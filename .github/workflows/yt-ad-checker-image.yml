@@ -3,6 +3,9 @@ name: Build yt-ad-checker image
 # Publishes the ad checker image to GitHub Container Registry:
 #   docker pull ghcr.io/<owner>/yt-ad-checker:latest
 #
+# Tags: every build gets :<branch> and :sha-<short>; :latest is pushed only
+# from the default branch (main).
+#
 # The image is heavy (~4.8 GB: Playwright + Chromium + mihomo), so it is built
 # only when the tool changes and its layers are cached in the registry. The
 # unit tests run inside the freshly built image before anything is pushed.
@@ -59,24 +62,31 @@ jobs:
 
       - name: Compute image tags
         id: meta
+        env:
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
         run: |
           # GHCR requires a lowercase repository name, forks may have uppercase.
           IMAGE="ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/yt-ad-checker"
           SHA="$(echo "${GITHUB_SHA}" | cut -c1-7)"
+          TAGS="--tag ${IMAGE}:${GITHUB_REF_NAME//\//-} --tag ${IMAGE}:sha-${SHA}"
+          # latest follows the default branch only, so a feature push never
+          # changes what production pulls from :latest.
+          if [ "${GITHUB_REF}" = "refs/heads/${DEFAULT_BRANCH}" ]; then
+            TAGS="--tag ${IMAGE}:latest ${TAGS}"
+          fi
           echo "image=${IMAGE}" >> "$GITHUB_OUTPUT"
           echo "version=${IMAGE}:sha-${SHA}" >> "$GITHUB_OUTPUT"
+          echo "tags=${TAGS}" >> "$GITHUB_OUTPUT"
 
       - name: Build image
         env:
           IMAGE: ${{ steps.meta.outputs.image }}
-          VERSION: ${{ steps.meta.outputs.version }}
+          TAGS: ${{ steps.meta.outputs.tags }}
         run: |
           docker buildx build \
             --load \
             --file tools/yt-ad-checker/Dockerfile \
-            --tag "${IMAGE}:latest" \
-            --tag "${IMAGE}:${GITHUB_REF_NAME//\//-}" \
-            --tag "${VERSION}" \
+            ${TAGS} \
             --cache-from "type=registry,ref=${IMAGE}:buildcache" \
             --cache-to "type=registry,ref=${IMAGE}:buildcache,mode=max" \
             tools/yt-ad-checker

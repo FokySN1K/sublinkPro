@@ -3,6 +3,10 @@ name: Build SublinkPro image
 # Publishes the application image to GitHub Container Registry:
 #   docker pull ghcr.io/<owner>/sublinkpro:latest
 #
+# Tags: every build gets :<branch> and :sha-<short>; :latest is pushed only
+# from the default branch (main), so a feature push cannot change what
+# production pulls from :latest.
+#
 # Built from the repository Dockerfile (frontend + backend + runtime), so the
 # image always matches this fork instead of upstream's zerodeng/sublink-pro.
 # The built image is started in demo mode and must answer /api/v1/version
@@ -64,12 +68,21 @@ jobs:
 
       - name: Compute image tags
         id: meta
+        env:
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
         run: |
           # GHCR requires a lowercase repository name, forks may have uppercase.
           IMAGE="ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/sublinkpro"
           SHA="$(echo "${GITHUB_SHA}" | cut -c1-7)"
+          TAGS="--tag ${IMAGE}:${GITHUB_REF_NAME//\//-} --tag ${IMAGE}:sha-${SHA}"
+          # latest follows the default branch only, so a feature push never
+          # changes what production pulls from :latest.
+          if [ "${GITHUB_REF}" = "refs/heads/${DEFAULT_BRANCH}" ]; then
+            TAGS="--tag ${IMAGE}:latest ${TAGS}"
+          fi
           echo "image=${IMAGE}" >> "$GITHUB_OUTPUT"
           echo "version=${IMAGE}:sha-${SHA}" >> "$GITHUB_OUTPUT"
+          echo "tags=${TAGS}" >> "$GITHUB_OUTPUT"
 
       - name: Stamp the version
         # main.go embeds VERSION, so the running instance reports the commit.
@@ -78,7 +91,7 @@ jobs:
       - name: Build image
         env:
           IMAGE: ${{ steps.meta.outputs.image }}
-          VERSION: ${{ steps.meta.outputs.version }}
+          TAGS: ${{ steps.meta.outputs.tags }}
         run: |
           # The Dockerfile builds the frontend and the binary for the target
           # platform, so arm64 would run the whole build under QEMU; add it to
@@ -87,9 +100,7 @@ jobs:
             --load \
             --platform linux/amd64 \
             --file Dockerfile \
-            --tag "${IMAGE}:latest" \
-            --tag "${IMAGE}:${GITHUB_REF_NAME//\//-}" \
-            --tag "${VERSION}" \
+            ${TAGS} \
             --cache-from "type=registry,ref=${IMAGE}:buildcache" \
             --cache-to "type=registry,ref=${IMAGE}:buildcache,mode=max" \
             .
