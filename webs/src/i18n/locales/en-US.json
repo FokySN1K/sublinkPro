@@ -3736,7 +3736,7 @@
     },
     "createDialog": {
       "title": "Create API Key",
-      "descriptionHelper": "Enter a short description to identify this key.",
+      "descriptionHelper": "Enter a description to identify this key. Up to 255 characters.",
       "expirationSettings": "Expiration settings"
     },
     "createdDialog": {
@@ -4357,5 +4357,11 @@
     "editPlan": "Edit detection plan",
     "planName": "Plan name",
     "emptyPlans": "No detection plans"
+  },
+  "backend": {
+    "accessKeys": {
+      "descriptionRequired": "Description is required",
+      "descriptionTooLong": "Description must be at most {{max}} characters"
+    }
   }
 }

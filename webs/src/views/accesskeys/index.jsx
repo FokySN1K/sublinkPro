@@ -31,6 +31,7 @@ import FormLabel from '@mui/material/FormLabel';
 import Typography from '@mui/material/Typography';
 import Box from '@mui/material/Box';
 import Divider from '@mui/material/Divider';
+import Tooltip from '@mui/material/Tooltip';
 
 // icons
 import AddIcon from '@mui/icons-material/Add';
@@ -45,6 +46,9 @@ import { useAuth } from 'contexts/AuthContext';
 import { formatDateTime } from 'i18n/locales';
 
 // ==============================|| API 密钥管理 ||============================== //
+
+// 与后端 access_keys.description (varchar(255)) 保持一致
+const DESCRIPTION_MAX_LENGTH = 255;
 
 export default function ApiKeyList() {
   const { t, i18n } = useTranslation();
@@ -145,14 +149,15 @@ export default function ApiKeyList() {
   };
 
   const handleSubmit = async () => {
-    if (!formData.description) {
+    const description = formData.description.trim();
+    if (!description) {
       showMessage(t('accessKeys.messages.descriptionRequired'), 'warning');
       return;
     }
 
     try {
       const params = {
-        description: formData.description,
+        description,
         username: user?.username
       };
 
@@ -270,7 +275,13 @@ export default function ApiKeyList() {
               {accessKeys.map((accessKey) => (
                 <TableRow key={accessKey.ID} hover>
                   <TableCell>{accessKey.ID}</TableCell>
-                  <TableCell>{accessKey.Description}</TableCell>
+                  <TableCell>
+                    <Tooltip title={accessKey.Description || ''} enterDelay={500}>
+                      <Box sx={{ maxWidth: 360, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        {accessKey.Description}
+                      </Box>
+                    </Tooltip>
+                  </TableCell>
                   <TableCell>{formatDate(accessKey.CreatedAt)}</TableCell>
                   <TableCell>{getExpirationStatus(accessKey)}</TableCell>
                   <TableCell align="right">
@@ -322,8 +333,15 @@ export default function ApiKeyList() {
               autoComplete="off"
               value={formData.description}
               onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-              inputProps={{ maxLength: 10 }}
-              helperText={t('accessKeys.createDialog.descriptionHelper')}
+              inputProps={{ maxLength: DESCRIPTION_MAX_LENGTH }}
+              helperText={
+                <Stack component="span" direction="row" justifyContent="space-between" spacing={2}>
+                  <span>{t('accessKeys.createDialog.descriptionHelper')}</span>
+                  <span>
+                    {formData.description.length}/{DESCRIPTION_MAX_LENGTH}
+                  </span>
+                </Stack>
+              }
             />
             <FormControl component="fieldset">
               <FormLabel component="legend">{t('accessKeys.createDialog.expirationSettings')}</FormLabel>

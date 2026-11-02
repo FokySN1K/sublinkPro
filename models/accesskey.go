@@ -9,9 +9,13 @@ import (
 	"sublink/database"
 	"sublink/utils"
 	"time"
+	"unicode/utf8"
 
 	"golang.org/x/crypto/bcrypt"
 )
+
+// AccessKeyDescriptionMaxLength 描述的最大长度（与 access_keys.description 的列长度一致）
+const AccessKeyDescriptionMaxLength = 255
 
 type AccessKey struct {
 	ID            int        `gorm:"primaryKey"`
@@ -21,6 +25,14 @@ type AccessKey struct {
 	CreatedAt     time.Time  `gorm:"autoCreateTime"`
 	ExpiredAt     *time.Time `gorm:"index"`
 	Description   string     `gorm:"type:varchar(255)"`
+}
+
+// ValidateAccessKeyDescription 按字符数校验描述长度，避免多字节字符被按字节数误判
+func ValidateAccessKeyDescription(description string) error {
+	if utf8.RuneCountInString(description) > AccessKeyDescriptionMaxLength {
+		return fmt.Errorf("描述不能超过 %d 个字符", AccessKeyDescriptionMaxLength)
+	}
+	return nil
 }
 
 // accessKeyCache 使用新的泛型缓存

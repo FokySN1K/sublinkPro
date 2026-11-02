@@ -2,6 +2,7 @@ package api
 
 import (
 	"strconv"
+	"strings"
 	"sublink/dto"
 	"sublink/models"
 	"sublink/utils"
@@ -16,6 +17,17 @@ func GenerateAccessKey(c *gin.Context) {
 		utils.FailWithI18n(c, "参数错误", "backend.common.invalidParams", nil)
 		return
 	}
+	description := strings.TrimSpace(userAccessKey.Description)
+	if description == "" {
+		utils.FailWithI18n(c, "描述不能为空", "backend.accessKeys.descriptionRequired", nil)
+		return
+	}
+	if err := models.ValidateAccessKeyDescription(description); err != nil {
+		utils.FailWithI18n(c, "描述过长", "backend.accessKeys.descriptionTooLong", map[string]any{
+			"max": models.AccessKeyDescriptionMaxLength,
+		})
+		return
+	}
 	user := &models.User{Username: userAccessKey.UserName}
 	err := user.Find()
 	if err != nil {
@@ -25,7 +37,7 @@ func GenerateAccessKey(c *gin.Context) {
 
 	var accessKey models.AccessKey
 	accessKey.ExpiredAt = userAccessKey.ExpiredAt
-	accessKey.Description = userAccessKey.Description
+	accessKey.Description = description
 	accessKey.UserID = user.ID
 	accessKey.CreatedAt = time.Now()
 	accessKey.Username = user.Username

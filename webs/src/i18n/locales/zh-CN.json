@@ -3736,7 +3736,7 @@
     },
     "createDialog": {
       "title": "创建 API 密钥",
-      "descriptionHelper": "填写简短描述，便于识别该密钥。",
+      "descriptionHelper": "填写描述，便于识别该密钥，最多 255 个字符。",
       "expirationSettings": "过期设置"
     },
     "createdDialog": {
@@ -4357,5 +4357,11 @@
     "editPlan": "编辑检测方案",
     "planName": "方案名称",
     "emptyPlans": "暂无检测方案"
+  },
+  "backend": {
+    "accessKeys": {
+      "descriptionRequired": "描述不能为空",
+      "descriptionTooLong": "描述不能超过 {{max}} 个字符"
+    }
   }
 }

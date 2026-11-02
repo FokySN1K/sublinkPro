@@ -107,7 +107,7 @@ Field-name casing is inconsistent across modules (e.g. node filters are lowerCam
 {
   "username": "admin",                    // required — an existing username
   "expiredAt": "2025-12-31T23:59:59Z",    // optional, RFC3339
-  "description": "AI skill"               // optional
+  "description": "AI skill"               // required, at most 255 characters
 }
 ```
 Response data: `{"accessKey": "prefix_xxx_yyy"}` — **shown only once**.
