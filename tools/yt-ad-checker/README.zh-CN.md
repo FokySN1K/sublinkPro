@@ -256,6 +256,20 @@ docker run --rm --entrypoint python yt-ad-checker -m unittest discover -s tests 
 （被中断的轮次满足 `checked < nodes` 并标记为 `interrupted`），以及
 Rutube 检测（广告位解析、至少两个视频应答的规则、请求超时与节点不通时的提前放弃）。
 
+## 发布镜像
+
+`.github/workflows/yt-ad-checker-image.yml` 会在 `tools/yt-ad-checker/` 有改动时
+以及手动触发时构建并发布镜像。构建完成后先在镜像内运行单元测试，通过后才推送：
+
+```bash
+docker pull ghcr.io/<owner>/yt-ad-checker:latest
+docker run --rm -e SUBLINK_URL=... -e SUBLINK_API_KEY=... ghcr.io/<owner>/yt-ad-checker:latest
+```
+
+每次构建都会打上 `latest`、分支名和 `sha-<short>` 标签；仓库中还保留一个
+`buildcache` 标签，让下一次构建复用体积较大的 Playwright 层而无需重新下载。
+该任务只在 fork 仓库中运行：上游以源码方式分发该工具，并维护自己的发布流水线。
+
 ## 排错
 
 | 现象 | 可能原因 |

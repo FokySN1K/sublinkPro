@@ -284,6 +284,22 @@ stopped run reports `checked < nodes` and is flagged as interrupted), and the
 Rutube probe (ad-slot parsing, the two-answer rule, request timeouts and the
 abort on a dead node).
 
+## Publishing the image
+
+`.github/workflows/yt-ad-checker-image.yml` builds and publishes the image on
+every change under `tools/yt-ad-checker/` and on manual dispatch. It runs the
+unit tests inside the freshly built image and pushes only when they pass:
+
+```bash
+docker pull ghcr.io/<owner>/yt-ad-checker:latest
+docker run --rm -e SUBLINK_URL=... -e SUBLINK_API_KEY=... ghcr.io/<owner>/yt-ad-checker:latest
+```
+
+Every build is tagged `latest`, with its branch name and `sha-<short>`. The
+registry also keeps a `buildcache` tag, so the next build reuses the heavy
+Playwright layers instead of downloading them again. The job runs in forks only:
+upstream ships the tool from source and keeps its own release pipeline.
+
 ## Troubleshooting
 
 | Symptom | Likely cause |
