@@ -5,7 +5,11 @@ on:
     tags:
       - 'v*'
     branches:
-      - '**'
+      # Fork note: only long-lived branches. Feature branches are covered by
+      # the PR checks and by the GHCR image workflows, so building binaries for
+      # every one of them just burns runner minutes.
+      - main
+      - dev
     paths-ignore:
       # 文档文件（不包括 skill-sublinkpro，它会被嵌入到二进制文件中）
       - '*.md'
@@ -335,6 +339,11 @@ jobs:
 
   build-docker:
     needs: [build-frontend, merge-binaries]
+    # Fork note: the step below logs in to Docker Hub with the upstream
+    # account and pushes to zerodeng/sublink-pro, which a fork can neither
+    # authenticate nor push to. Images for the fork are published to GHCR by
+    # sublinkpro-image.yml, so this job is skipped in forks.
+    if: github.event.repository.fork == false
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
