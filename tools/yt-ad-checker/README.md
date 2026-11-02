@@ -30,6 +30,12 @@ SublinkPro API ──► node list ──► mihomo (one proxy per node)
 | `youtube` (default) | headful Chromium, four player signals | `youtube` / `youtube-ads` |
 | `rutube` | one JSON request per video, no browser | `rutube` / `rutube-ads` |
 
+One container checks one service: `SERVICE` is resolved at start-up and selects
+the probe, the tag pair and the state file. To check both, run two instances
+with their own `/data` volume — `docker-compose.local.yaml` does exactly that
+with `yt-ad-checker` and `yt-ad-checker-rutube`. They write different tags, so
+the instances never conflict.
+
 ## How a node is classified (YouTube)
 
 Four independent signals are collected per probe:

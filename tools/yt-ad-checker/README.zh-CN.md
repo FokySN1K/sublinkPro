@@ -28,6 +28,10 @@ SublinkPro API ──► 节点列表 ──► mihomo（每个节点一个代�
 | `youtube`（默认） | 有头 Chromium，四组播放器信号 | `youtube` / `youtube-ads` |
 | `rutube` | 每个视频一次 JSON 请求，无需浏览器 | `rutube` / `rutube-ads` |
 
+一个容器只检测一种服务：`SERVICE` 在启动时解析一次，决定检测方式、标签对与状态文件。
+需要同时检测两者时，用两个实例并各自挂载独立的 `/data` —— `docker-compose.local.yaml`
+中的 `yt-ad-checker` 与 `yt-ad-checker-rutube` 即为此配置；两者写入不同标签，互不冲突。
+
 ## 判定依据（YouTube）
 
 单次检测会采集四组相互独立的信号：

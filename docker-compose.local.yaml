@@ -12,10 +12,11 @@
 #   docker compose -f docker-compose.local.yaml up -d --build
 #
 # The YouTube/Rutube ad checker lives behind the "ad-checker" profile and is
-# pulled from GHCR (published by .github/workflows/yt-ad-checker-image.yml):
-#   docker compose -f docker-compose.local.yaml --profile ad-checker pull yt-ad-checker
+# pulled from GHCR (published by .github/workflows/yt-ad-checker-image.yml).
+# One container checks one service, so both run as two instances:
+#   docker compose -f docker-compose.local.yaml --profile ad-checker pull
 #   SUBLINK_API_KEY=<access key> docker compose -f docker-compose.local.yaml \
-#     --profile ad-checker up -d yt-ad-checker
+#     --profile ad-checker up -d
 
 name: sublinkpro-local
 
@@ -151,16 +152,14 @@ services:
     stop_grace_period: 90s
     shm_size: "1gb"
     depends_on:
-      - sublinkpro
+      sublinkpro:
+        condition: service_healthy
     environment:
       - SUBLINK_URL=${SUBLINK_URL:-http://sublinkpro:8000}
       - SUBLINK_API_KEY=${SUBLINK_API_KEY:-}
-      - SERVICE=${SERVICE:-youtube}
+      - SERVICE=youtube
       - YOUTUBE_TAG=${YOUTUBE_TAG:-youtube}
       - YOUTUBE_ADS_TAG=${YOUTUBE_ADS_TAG:-youtube-ads}
-      - RUTUBE_TAG=${RUTUBE_TAG:-rutube}
-      - RUTUBE_ADS_TAG=${RUTUBE_ADS_TAG:-rutube-ads}
-      - RUTUBE_VIDEOS=${RUTUBE_VIDEOS:-}
       - CHECK_INTERVAL=${CHECK_INTERVAL:-6h}
       - RUN_ON_START=${RUN_ON_START:-true}
       - ONCE=${ONCE:-false}
@@ -179,5 +178,40 @@ services:
     volumes:
       - "yt-ad-checker-data:/data"
 
+  # Rutube is a second instance of the same image: SERVICE selects the probe and
+  # the tag pair, and each instance owns its /data, so the two never fight over
+  # tags or the scheduler lock. The probe is one JSON request per video (no
+  # browser), so it needs no shm_size and fits more workers into the same RAM.
+  yt-ad-checker-rutube:
+    profiles: ["ad-checker"]
+    image: ghcr.io/fokysn1k/yt-ad-checker:latest
+    container_name: yt-ad-checker-rutube-local
+    restart: unless-stopped
+    init: true
+    stop_grace_period: 90s
+    depends_on:
+      sublinkpro:
+        condition: service_healthy
+    environment:
+      - SUBLINK_URL=${SUBLINK_URL:-http://sublinkpro:8000}
+      - SUBLINK_API_KEY=${SUBLINK_API_KEY:-}
+      - SERVICE=rutube
+      - RUTUBE_TAG=${RUTUBE_TAG:-rutube}
+      - RUTUBE_ADS_TAG=${RUTUBE_ADS_TAG:-rutube-ads}
+      - RUTUBE_VIDEOS=${RUTUBE_VIDEOS:-}
+      - CHECK_INTERVAL=${RUTUBE_CHECK_INTERVAL:-6h}
+      - RUN_ON_START=${RUN_ON_START:-true}
+      - ONCE=${ONCE:-false}
+      - ONLY_TAGS=${ONLY_TAGS:-}
+      - SKIP_TAGS=${SKIP_TAGS:-}
+      - MAX_NODES=${MAX_NODES:-0}
+      - WORKERS=${RUTUBE_WORKERS:-3}
+      - ENSURE_TAG=${ENSURE_TAG:-true}
+      - DRY_RUN=${DRY_RUN:-false}
+      - LOG_LEVEL=${LOG_LEVEL:-info}
+    volumes:
+      - "yt-ad-checker-rutube-data:/data"
+
 volumes:
   yt-ad-checker-data:
+  yt-ad-checker-rutube-data:
