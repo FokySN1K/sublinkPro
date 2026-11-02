@@ -43,6 +43,7 @@ import {
 import ChainPreviewDialog from './ChainPreviewDialog';
 import ChainRuleEditor from './ChainRuleEditor';
 import { getChainProxyIconButtonSx, getChainProxyThemeTokens } from './chainProxyTheme';
+import { localizeNodeConditionFields } from 'utils/nodeConditionOptions';
 
 export default function ChainProxyDialog({ open, onClose, subscription }) {
   const theme = useTheme();
@@ -514,7 +515,7 @@ export default function ChainProxyDialog({ open, onClose, subscription }) {
               value={editingRule}
               onChange={handleRuleChange}
               nodes={options.nodes || []}
-              fields={options.conditionFields || []}
+              fields={localizeNodeConditionFields(options.conditionFields)}
               operators={options.operators || []}
               groupTypes={options.groupTypes || []}
               templateGroups={options.templateGroups || []}

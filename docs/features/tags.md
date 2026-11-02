@@ -58,6 +58,24 @@ Exclusive groups ensure that only one tag from the same group remains on a node.
 
 ---
 
+## Renaming a Tag
+
+A tag name is the primary key, and node tags, subscription tag filters,
+node-check profiles and node-check jobs store it by name. Renaming a tag in the
+tag dialog therefore rewrites every reference in one transaction: nodes keep the
+tag under its new name, tag rules and subscription filters follow the new name,
+and `$TagGroup(group)` placeholders in node-name rules render the new text.
+
+Conditions that match tag *text* (the `tags` field in a rule) are not rewritten,
+because they compare arbitrary strings; update those rules by hand if they
+mention the old name.
+
+Tag names cannot be empty, cannot contain a comma (node tags are stored as a
+comma-separated list) and are limited to 100 characters; the API rejects such
+names both when a tag is created and when it is renamed.
+
+---
+
 ## Tag Rule Configuration
 
 On the “Tag Management” page, each tag can have automatic matching rules.
@@ -121,3 +139,8 @@ When creating a subscription, you can set:
 - **Tag blocklist**: exclude nodes with specified tags
 
 Allowlist and blocklist can be combined. The system applies the allowlist first, then excludes blocklisted nodes.
+
+Tags do not change the name a client sees by themselves: a node name is
+rendered from the subscription's rename rule, and tags reach it only through the
+explicit `$Tags` and `$TagGroup(group)` placeholders. Adding, renaming or
+removing a tag leaves every other name untouched.

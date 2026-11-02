@@ -2355,6 +2355,11 @@
         "inactive": "Unlock filtering is currently disabled. Add a rule below to enable it.",
         "addRule": "Add unlock rule"
       }
+    },
+    "countryStats": {
+      "title": "Nodes by country",
+      "total": "Total nodes: {{count}}",
+      "empty": "No countries match the current filters"
     }
   },
   "subscriptions": {
@@ -3007,6 +3012,10 @@
       },
       "nodeFilter": {
         "activeRules": "{{count}} rules enabled",
+        "generalTitle": "General constraints",
+        "generalSummary": "{{count}} constraints enabled",
+        "countryTitle": "Country filter",
+        "countrySummary": "Whitelist {{whitelist}} / blacklist {{blacklist}}",
         "maxDelay": "Max Delay",
         "maxDelayHelper": "Set the latency threshold for filtering nodes. 0 means no limit.",
         "minSpeed": "Min Speed",
@@ -3277,6 +3286,10 @@
         "helpGroup": "• Tag groups are mutually exclusive. Adding a new tag in the same group removes the previous one.",
         "helpExample": "• Example: create “Excellent” and “Poor” tags in the same group, so speed tests keep only the latest rating.",
         "name": "Tag name",
+        "nameEditHint": "Renaming updates every reference: node tags, subscription tag filters and check jobs.",
+        "nameRenameHint": "Renaming updates node tags, subscription tag filters and check jobs on save.",
+        "nameCommaInvalid": "Tag names cannot contain commas",
+        "nameTooLong": "Tag names cannot exceed {{max}} characters",
         "group": "Tag group (optional)",
         "groupPlaceholder": "Select or enter a tag group name",
         "groupHelper": "Tags in the same group are mutually exclusive. Leave blank to skip exclusivity.",
@@ -3512,6 +3525,7 @@
   "nodeConditions": {
     "fields": {
       "name": "Remark",
+      "effectiveName": "Actual name",
       "linkName": "Original name",
       "linkCountry": "Country code",
       "protocol": "Protocol type",
@@ -3530,7 +3544,9 @@
       "residentialType": "Residential attribute",
       "speedStatus": "Speed status",
       "delayStatus": "Delay status",
+      "tags": "Tags",
       "linkAddress": "Address",
+      "linkHost": "Host",
       "linkPort": "Port",
       "dialerProxyName": "Dialer proxy",
       "link": "Node link"

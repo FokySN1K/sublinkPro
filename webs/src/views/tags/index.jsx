@@ -197,7 +197,12 @@ export default function TagManagement() {
   const handleSaveTag = async (tagData) => {
     try {
       if (editingTag) {
-        await updateTag({ ...tagData, name: editingTag.name });
+        // 名称是主键：改名时后端会级联更新节点、订阅筛选与检测任务
+        await updateTag({
+          ...tagData,
+          name: editingTag.name,
+          newName: tagData.name !== editingTag.name ? tagData.name : ''
+        });
       } else {
         await addTag(tagData);
       }
@@ -205,6 +210,11 @@ export default function TagManagement() {
       showMessage(editingTag ? t('tags.messages.updateSuccess') : t('tags.messages.addSuccess'));
       setTagDialogOpen(false);
       fetchTags();
+      if (editingTag) {
+        // 规则按名称关联标签，改名后需要重新加载
+        fetchRules();
+        fetchGroups();
+      }
     } catch (error) {
       showMessage(error.message || t('tags.messages.operationFailed'), 'error');
     }

@@ -2,6 +2,7 @@ package api
 
 import (
 	"strconv"
+	"strings"
 	"sublink/models"
 	"sublink/services"
 	"sublink/utils"
@@ -29,8 +30,10 @@ func TagAdd(c *gin.Context) {
 		utils.FailWithMsg(c, "参数错误")
 		return
 	}
-	if tag.Name == "" {
-		utils.FailWithMsg(c, "标签名称不能为空")
+	tag.Name = strings.TrimSpace(tag.Name)
+	// 名称会进入以逗号分隔的节点标签列表，新建时就拦下非法名称
+	if err := models.ValidateTagName(tag.Name); err != nil {
+		utils.FailWithMsg(c, err.Error())
 		return
 	}
 	// 检查标签是否已存在
@@ -48,20 +51,56 @@ func TagAdd(c *gin.Context) {
 	utils.OkWithData(c, tag)
 }
 
-// TagUpdate 更新标签
+// TagUpdate 更新标签；newName 与 name 不同时连同所有引用一起重命名
 func TagUpdate(c *gin.Context) {
-	var tag models.Tag
-	if err := c.ShouldBindJSON(&tag); err != nil {
+	var req struct {
+		Name        string `json:"name"`
+		NewName     string `json:"newName"`
+		GroupName   string `json:"groupName"`
+		Color       string `json:"color"`
+		Description string `json:"description"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
 		utils.FailWithMsg(c, "参数错误")
 		return
 	}
-	if tag.Name == "" {
+	if req.Name == "" {
 		utils.FailWithMsg(c, "标签名称不能为空")
 		return
 	}
+	var tag models.Tag
+	if err := tag.GetByName(req.Name); err != nil {
+		utils.FailWithCode(c, 404, "标签不存在")
+		return
+	}
+
+	// 先校验新名称，避免颜色/描述已写入后才发现重命名不可用
+	newName := strings.TrimSpace(req.NewName)
+	renaming := newName != "" && newName != tag.Name
+	if renaming {
+		if err := models.ValidateTagRename(newName); err != nil {
+			utils.FailWithMsg(c, err.Error())
+			return
+		}
+	}
+
+	tag.GroupName = req.GroupName
+	if req.Color != "" {
+		tag.Color = req.Color
+	}
+	tag.Description = req.Description
 	if err := tag.Update(); err != nil {
 		utils.FailWithMsg(c, "更新标签失败: "+err.Error())
 		return
+	}
+
+	if renaming {
+		oldName := tag.Name
+		if err := tag.Rename(newName); err != nil {
+			utils.FailWithMsg(c, "重命名标签失败: "+err.Error())
+			return
+		}
+		utils.Info("标签已重命名: %s -> %s", oldName, newName)
 	}
 	utils.OkWithData(c, tag)
 }

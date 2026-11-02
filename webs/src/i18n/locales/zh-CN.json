@@ -2355,6 +2355,11 @@
         "inactive": "当前未启用解锁筛选。点击下方按钮后再添加具体规则。",
         "addRule": "新增解锁规则"
       }
+    },
+    "countryStats": {
+      "title": "按国家统计节点",
+      "total": "节点总数：{{count}}",
+      "empty": "当前筛选条件下没有节点"
     }
   },
   "subscriptions": {
@@ -3007,6 +3012,10 @@
       },
       "nodeFilter": {
         "activeRules": "已启用 {{count}} 项规则",
+        "generalTitle": "通用限制",
+        "generalSummary": "已启用 {{count}} 项限制",
+        "countryTitle": "国家筛选",
+        "countrySummary": "白名单 {{whitelist}} / 黑名单 {{blacklist}}",
         "maxDelay": "最大延迟",
         "maxDelayHelper": "设置筛选节点的延迟阈值，0表示不限制",
         "minSpeed": "最小速度",
@@ -3277,6 +3286,10 @@
         "helpGroup": "• 标签组：同一组内的标签互斥，添加新标签时会自动移除同组的旧标签",
         "helpExample": "• 例如：创建“优秀”和“差”两个标签并设为同组，测速时节点只会保留最新的评级",
         "name": "标签名称",
+        "nameEditHint": "重命名会同步更新所有引用：节点标签、订阅的标签筛选与检测任务。",
+        "nameRenameHint": "保存后会同步更新节点标签、订阅的标签筛选与检测任务。",
+        "nameCommaInvalid": "标签名称不能包含逗号",
+        "nameTooLong": "标签名称不能超过 {{max}} 个字符",
         "group": "标签组 (可选)",
         "groupPlaceholder": "选择或输入标签组名称",
         "groupHelper": "同一组内的标签互斥，为空则不参与互斥",
@@ -3512,6 +3525,7 @@
   "nodeConditions": {
     "fields": {
       "name": "备注",
+      "effectiveName": "实际名称",
       "linkName": "原始名称",
       "linkCountry": "国家代码",
       "protocol": "协议类型",
@@ -3530,7 +3544,9 @@
       "residentialType": "住宅属性",
       "speedStatus": "速度状态",
       "delayStatus": "延迟状态",
+      "tags": "标签",
       "linkAddress": "地址",
+      "linkHost": "主机名",
       "linkPort": "端口",
       "dialerProxyName": "前置代理",
       "link": "节点链接"

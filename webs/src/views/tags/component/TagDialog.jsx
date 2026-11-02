@@ -23,6 +23,10 @@ import InputAdornment from '@mui/material/InputAdornment';
 import ColorLensIcon from '@mui/icons-material/ColorLens';
 
 // Color presets
+// Tag names double as node-name placeholders and are stored as a comma
+// separated list, so they must stay comma free (see models.Tag).
+const MAX_TAG_NAME_LENGTH = 100;
+
 const colorPresets = [
   '#1976d2', // Blue
   '#388e3c', // Green
@@ -100,8 +104,10 @@ export default function TagDialog({ open, onClose, onSave, editingTag, existingG
     }
   }, [editingTag, open]);
 
+  const nameInvalid = name.includes(',') || name.trim().length > MAX_TAG_NAME_LENGTH;
+
   const handleSave = () => {
-    if (!name.trim()) return;
+    if (!name.trim() || nameInvalid) return;
     onSave({ name: name.trim(), color, description, groupName: groupName.trim() });
   };
 
@@ -135,7 +141,18 @@ export default function TagDialog({ open, onClose, onSave, editingTag, existingG
             fullWidth
             required
             autoFocus
-            disabled={!!editingTag}
+            error={nameInvalid}
+            helperText={
+              nameInvalid
+                ? name.includes(',')
+                  ? t('tags.dialog.tag.nameCommaInvalid')
+                  : t('tags.dialog.tag.nameTooLong', { max: MAX_TAG_NAME_LENGTH })
+                : editingTag && name.trim() !== editingTag.name
+                  ? t('tags.dialog.tag.nameRenameHint')
+                  : editingTag
+                    ? t('tags.dialog.tag.nameEditHint')
+                    : ''
+            }
           />
 
           <Box>
@@ -301,7 +318,7 @@ export default function TagDialog({ open, onClose, onSave, editingTag, existingG
       </DialogContent>
       <DialogActions>
         <Button onClick={onClose}>{t('common.cancel')}</Button>
-        <Button variant="contained" onClick={handleSave} disabled={!name.trim()}>
+        <Button variant="contained" onClick={handleSave} disabled={!name.trim() || nameInvalid}>
           {t('common.save')}
         </Button>
       </DialogActions>

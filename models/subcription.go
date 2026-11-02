@@ -429,190 +429,170 @@ func GetSubcriptionByID(id int) (*Subcription, error) {
 	return &sub, nil
 }
 
+// nodeFilterDecision 描述单个筛选组对节点的判断结果
+type nodeFilterDecision struct {
+	configured bool // 该筛选组是否已配置
+	matched    bool // 节点是否满足该筛选组
+	excluded   bool // 命中黑名单，必须直接排除
+}
+
+type nodeFilterPredicate func(node Node) nodeFilterDecision
+
 // ApplyFilters 对节点列表应用过滤条件
 // 抽取共用的过滤逻辑，供 GetSub 和 PreviewSub 调用
-// 返回过滤后的节点列表
+// 各筛选组之间固定为 AND：节点必须同时满足所有已配置的筛选组；
+// 组内白名单多值之间为 OR，命中任一黑名单即直接排除。
 func (sub *Subcription) ApplyFilters(nodes []Node) []Node {
-	result := nodes
+	predicates := sub.buildNodeFilterPredicates()
+	result := make([]Node, 0, len(nodes))
 
-	// 1. 延迟和速度过滤
-	if sub.DelayTime > 0 || sub.MinSpeed > 0 {
-		var filteredNodes []Node
-		for _, node := range result {
-			if sub.DelayTime > 0 {
-				if node.DelayTime <= 0 || node.DelayTime > sub.DelayTime {
-					continue
-				}
+	for _, node := range nodes {
+		configuredCount := 0
+		matchedCount := 0
+		excluded := false
+
+		for _, predicate := range predicates {
+			decision := predicate(node)
+			// 黑名单始终优先，与其它筛选组无关
+			if decision.excluded {
+				excluded = true
+				break
 			}
-			if sub.MinSpeed > 0 {
-				if node.Speed < sub.MinSpeed {
-					continue
-				}
-			}
-			filteredNodes = append(filteredNodes, node)
-		}
-		result = filteredNodes
-	}
-
-	// 2. 国家代码过滤
-	if sub.CountryWhitelist != "" || sub.CountryBlacklist != "" {
-		whitelistMap := make(map[string]bool)
-		blacklistMap := make(map[string]bool)
-
-		if sub.CountryWhitelist != "" {
-			for _, c := range strings.Split(sub.CountryWhitelist, ",") {
-				c = strings.TrimSpace(c)
-				if c != "" {
-					whitelistMap[strings.ToUpper(c)] = true
-				}
-			}
-		}
-
-		if sub.CountryBlacklist != "" {
-			for _, c := range strings.Split(sub.CountryBlacklist, ",") {
-				c = strings.TrimSpace(c)
-				if c != "" {
-					blacklistMap[strings.ToUpper(c)] = true
-				}
-			}
-		}
-
-		var filteredNodes []Node
-		for _, node := range result {
-			country := strings.ToUpper(node.LinkCountry)
-			// 黑名单优先
-			if len(blacklistMap) > 0 && blacklistMap[country] {
+			if !decision.configured {
 				continue
 			}
-			// 白名单
-			if len(whitelistMap) > 0 && !whitelistMap[country] {
-				continue
+			configuredCount++
+			if decision.matched {
+				matchedCount++
 			}
-			filteredNodes = append(filteredNodes, node)
 		}
-		result = filteredNodes
+
+		if excluded {
+			continue
+		}
+		if configuredCount > 0 && matchedCount != configuredCount {
+			continue
+		}
+
+		result = append(result, node)
 	}
 
-	// 3. 标签过滤
-	if sub.TagWhitelist != "" || sub.TagBlacklist != "" {
-		whitelistTags := make(map[string]bool)
-		blacklistTags := make(map[string]bool)
+	// 应用去重规则
+	return sub.ApplyDeduplication(result)
+}
 
-		if sub.TagWhitelist != "" {
-			for _, t := range strings.Split(sub.TagWhitelist, ",") {
-				t = strings.TrimSpace(t)
-				if t != "" {
-					whitelistTags[t] = true
-				}
-			}
+func (sub *Subcription) buildNodeFilterPredicates() []nodeFilterPredicate {
+	predicates := make([]nodeFilterPredicate, 0, 7)
+	for _, predicate := range []nodeFilterPredicate{
+		sub.delaySpeedFilterPredicate(),
+		sub.countryFilterPredicate(),
+		sub.tagFilterPredicate(),
+		sub.nodeNameFilterPredicate(),
+		sub.protocolFilterPredicate(),
+		sub.qualityFilterPredicate(),
+		sub.unlockFilterPredicate(),
+	} {
+		if predicate != nil {
+			predicates = append(predicates, predicate)
 		}
-
-		if sub.TagBlacklist != "" {
-			for _, t := range strings.Split(sub.TagBlacklist, ",") {
-				t = strings.TrimSpace(t)
-				if t != "" {
-					blacklistTags[t] = true
-				}
-			}
-		}
-
-		var filteredNodes []Node
-		for _, node := range result {
-			nodeTags := node.GetTagNames()
-
-			// 黑名单优先
-			if len(blacklistTags) > 0 {
-				isBlacklisted := false
-				for _, nt := range nodeTags {
-					if blacklistTags[nt] {
-						isBlacklisted = true
-						break
-					}
-				}
-				if isBlacklisted {
-					continue
-				}
-			}
-
-			// 白名单
-			if len(whitelistTags) > 0 {
-				isWhitelisted := false
-				for _, nt := range nodeTags {
-					if whitelistTags[nt] {
-						isWhitelisted = true
-						break
-					}
-				}
-				if !isWhitelisted {
-					continue
-				}
-			}
-
-			filteredNodes = append(filteredNodes, node)
-		}
-		result = filteredNodes
 	}
+	return predicates
+}
 
-	// 4. 节点名称过滤
+// 1. 延迟和速度过滤
+func (sub *Subcription) delaySpeedFilterPredicate() nodeFilterPredicate {
+	if sub.DelayTime <= 0 && sub.MinSpeed <= 0 {
+		return nil
+	}
+	return func(node Node) nodeFilterDecision {
+		if sub.DelayTime > 0 && (node.DelayTime <= 0 || node.DelayTime > sub.DelayTime) {
+			return nodeFilterDecision{configured: true}
+		}
+		if sub.MinSpeed > 0 && node.Speed < sub.MinSpeed {
+			return nodeFilterDecision{configured: true}
+		}
+		return nodeFilterDecision{configured: true, matched: true}
+	}
+}
+
+// 2. 国家代码过滤
+func (sub *Subcription) countryFilterPredicate() nodeFilterPredicate {
+	whitelist := splitFilterValues(sub.CountryWhitelist, strings.ToUpper)
+	blacklist := splitFilterValues(sub.CountryBlacklist, strings.ToUpper)
+	if len(whitelist) == 0 && len(blacklist) == 0 {
+		return nil
+	}
+	return func(node Node) nodeFilterDecision {
+		country := strings.ToUpper(strings.TrimSpace(node.LinkCountry))
+		if blacklist[country] {
+			return nodeFilterDecision{configured: true, excluded: true}
+		}
+		if len(whitelist) > 0 && !whitelist[country] {
+			return nodeFilterDecision{configured: true}
+		}
+		return nodeFilterDecision{configured: true, matched: true}
+	}
+}
+
+// 3. 标签过滤
+func (sub *Subcription) tagFilterPredicate() nodeFilterPredicate {
+	whitelist := splitFilterValues(sub.TagWhitelist, nil)
+	blacklist := splitFilterValues(sub.TagBlacklist, nil)
+	if len(whitelist) == 0 && len(blacklist) == 0 {
+		return nil
+	}
+	return func(node Node) nodeFilterDecision {
+		tags := node.GetTagNames()
+		if hasAnyFilterValue(tags, blacklist) {
+			return nodeFilterDecision{configured: true, excluded: true}
+		}
+		if len(whitelist) > 0 && !hasAnyFilterValue(tags, whitelist) {
+			return nodeFilterDecision{configured: true}
+		}
+		return nodeFilterDecision{configured: true, matched: true}
+	}
+}
+
+// 4. 节点名称过滤
+func (sub *Subcription) nodeNameFilterPredicate() nodeFilterPredicate {
 	hasWhitelistRules := utils.HasActiveNodeNameFilter(sub.NodeNameWhitelist)
 	hasBlacklistRules := utils.HasActiveNodeNameFilter(sub.NodeNameBlacklist)
-
-	if hasWhitelistRules || hasBlacklistRules {
-		var filteredNodes []Node
-		for _, node := range result {
-			filterName := node.EffectiveName()
-			// 黑名单优先
-			if hasBlacklistRules && utils.MatchesNodeNameFilter(sub.NodeNameBlacklist, filterName) {
-				continue
-			}
-			// 白名单
-			if hasWhitelistRules && !utils.MatchesNodeNameFilter(sub.NodeNameWhitelist, filterName) {
-				continue
-			}
-			filteredNodes = append(filteredNodes, node)
-		}
-		result = filteredNodes
+	if !hasWhitelistRules && !hasBlacklistRules {
+		return nil
 	}
-
-	// 5. 协议过滤
-	if sub.ProtocolWhitelist != "" || sub.ProtocolBlacklist != "" {
-		whitelistProtos := make(map[string]bool)
-		blacklistProtos := make(map[string]bool)
-
-		if sub.ProtocolWhitelist != "" {
-			for _, p := range strings.Split(sub.ProtocolWhitelist, ",") {
-				p = strings.TrimSpace(strings.ToLower(p))
-				if p != "" {
-					whitelistProtos[p] = true
-				}
-			}
+	return func(node Node) nodeFilterDecision {
+		filterName := node.EffectiveName()
+		if hasBlacklistRules && utils.MatchesNodeNameFilter(sub.NodeNameBlacklist, filterName) {
+			return nodeFilterDecision{configured: true, excluded: true}
 		}
-
-		if sub.ProtocolBlacklist != "" {
-			for _, p := range strings.Split(sub.ProtocolBlacklist, ",") {
-				p = strings.TrimSpace(strings.ToLower(p))
-				if p != "" {
-					blacklistProtos[p] = true
-				}
-			}
+		if hasWhitelistRules && !utils.MatchesNodeNameFilter(sub.NodeNameWhitelist, filterName) {
+			return nodeFilterDecision{configured: true}
 		}
-
-		var filteredNodes []Node
-		for _, node := range result {
-			nodeProto := strings.ToLower(node.Protocol)
-			// 黑名单优先
-			if len(blacklistProtos) > 0 && blacklistProtos[nodeProto] {
-				continue
-			}
-			// 白名单
-			if len(whitelistProtos) > 0 && !whitelistProtos[nodeProto] {
-				continue
-			}
-			filteredNodes = append(filteredNodes, node)
-		}
-		result = filteredNodes
+		return nodeFilterDecision{configured: true, matched: true}
 	}
+}
 
+// 5. 协议过滤
+func (sub *Subcription) protocolFilterPredicate() nodeFilterPredicate {
+	whitelist := splitFilterValues(sub.ProtocolWhitelist, strings.ToLower)
+	blacklist := splitFilterValues(sub.ProtocolBlacklist, strings.ToLower)
+	if len(whitelist) == 0 && len(blacklist) == 0 {
+		return nil
+	}
+	return func(node Node) nodeFilterDecision {
+		nodeProto := strings.ToLower(strings.TrimSpace(node.Protocol))
+		if blacklist[nodeProto] {
+			return nodeFilterDecision{configured: true, excluded: true}
+		}
+		if len(whitelist) > 0 && !whitelist[nodeProto] {
+			return nodeFilterDecision{configured: true}
+		}
+		return nodeFilterDecision{configured: true, matched: true}
+	}
+}
+
+// 6. 节点质量过滤
+func (sub *Subcription) qualityFilterPredicate() nodeFilterPredicate {
 	residentialType := sub.ResidentialType
 	if residentialType == "" && sub.OnlyResidential {
 		residentialType = "residential"
@@ -621,52 +601,69 @@ func (sub *Subcription) ApplyFilters(nodes []Node) []Node {
 	if ipType == "" && sub.OnlyNative {
 		ipType = "native"
 	}
-
-	// 6. 节点质量过滤
-	if sub.MaxFraudScore > 0 || residentialType != "" || ipType != "" || sub.QualityStatus != "" {
-		var filteredNodes []Node
-		for _, node := range result {
-			// 最大欺诈评分过滤
-			if sub.MaxFraudScore > 0 {
-				if getNodeQualityStatusValue(node) != QualityStatusSuccess || node.FraudScore < 0 || node.FraudScore > sub.MaxFraudScore {
-					continue
-				}
-			}
-			if !matchNodeQualityStatus(node, sub.QualityStatus) {
-				continue
-			}
-			if !matchNodeResidentialType(node, residentialType) {
-				continue
-			}
-			if !matchNodeIPType(node, ipType) {
-				continue
-			}
-			filteredNodes = append(filteredNodes, node)
-		}
-		result = filteredNodes
+	if sub.MaxFraudScore <= 0 && residentialType == "" && ipType == "" && sub.QualityStatus == "" {
+		return nil
 	}
+	return func(node Node) nodeFilterDecision {
+		if sub.MaxFraudScore > 0 {
+			if getNodeQualityStatusValue(node) != QualityStatusSuccess || node.FraudScore < 0 || node.FraudScore > sub.MaxFraudScore {
+				return nodeFilterDecision{configured: true}
+			}
+		}
+		if !matchNodeQualityStatus(node, sub.QualityStatus) {
+			return nodeFilterDecision{configured: true}
+		}
+		if !matchNodeResidentialType(node, residentialType) {
+			return nodeFilterDecision{configured: true}
+		}
+		if !matchNodeIPType(node, ipType) {
+			return nodeFilterDecision{configured: true}
+		}
+		return nodeFilterDecision{configured: true, matched: true}
+	}
+}
 
+// 7. 解锁规则过滤
+func (sub *Subcription) unlockFilterPredicate() nodeFilterPredicate {
 	unlockRules := ParseUnlockFilterRules(sub.UnlockRules)
 	if len(unlockRules) == 0 && (sub.UnlockProvider != "" || sub.UnlockStatus != "" || sub.UnlockKeyword != "") {
 		unlockRules = []UnlockFilterRule{{Provider: sub.UnlockProvider, Status: sub.UnlockStatus, Keyword: sub.UnlockKeyword}}
 	}
-	unlockRuleMode := NormalizeUnlockRuleMode(sub.UnlockRuleMode)
-	if len(unlockRules) > 0 {
-		var filteredNodes []Node
-		for _, node := range result {
-			summary := ParseUnlockSummary(node.UnlockSummary)
-			if !MatchUnlockSummaryRulesWithMode(summary, unlockRules, unlockRuleMode) {
-				continue
-			}
-			filteredNodes = append(filteredNodes, node)
-		}
-		result = filteredNodes
+	if len(unlockRules) == 0 {
+		return nil
 	}
+	unlockRuleMode := NormalizeUnlockRuleMode(sub.UnlockRuleMode)
+	return func(node Node) nodeFilterDecision {
+		summary := ParseUnlockSummary(node.UnlockSummary)
+		return nodeFilterDecision{
+			configured: true,
+			matched:    MatchUnlockSummaryRulesWithMode(summary, unlockRules, unlockRuleMode),
+		}
+	}
+}
 
-	// 7. 应用去重规则
-	result = sub.ApplyDeduplication(result)
+func splitFilterValues(value string, normalize func(string) string) map[string]bool {
+	values := make(map[string]bool)
+	for _, item := range strings.Split(value, ",") {
+		item = strings.TrimSpace(item)
+		if item == "" {
+			continue
+		}
+		if normalize != nil {
+			item = normalize(item)
+		}
+		values[item] = true
+	}
+	return values
+}
 
-	return result
+func hasAnyFilterValue(values []string, set map[string]bool) bool {
+	for _, value := range values {
+		if set[value] {
+			return true
+		}
+	}
+	return false
 }
 
 // 读取订阅

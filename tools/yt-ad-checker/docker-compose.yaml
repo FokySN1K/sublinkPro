@@ -1,0 +1,57 @@
+name: yt-ad-checker
+
+services:
+  yt-ad-checker:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: yt-ad-checker:latest
+    container_name: yt-ad-checker
+    restart: unless-stopped
+    init: true
+    # A probe in flight may need up to PROBE_TIMEOUT to finish on SIGTERM.
+    stop_grace_period: 90s
+    shm_size: "1gb"
+    environment:
+      SUBLINK_URL: ${SUBLINK_URL:-http://host.docker.internal:8000}
+      SUBLINK_API_KEY: ${SUBLINK_API_KEY:?SUBLINK_API_KEY is required}
+      SERVICE: ${SERVICE:-youtube}
+      YOUTUBE_TAG: ${YOUTUBE_TAG:-youtube}
+      YOUTUBE_ADS_TAG: ${YOUTUBE_ADS_TAG:-youtube-ads}
+      RUTUBE_TAG: ${RUTUBE_TAG:-rutube}
+      RUTUBE_ADS_TAG: ${RUTUBE_ADS_TAG:-rutube-ads}
+      RUTUBE_VIDEOS: ${RUTUBE_VIDEOS:-}
+      CHECK_INTERVAL: ${CHECK_INTERVAL:-6h}
+      RUN_ON_START: ${RUN_ON_START:-true}
+      ONCE: ${ONCE:-false}
+      ONLY_TAGS: ${ONLY_TAGS:-}
+      SKIP_TAGS: ${SKIP_TAGS:-}
+      MAX_NODES: ${MAX_NODES:-0}
+      WORKERS: ${WORKERS:-1}
+      ENSURE_TAG: ${ENSURE_TAG:-true}
+      DRY_RUN: ${DRY_RUN:-false}
+      YOUTUBE_VIDEOS: ${YOUTUBE_VIDEOS:-}
+      PROBE_URL: ${PROBE_URL:-}
+      PROBE_TIMEOUT: ${PROBE_TIMEOUT:-45}
+      PROBE_DWELL: ${PROBE_DWELL:-10}
+      HEADLESS: ${HEADLESS:-false}
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+    extra_hosts:
+      # Lets the container reach SublinkPro published on the Docker host.
+      - "host.docker.internal:host-gateway"
+    volumes:
+      - yt-ad-checker-data:/data
+    # To reach SublinkPro over a shared Docker network instead of the host,
+    # drop the extra_hosts block above, uncomment the two sections below and
+    # set SUBLINK_URL=http://sublinkpro:8000 in .env.
+    #
+    # networks:
+    #   - sublinkpro
+    #
+# networks:
+#   sublinkpro:
+#     external: true
+#     name: sublinkpro_default
+
+volumes:
+  yt-ad-checker-data:

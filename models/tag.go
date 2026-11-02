@@ -10,6 +10,7 @@ import (
 	"sublink/database"
 	"sublink/utils"
 	"time"
+	"unicode/utf8"
 
 	"gorm.io/gorm"
 )
@@ -99,8 +100,8 @@ func InitTagRuleCache() error {
 
 // Add 添加标签
 func (t *Tag) Add() error {
-	if t.Name == "" {
-		return fmt.Errorf("标签名称不能为空")
+	if err := ValidateTagName(t.Name); err != nil {
+		return err
 	}
 	if err := database.DB.Create(t).Error; err != nil {
 		return err
@@ -122,6 +123,244 @@ func (t *Tag) Update() error {
 	}
 	tagCache.Set(t.Name, *t)
 	return nil
+}
+
+// TagNameMaxLength 标签名称的最大长度（与 tags.name 的列长度一致）
+const TagNameMaxLength = 100
+
+// ValidateTagName 校验标签名称本身是否可用（不检查重名）。
+// 标签名称同时是主键和以逗号分隔保存在节点、订阅、检测任务里的值，
+// 因此空名称、含逗号的名称与超长名称在新建和重命名时都必须拒绝。
+func ValidateTagName(name string) error {
+	if strings.TrimSpace(name) == "" {
+		return fmt.Errorf("标签名称不能为空")
+	}
+	if strings.Contains(name, ",") {
+		return fmt.Errorf("标签名称不能包含逗号")
+	}
+	if utf8.RuneCountInString(name) > TagNameMaxLength {
+		return fmt.Errorf("标签名称不能超过 %d 个字符", TagNameMaxLength)
+	}
+	return nil
+}
+
+// ValidateTagRename 校验标签新名称是否可用。
+func ValidateTagRename(newName string) error {
+	if err := ValidateTagName(newName); err != nil {
+		return err
+	}
+	if TagExists(newName) {
+		return fmt.Errorf("标签名称已存在")
+	}
+	return nil
+}
+
+// Rename 重命名标签，并级联更新所有引用该名称的数据。
+//
+// 标签名是主键，而节点标签、订阅的标签白/黑名单、节点检测策略与检测任务的
+// 标签范围都以名称保存，所以只改 tags 表会留下一批指向已不存在标签的引用。
+// 所有写入放在同一个事务里，任一步失败则整体回滚；提交后再同步内存缓存。
+func (t *Tag) Rename(newName string) error {
+	newName = strings.TrimSpace(newName)
+	if newName == t.Name {
+		return nil
+	}
+	if err := ValidateTagRename(newName); err != nil {
+		return err
+	}
+
+	oldName := t.Name
+	updatedAt := time.Now()
+	err := database.WithTransaction(func(tx *gorm.DB) error {
+		if err := tx.Model(&Tag{}).Where("name = ?", oldName).Updates(map[string]any{
+			"name":       newName,
+			"updated_at": updatedAt,
+		}).Error; err != nil {
+			return err
+		}
+		if err := tx.Model(&TagRule{}).Where("tag_name = ?", oldName).
+			Update("tag_name", newName).Error; err != nil {
+			return err
+		}
+		if err := renameTagInNodes(tx, oldName, newName); err != nil {
+			return err
+		}
+		if err := renameTagInSubscriptions(tx, oldName, newName); err != nil {
+			return err
+		}
+		if err := renameTagInNodeCheckProfiles(tx, oldName, newName); err != nil {
+			return err
+		}
+		return renameTagInNodeCheckJobs(tx, oldName, newName)
+	})
+	if err != nil {
+		return err
+	}
+
+	t.Name = newName
+	t.UpdatedAt = updatedAt
+	tagCache.Delete(oldName)
+	tagCache.Set(newName, *t)
+	renameTagInCaches(oldName, newName)
+	return nil
+}
+
+// replaceTagInCSV 把逗号分隔列表中的 oldName 换成 newName，第二个返回值表示是否有改动。
+func replaceTagInCSV(value, oldName, newName string) (string, bool) {
+	if value == "" || !strings.Contains(value, oldName) {
+		return value, false
+	}
+	parts := strings.Split(value, ",")
+	changed := false
+	for i, part := range parts {
+		if strings.TrimSpace(part) == oldName {
+			parts[i] = newName
+			changed = true
+		}
+	}
+	if !changed {
+		return value, false
+	}
+	return strings.Join(parts, ","), true
+}
+
+// renameTagInNodes 重写 nodes.tags 中的标签名称，相同结果的节点合并为一条更新。
+func renameTagInNodes(tx *gorm.DB, oldName, newName string) error {
+	// LIKE 只做粗筛，精确判断交给 GetTagNames，避免 "you" 命中 "youtube"
+	var nodes []Node
+	if err := tx.Select("id", "tags").Where("tags LIKE ?", "%"+oldName+"%").Find(&nodes).Error; err != nil {
+		return err
+	}
+	resultGroups := make(map[string][]int)
+	for i := range nodes {
+		if !nodes[i].HasTagName(oldName) {
+			continue
+		}
+		names := nodes[i].GetTagNames()
+		for j, name := range names {
+			if name == oldName {
+				names[j] = newName
+			}
+		}
+		tagsString := strings.Join(names, ",")
+		resultGroups[tagsString] = append(resultGroups[tagsString], nodes[i].ID)
+	}
+	for tagsString, ids := range resultGroups {
+		if err := tx.Model(&Node{}).Where("id IN ?", ids).Update("tags", tagsString).Error; err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// renameTagInSubscriptions 重写订阅的标签白名单与黑名单。
+func renameTagInSubscriptions(tx *gorm.DB, oldName, newName string) error {
+	var subs []Subcription
+	if err := tx.Unscoped().Select("id", "tag_whitelist", "tag_blacklist").Find(&subs).Error; err != nil {
+		return err
+	}
+	for i := range subs {
+		whitelist, changedW := replaceTagInCSV(subs[i].TagWhitelist, oldName, newName)
+		blacklist, changedB := replaceTagInCSV(subs[i].TagBlacklist, oldName, newName)
+		if !changedW && !changedB {
+			continue
+		}
+		if err := tx.Unscoped().Model(&Subcription{}).Where("id = ?", subs[i].ID).Updates(map[string]any{
+			"tag_whitelist": whitelist,
+			"tag_blacklist": blacklist,
+		}).Error; err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// renameTagInNodeCheckProfiles 重写节点检测策略的标签过滤条件。
+func renameTagInNodeCheckProfiles(tx *gorm.DB, oldName, newName string) error {
+	var profiles []NodeCheckProfile
+	if err := tx.Unscoped().Select("id", "tags").Find(&profiles).Error; err != nil {
+		return err
+	}
+	for i := range profiles {
+		tags, changed := replaceTagInCSV(profiles[i].Tags, oldName, newName)
+		if !changed {
+			continue
+		}
+		if err := tx.Unscoped().Model(&NodeCheckProfile{}).Where("id = ?", profiles[i].ID).
+			Update("tags", tags).Error; err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// renameTagInNodeCheckJobs 重写检测任务的标签范围（JSON 数组列）。
+func renameTagInNodeCheckJobs(tx *gorm.DB, oldName, newName string) error {
+	jobs := make([]NodeCheckJob, 0)
+	if err := tx.Find(&jobs).Error; err != nil {
+		return err
+	}
+	for i := range jobs {
+		renamed := make([]string, 0, len(jobs[i].Tags))
+		changed := false
+		for _, name := range jobs[i].Tags {
+			if name == oldName {
+				name = newName
+				changed = true
+			}
+			renamed = append(renamed, name)
+		}
+		if !changed {
+			continue
+		}
+		jobs[i].Tags = renamed
+		if err := tx.Model(&jobs[i]).Select("Tags").Updates(&jobs[i]).Error; err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// renameTagInCaches 把内存缓存里的旧名称就地替换，避免缓存比数据库晚一拍。
+func renameTagInCaches(oldName, newName string) {
+	for _, rule := range tagRuleCache.GetAll() {
+		if rule.TagName != oldName {
+			continue
+		}
+		rule.TagName = newName
+		tagRuleCache.Set(rule.ID, rule)
+	}
+	for _, node := range nodeCache.GetAll() {
+		if !node.HasTagName(oldName) {
+			continue
+		}
+		names := node.GetTagNames()
+		for i, name := range names {
+			if name == oldName {
+				names[i] = newName
+			}
+		}
+		node.Tags = strings.Join(names, ",")
+		nodeCache.Set(node.ID, node)
+	}
+	for _, sub := range subcriptionCache.GetAll() {
+		whitelist, changedW := replaceTagInCSV(sub.TagWhitelist, oldName, newName)
+		blacklist, changedB := replaceTagInCSV(sub.TagBlacklist, oldName, newName)
+		if !changedW && !changedB {
+			continue
+		}
+		sub.TagWhitelist = whitelist
+		sub.TagBlacklist = blacklist
+		subcriptionCache.Set(sub.ID, sub)
+	}
+	for _, profile := range nodeCheckProfileCache.GetAll() {
+		tags, changed := replaceTagInCSV(profile.Tags, oldName, newName)
+		if !changed {
+			continue
+		}
+		profile.Tags = tags
+		nodeCheckProfileCache.Set(profile.ID, profile)
+	}
 }
 
 // Delete 删除标签
