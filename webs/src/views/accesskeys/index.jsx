@@ -36,12 +36,13 @@ import Tooltip from '@mui/material/Tooltip';
 // icons
 import AddIcon from '@mui/icons-material/Add';
 import DeleteIcon from '@mui/icons-material/Delete';
+import EditIcon from '@mui/icons-material/Edit';
 import RefreshIcon from '@mui/icons-material/Refresh';
 import ContentCopyIcon from '@mui/icons-material/ContentCopy';
 
 import MainCard from 'ui-component/cards/MainCard';
 import Pagination from 'components/Pagination';
-import { getAccessKeys, createAccessKey, deleteAccessKey } from 'api/accesskeys';
+import { getAccessKeys, createAccessKey, deleteAccessKey, updateAccessKey } from 'api/accesskeys';
 import { useAuth } from 'contexts/AuthContext';
 import { formatDateTime } from 'i18n/locales';
 
@@ -49,6 +50,61 @@ import { formatDateTime } from 'i18n/locales';
 
 // 与后端 access_keys.description (varchar(255)) 保持一致
 const DESCRIPTION_MAX_LENGTH = 255;
+
+// 创建与编辑对话框共用的描述和过期时间表单
+function AccessKeyFormFields({ idPrefix, value, onChange, t }) {
+  const expiredAtText = value.expiredAt
+    ? new Date(value.expiredAt.getTime() - value.expiredAt.getTimezoneOffset() * 60000).toISOString().slice(0, 16)
+    : '';
+
+  return (
+    <Stack spacing={2}>
+      <TextField
+        fullWidth
+        id={`${idPrefix}-description`}
+        name="description"
+        label={t('accessKeys.fields.description')}
+        autoComplete="off"
+        value={value.description}
+        onChange={(e) => onChange({ ...value, description: e.target.value })}
+        inputProps={{ maxLength: DESCRIPTION_MAX_LENGTH }}
+        helperText={
+          <Stack component="span" direction="row" justifyContent="space-between" spacing={2}>
+            <span>{t('accessKeys.form.descriptionHelper')}</span>
+            <span>
+              {value.description.length}/{DESCRIPTION_MAX_LENGTH}
+            </span>
+          </Stack>
+        }
+      />
+      <FormControl component="fieldset">
+        <FormLabel component="legend">{t('accessKeys.form.expirationSettings')}</FormLabel>
+        <RadioGroup row value={value.expirationOption} onChange={(e) => onChange({ ...value, expirationOption: e.target.value })}>
+          <FormControlLabel value="never" control={<Radio />} label={t('accessKeys.expiration.never')} />
+          <FormControlLabel value="custom" control={<Radio />} label={t('accessKeys.expiration.custom')} />
+        </RadioGroup>
+      </FormControl>
+      {value.expirationOption === 'custom' && (
+        <TextField
+          fullWidth
+          id={`${idPrefix}-expiredAt`}
+          name="expiredAt"
+          label={t('accessKeys.fields.expiredAt')}
+          type="datetime-local"
+          autoComplete="off"
+          value={expiredAtText}
+          onChange={(e) => {
+            const val = e.target.value;
+            onChange({ ...value, expiredAt: val ? new Date(val) : null });
+          }}
+          InputLabelProps={{
+            shrink: true
+          }}
+        />
+      )}
+    </Stack>
+  );
+}
 
 export default function ApiKeyList() {
   const { t, i18n } = useTranslation();
@@ -67,6 +123,15 @@ export default function ApiKeyList() {
     expiredAt: null
   });
   const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' });
+
+  // 编辑对话框
+  const [editOpen, setEditOpen] = useState(false);
+  const [editTarget, setEditTarget] = useState(null);
+  const [editForm, setEditForm] = useState({
+    description: '',
+    expirationOption: 'never',
+    expiredAt: null
+  });
 
   // 分页
   const [page, setPage] = useState(0);
@@ -184,6 +249,41 @@ export default function ApiKeyList() {
     showMessage(t('accessKeys.messages.copied'));
   };
 
+  const handleEditOpen = (accessKey) => {
+    setEditTarget(accessKey);
+    setEditForm({
+      description: accessKey.Description || '',
+      expirationOption: accessKey.ExpiredAt ? 'custom' : 'never',
+      expiredAt: accessKey.ExpiredAt ? new Date(accessKey.ExpiredAt) : null
+    });
+    setEditOpen(true);
+  };
+
+  const handleEditSubmit = async () => {
+    const description = editForm.description.trim();
+    if (!description) {
+      showMessage(t('accessKeys.messages.descriptionRequired'), 'warning');
+      return;
+    }
+    if (editForm.expirationOption === 'custom' && !editForm.expiredAt) {
+      showMessage(t('accessKeys.messages.expiredAtRequired'), 'warning');
+      return;
+    }
+
+    try {
+      await updateAccessKey({
+        id: editTarget.ID,
+        description,
+        expiredAt: editForm.expirationOption === 'custom' ? editForm.expiredAt.toISOString() : null
+      });
+      showMessage(t('accessKeys.messages.updateSuccess'));
+      setEditOpen(false);
+      fetchAccessKeys(page, rowsPerPage);
+    } catch (error) {
+      showMessage(error.message || t('accessKeys.messages.updateFailed'), 'error');
+    }
+  };
+
   const formatDate = (dateStr) => {
     if (!dateStr) return '-';
     const date = new Date(dateStr);
@@ -204,6 +304,21 @@ export default function ApiKeyList() {
       return <Chip label={t('accessKeys.expiration.expiresInDays', { count: diffDays })} color="warning" size="small" variant="outlined" />;
     }
     return <Chip label={formatDate(apiKey.ExpiredAt)} color="info" size="small" variant="outlined" />;
+  };
+
+  const renderLastUsed = (accessKey) => {
+    if (!accessKey.LastUsedAt) {
+      return (
+        <Typography variant="caption" color="textSecondary">
+          {t('accessKeys.lastUsed.never')}
+        </Typography>
+      );
+    }
+    return (
+      <Tooltip title={accessKey.LastUsedIP || ''} enterDelay={300}>
+        <Box component="span">{formatDate(accessKey.LastUsedAt)}</Box>
+      </Tooltip>
+    );
   };
 
   return (
@@ -249,8 +364,20 @@ export default function ApiKeyList() {
                 <Typography variant="caption" color="textSecondary" display="block" gutterBottom>
                   {t('accessKeys.fields.createdAt')}: {formatDate(accessKey.CreatedAt)}
                 </Typography>
+                <Typography variant="caption" color="textSecondary" display="block" gutterBottom>
+                  {t('accessKeys.fields.lastUsed')}:{' '}
+                  {accessKey.LastUsedAt ? formatDate(accessKey.LastUsedAt) : t('accessKeys.lastUsed.never')}
+                </Typography>
+                {accessKey.LastUsedIP && (
+                  <Typography variant="caption" color="textSecondary" display="block" gutterBottom>
+                    {t('accessKeys.fields.lastUsedIP')}: {accessKey.LastUsedIP}
+                  </Typography>
+                )}
                 <Divider sx={{ my: 1 }} />
                 <Stack direction="row" justifyContent="flex-end">
+                  <IconButton size="small" color="primary" onClick={() => handleEditOpen(accessKey)}>
+                    <EditIcon fontSize="small" />
+                  </IconButton>
                   <IconButton size="small" color="error" onClick={() => handleDelete(accessKey)}>
                     <DeleteIcon fontSize="small" />
                   </IconButton>
@@ -267,6 +394,7 @@ export default function ApiKeyList() {
                 <TableCell>ID</TableCell>
                 <TableCell>{t('accessKeys.fields.description')}</TableCell>
                 <TableCell>{t('accessKeys.fields.createdAt')}</TableCell>
+                <TableCell>{t('accessKeys.fields.lastUsed')}</TableCell>
                 <TableCell>{t('accessKeys.fields.expiration')}</TableCell>
                 <TableCell align="right">{t('accessKeys.fields.actions')}</TableCell>
               </TableRow>
@@ -283,8 +411,12 @@ export default function ApiKeyList() {
                     </Tooltip>
                   </TableCell>
                   <TableCell>{formatDate(accessKey.CreatedAt)}</TableCell>
+                  <TableCell>{renderLastUsed(accessKey)}</TableCell>
                   <TableCell>{getExpirationStatus(accessKey)}</TableCell>
                   <TableCell align="right">
+                    <IconButton size="small" color="primary" onClick={() => handleEditOpen(accessKey)}>
+                      <EditIcon fontSize="small" />
+                    </IconButton>
                     <IconButton size="small" color="error" onClick={() => handleDelete(accessKey)}>
                       <DeleteIcon fontSize="small" />
                     </IconButton>
@@ -324,64 +456,26 @@ export default function ApiKeyList() {
       <Dialog open={dialogOpen} onClose={() => setDialogOpen(false)} maxWidth="sm" fullWidth>
         <DialogTitle>{t('accessKeys.createDialog.title')}</DialogTitle>
         <DialogContent>
-          <Stack spacing={2}>
-            <TextField
-              fullWidth
-              id="description"
-              name="description"
-              label={t('accessKeys.fields.description')}
-              autoComplete="off"
-              value={formData.description}
-              onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-              inputProps={{ maxLength: DESCRIPTION_MAX_LENGTH }}
-              helperText={
-                <Stack component="span" direction="row" justifyContent="space-between" spacing={2}>
-                  <span>{t('accessKeys.createDialog.descriptionHelper')}</span>
-                  <span>
-                    {formData.description.length}/{DESCRIPTION_MAX_LENGTH}
-                  </span>
-                </Stack>
-              }
-            />
-            <FormControl component="fieldset">
-              <FormLabel component="legend">{t('accessKeys.createDialog.expirationSettings')}</FormLabel>
-              <RadioGroup
-                row
-                value={formData.expirationOption}
-                onChange={(e) => setFormData({ ...formData, expirationOption: e.target.value })}
-              >
-                <FormControlLabel value="never" control={<Radio />} label={t('accessKeys.expiration.never')} />
-                <FormControlLabel value="custom" control={<Radio />} label={t('accessKeys.expiration.custom')} />
-              </RadioGroup>
-            </FormControl>
-            {formData.expirationOption === 'custom' && (
-              <TextField
-                fullWidth
-                id="expiredAt"
-                name="expiredAt"
-                label={t('accessKeys.fields.expiredAt')}
-                type="datetime-local"
-                autoComplete="off"
-                value={
-                  formData.expiredAt
-                    ? new Date(formData.expiredAt.getTime() - formData.expiredAt.getTimezoneOffset() * 60000).toISOString().slice(0, 16)
-                    : ''
-                }
-                onChange={(e) => {
-                  const val = e.target.value;
-                  setFormData({ ...formData, expiredAt: val ? new Date(val) : null });
-                }}
-                InputLabelProps={{
-                  shrink: true
-                }}
-              />
-            )}
-          </Stack>
+          <AccessKeyFormFields idPrefix="accesskey-create" value={formData} onChange={setFormData} t={t} />
         </DialogContent>
         <DialogActions>
           <Button onClick={() => setDialogOpen(false)}>{t('common.cancel')}</Button>
           <Button variant="contained" onClick={handleSubmit}>
             {t('accessKeys.actions.create')}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* 编辑对话框：只修改描述与过期时间，密钥本身保持不变 */}
+      <Dialog open={editOpen} onClose={() => setEditOpen(false)} maxWidth="sm" fullWidth>
+        <DialogTitle>{t('accessKeys.editDialog.title')}</DialogTitle>
+        <DialogContent>
+          <AccessKeyFormFields idPrefix="accesskey-edit" value={editForm} onChange={setEditForm} t={t} />
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setEditOpen(false)}>{t('common.cancel')}</Button>
+          <Button variant="contained" onClick={handleEditSubmit}>
+            {t('common.save')}
           </Button>
         </DialogActions>
       </Dialog>

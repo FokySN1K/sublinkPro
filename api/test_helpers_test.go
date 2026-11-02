@@ -15,9 +15,10 @@ import (
 )
 
 type apiJSONResponse struct {
-	Code int             `json:"code"`
-	Msg  string          `json:"msg"`
-	Data json.RawMessage `json:"data"`
+	Code    int             `json:"code"`
+	Msg     string          `json:"msg"`
+	Data    json.RawMessage `json:"data"`
+	I18nKey string          `json:"i18nKey"`
 }
 
 func setupSettingAPITestDB(t *testing.T) {

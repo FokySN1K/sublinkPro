@@ -3724,6 +3724,8 @@
     "fields": {
       "description": "Description",
       "createdAt": "Created at",
+      "lastUsed": "Last used",
+      "lastUsedIP": "Source IP",
       "expiration": "Expiration",
       "expiredAt": "Expiration time",
       "actions": "Actions"
@@ -3734,10 +3736,18 @@
       "expired": "Expired",
       "expiresInDays": "Expires in {{count}} days"
     },
-    "createDialog": {
-      "title": "Create API Key",
+    "lastUsed": {
+      "never": "Never used"
+    },
+    "form": {
       "descriptionHelper": "Enter a description to identify this key. Up to 255 characters.",
       "expirationSettings": "Expiration settings"
+    },
+    "createDialog": {
+      "title": "Create API Key"
+    },
+    "editDialog": {
+      "title": "Edit API Key"
     },
     "createdDialog": {
       "title": "API Key Created",
@@ -3755,6 +3765,8 @@
       "descriptionRequired": "Please enter a description",
       "expiredAtRequired": "Please select an expiration time",
       "createFailed": "Failed to create API key",
+      "updateSuccess": "Updated successfully",
+      "updateFailed": "Update failed",
       "copied": "Copied to clipboard"
     }
   },
@@ -4359,9 +4371,53 @@
     "emptyPlans": "No detection plans"
   },
   "backend": {
+    "common": {
+      "invalidParams": "Invalid request parameters"
+    },
+    "user": {
+      "notFound": "User not found",
+      "missingUserID": "Missing user ID"
+    },
+    "auth": {
+      "currentUser": {
+        "missing": "Unable to identify the current user",
+        "invalid": "The current user identity is invalid"
+      },
+      "captcha": {
+        "disabled": "Captcha is disabled",
+        "loaded": "Captcha loaded",
+        "loadFailed": "Failed to load captcha",
+        "turnstileLoaded": "Turnstile configuration loaded"
+      },
+      "login": {
+        "success": "Signed in successfully",
+        "invalidCredentials": "Incorrect username or password",
+        "ipBanned": "Too many failed sign-in attempts. Please try again in {{minutes}} minutes",
+        "turnstileRequired": "Please complete the human verification",
+        "turnstileFailed": "Human verification failed",
+        "turnstileRejected": "Human verification did not pass",
+        "captchaInvalid": "Incorrect captcha",
+        "mfaChallengeFailed": "Failed to create the sign-in challenge",
+        "mfaRequired": "Two-factor authentication required",
+        "tokenFailed": "Failed to issue the access token"
+      },
+      "logout": {
+        "success": "Signed out"
+      }
+    },
     "accessKeys": {
       "descriptionRequired": "Description is required",
-      "descriptionTooLong": "Description must be at most {{max}} characters"
+      "descriptionTooLong": "Description must be at most {{max}} characters",
+      "generateSuccess": "API key generated",
+      "generateFailed": "Failed to generate the API key",
+      "updateSuccess": "API key updated",
+      "updateFailed": "Failed to update the API key",
+      "deleteSuccess": "API key deleted",
+      "deleteFailed": "Failed to delete the API key",
+      "querySuccess": "API keys loaded",
+      "queryFailed": "Failed to load API keys",
+      "missingAccessKeyID": "Missing access key ID",
+      "notFound": "API key not found"
     }
   }
 }

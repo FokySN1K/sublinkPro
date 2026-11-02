@@ -28,6 +28,13 @@ type UserAccessKey struct {
 	Description string     `json:"description"`
 }
 
+// UserAccessKeyUpdate 用户访问密钥更新请求体结构
+type UserAccessKeyUpdate struct {
+	ID          int        `json:"id" binding:"required"`
+	Description string     `json:"description"`
+	ExpiredAt   *time.Time `json:"expiredAt"`
+}
+
 // AirportRequest 机场添加/更新请求体结构
 type AirportRequest struct {
 	ID                           int                    `json:"id"`

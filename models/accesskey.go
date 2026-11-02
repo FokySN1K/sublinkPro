@@ -3,11 +3,14 @@ package models
 import (
 	"crypto/rand"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"strconv"
+	"strings"
 	"sublink/cache"
 	"sublink/database"
 	"sublink/utils"
+	"sync"
 	"time"
 	"unicode/utf8"
 
@@ -17,6 +20,16 @@ import (
 // AccessKeyDescriptionMaxLength 描述的最大长度（与 access_keys.description 的列长度一致）
 const AccessKeyDescriptionMaxLength = 255
 
+// accessKeyLastUsedWriteInterval 最近使用记录的落库间隔，避免每个 API 请求都写库
+const accessKeyLastUsedWriteInterval = 5 * time.Minute
+
+var (
+	// ErrAccessKeyDescriptionEmpty 描述为空
+	ErrAccessKeyDescriptionEmpty = errors.New("描述不能为空")
+	// ErrAccessKeyDescriptionTooLong 描述超过最大长度
+	ErrAccessKeyDescriptionTooLong = fmt.Errorf("描述不能超过 %d 个字符", AccessKeyDescriptionMaxLength)
+)
+
 type AccessKey struct {
 	ID            int        `gorm:"primaryKey"`
 	UserID        int        `gorm:"not null;index"`
@@ -25,14 +38,28 @@ type AccessKey struct {
 	CreatedAt     time.Time  `gorm:"autoCreateTime"`
 	ExpiredAt     *time.Time `gorm:"index"`
 	Description   string     `gorm:"type:varchar(255)"`
+	LastUsedAt    *time.Time
+	LastUsedIP    string `gorm:"type:varchar(64)"`
 }
 
 // ValidateAccessKeyDescription 按字符数校验描述长度，避免多字节字符被按字节数误判
 func ValidateAccessKeyDescription(description string) error {
 	if utf8.RuneCountInString(description) > AccessKeyDescriptionMaxLength {
-		return fmt.Errorf("描述不能超过 %d 个字符", AccessKeyDescriptionMaxLength)
+		return ErrAccessKeyDescriptionTooLong
 	}
 	return nil
+}
+
+// NormalizeAccessKeyDescription 去除首尾空白并校验长度，返回可直接存储的描述
+func NormalizeAccessKeyDescription(description string) (string, error) {
+	description = strings.TrimSpace(description)
+	if description == "" {
+		return "", ErrAccessKeyDescriptionEmpty
+	}
+	if err := ValidateAccessKeyDescription(description); err != nil {
+		return "", err
+	}
+	return description, nil
 }
 
 // accessKeyCache 使用新的泛型缓存
@@ -66,6 +93,52 @@ func (accessKey *AccessKey) Generate() error {
 	}
 	accessKeyCache.Set(accessKey.ID, *accessKey)
 	return nil
+}
+
+// Update 更新描述与过期时间 (Write-Through)
+func (accessKey *AccessKey) Update(description string, expiredAt *time.Time) error {
+	var existing AccessKey
+	if err := database.DB.First(&existing, accessKey.ID).Error; err != nil {
+		return err
+	}
+	err := database.DB.Model(&AccessKey{}).Where("id = ?", accessKey.ID).
+		Updates(map[string]any{"description": description, "expired_at": expiredAt}).Error
+	if err != nil {
+		return err
+	}
+	existing.Description = description
+	existing.ExpiredAt = expiredAt
+	accessKeyCache.Set(existing.ID, existing)
+	*accessKey = existing
+	return nil
+}
+
+// accessKeyLastUsedWrites 记录各密钥上次写入最近使用信息的时间，用于节流
+var accessKeyLastUsedWrites sync.Map
+
+// TouchLastUsed 记录密钥最近一次使用的时间与来源 IP。
+// 写入按密钥节流并放到后台执行，避免高频 API 调用把 SQLite 写成瓶颈。
+func (accessKey *AccessKey) TouchLastUsed(ip string, now time.Time) {
+	if last, ok := accessKeyLastUsedWrites.Load(accessKey.ID); ok {
+		if lastWrite, ok := last.(time.Time); ok && now.Sub(lastWrite) < accessKeyLastUsedWriteInterval {
+			return
+		}
+	}
+	accessKeyLastUsedWrites.Store(accessKey.ID, now)
+
+	go func(id int, clientIP string, at time.Time) {
+		err := database.DB.Model(&AccessKey{}).Where("id = ?", id).
+			Updates(map[string]any{"last_used_at": at, "last_used_ip": clientIP}).Error
+		if err != nil {
+			utils.Error("更新 AccessKey 最近使用记录失败，ID: %d, 错误: %v", id, err)
+			return
+		}
+		if cached, ok := accessKeyCache.Get(id); ok {
+			cached.LastUsedAt = &at
+			cached.LastUsedIP = clientIP
+			accessKeyCache.Set(id, cached)
+		}
+	}(accessKey.ID, ip, now)
 }
 
 // FindValidAccessKeys 查找未过期的 AccessKey

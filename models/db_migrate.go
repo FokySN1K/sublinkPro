@@ -374,6 +374,23 @@ func RunMigrations() error {
 		utils.Error("执行迁移 0038_seed_extended_country_rules 失败: %v", err)
 	}
 
+	// 0039_add_accesskey_last_used_columns - 记录访问密钥的最近使用时间与来源 IP
+	if err := database.RunCustomMigration("0039_add_accesskey_last_used_columns", func() error {
+		if !db.Migrator().HasColumn(&AccessKey{}, "LastUsedAt") {
+			if err := db.Migrator().AddColumn(&AccessKey{}, "LastUsedAt"); err != nil {
+				return err
+			}
+		}
+		if !db.Migrator().HasColumn(&AccessKey{}, "LastUsedIP") {
+			if err := db.Migrator().AddColumn(&AccessKey{}, "LastUsedIP"); err != nil {
+				return err
+			}
+		}
+		return nil
+	}); err != nil {
+		utils.Error("执行迁移 0039_add_accesskey_last_used_columns 失败: %v", err)
+	}
+
 	if err := database.RunCustomMigration("0024_migrate_legacy_webhook_settings", func() error {
 		legacyURL, _ := GetSetting("webhook_url")
 		legacyMethod, _ := GetSetting("webhook_method")

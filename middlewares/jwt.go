@@ -7,6 +7,7 @@ import (
 	"sublink/config"
 	"sublink/models"
 	"sublink/utils"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/golang-jwt/jwt/v4"
@@ -35,7 +36,7 @@ func AuthToken(c *gin.Context) {
 	accessKey := c.GetHeader("X-API-Key")
 
 	if accessKey != "" {
-		username, bool, err := validApiKey(accessKey)
+		username, bool, err := validApiKey(accessKey, c.ClientIP())
 		if err != nil || !bool {
 			utils.Forbidden(c, err.Error())
 			c.Abort()
@@ -126,7 +127,7 @@ func sendSSEAuthError(c *gin.Context, message string) {
 	c.Abort()
 }
 
-func validApiKey(apiKey string) (string, bool, error) {
+func validApiKey(apiKey string, clientIP string) (string, bool, error) {
 
 	// 快速格式验证
 	parts := strings.Split(apiKey, "_")
@@ -155,7 +156,8 @@ func validApiKey(apiKey string) (string, bool, error) {
 	// bcrypt验证
 	for _, key := range keys {
 		if key.VerifyKey(apiKey) {
-
+			// 记录最近使用时间与来源 IP（内部已做节流与异步落库）
+			key.TouchLastUsed(clientIP, time.Now())
 			return key.Username, true, nil
 		}
 	}

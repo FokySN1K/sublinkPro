@@ -27,3 +27,13 @@ export function deleteAccessKey(id) {
     method: 'delete'
   });
 }
+
+// 更新 Access Key 的描述与过期时间（密钥本身不变）
+// data: { id, description, expiredAt }
+export function updateAccessKey(data) {
+  return request({
+    url: '/v1/accesskey/update',
+    method: 'post',
+    data
+  });
+}

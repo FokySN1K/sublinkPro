@@ -1,14 +1,15 @@
 package api
 
 import (
+	"errors"
 	"strconv"
-	"strings"
 	"sublink/dto"
 	"sublink/models"
 	"sublink/utils"
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"gorm.io/gorm"
 )
 
 func GenerateAccessKey(c *gin.Context) {
@@ -17,15 +18,8 @@ func GenerateAccessKey(c *gin.Context) {
 		utils.FailWithI18n(c, "参数错误", "backend.common.invalidParams", nil)
 		return
 	}
-	description := strings.TrimSpace(userAccessKey.Description)
-	if description == "" {
-		utils.FailWithI18n(c, "描述不能为空", "backend.accessKeys.descriptionRequired", nil)
-		return
-	}
-	if err := models.ValidateAccessKeyDescription(description); err != nil {
-		utils.FailWithI18n(c, "描述过长", "backend.accessKeys.descriptionTooLong", map[string]any{
-			"max": models.AccessKeyDescriptionMaxLength,
-		})
+	description, ok := bindAccessKeyDescription(c, userAccessKey.Description)
+	if !ok {
 		return
 	}
 	user := &models.User{Username: userAccessKey.UserName}
@@ -57,6 +51,49 @@ func GenerateAccessKey(c *gin.Context) {
 	utils.OkDetailedI18n(c, "API Key生成成功", map[string]string{
 		"accessKey": apiKey,
 	}, "backend.accessKeys.generateSuccess", nil)
+}
+
+// bindAccessKeyDescription 校验描述并在不合法时直接写出错误响应
+func bindAccessKeyDescription(c *gin.Context, raw string) (string, bool) {
+	description, err := models.NormalizeAccessKeyDescription(raw)
+	if err == nil {
+		return description, true
+	}
+	if errors.Is(err, models.ErrAccessKeyDescriptionTooLong) {
+		utils.FailWithI18n(c, "描述过长", "backend.accessKeys.descriptionTooLong", map[string]any{
+			"max": models.AccessKeyDescriptionMaxLength,
+		})
+		return "", false
+	}
+	utils.FailWithI18n(c, "描述不能为空", "backend.accessKeys.descriptionRequired", nil)
+	return "", false
+}
+
+// UpdateAccessKey 更新 Access Key 的描述与过期时间，密钥本身保持不变
+func UpdateAccessKey(c *gin.Context) {
+	var req dto.UserAccessKeyUpdate
+	if err := c.BindJSON(&req); err != nil {
+		utils.FailWithI18n(c, "参数错误", "backend.common.invalidParams", nil)
+		return
+	}
+
+	description, ok := bindAccessKeyDescription(c, req.Description)
+	if !ok {
+		return
+	}
+
+	accessKey := &models.AccessKey{ID: req.ID}
+	if err := accessKey.Update(description, req.ExpiredAt); err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			utils.FailWithI18n(c, "Access Key不存在", "backend.accessKeys.notFound", nil)
+			return
+		}
+		utils.Error("更新 Access Key 失败: %v", err)
+		utils.FailWithI18n(c, "更新Access Key失败", "backend.accessKeys.updateFailed", nil)
+		return
+	}
+
+	utils.OkDetailedI18n(c, "更新Access Key成功", accessKey, "backend.accessKeys.updateSuccess", nil)
 }
 
 func DeleteAccessKey(c *gin.Context) {

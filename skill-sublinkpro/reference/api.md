@@ -114,6 +114,18 @@ Response data: `{"accessKey": "prefix_xxx_yyy"}` — **shown only once**.
 
 ### List API Keys
 **GET** `/api/v1/accesskey/get/{userId}` (query: `?page=1&pageSize=20`)
+- Each item includes `Description`, `CreatedAt`, `ExpiredAt`, `LastUsedAt` (`null` until first use) and `LastUsedIP`. Last-used tracking is throttled to at most one write per key every 5 minutes.
+
+### Update API Key
+**POST** `/api/v1/accesskey/update` — **JSON** (demo-restricted)
+```json
+{
+  "id": 1,                                // required — key id from the list
+  "description": "AI skill",              // required, at most 255 characters
+  "expiredAt": "2025-12-31T23:59:59Z"     // optional, RFC3339; null/omitted = never expires
+}
+```
+The secret itself is unchanged, so renaming a key does not require reconfiguring clients.
 
 ### Delete API Key
 **DELETE** `/api/v1/accesskey/delete/{accessKeyId}` (demo-restricted)

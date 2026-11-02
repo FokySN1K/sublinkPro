@@ -3724,6 +3724,8 @@
     "fields": {
       "description": "描述",
       "createdAt": "创建时间",
+      "lastUsed": "最近使用",
+      "lastUsedIP": "来源 IP",
       "expiration": "过期时间",
       "expiredAt": "过期时间",
       "actions": "操作"
@@ -3734,10 +3736,18 @@
       "expired": "已过期",
       "expiresInDays": "{{count}} 天后过期"
     },
-    "createDialog": {
-      "title": "创建 API 密钥",
+    "lastUsed": {
+      "never": "从未使用"
+    },
+    "form": {
       "descriptionHelper": "填写描述，便于识别该密钥，最多 255 个字符。",
       "expirationSettings": "过期设置"
+    },
+    "createDialog": {
+      "title": "创建 API 密钥"
+    },
+    "editDialog": {
+      "title": "编辑 API 密钥"
     },
     "createdDialog": {
       "title": "API 密钥已创建",
@@ -3755,6 +3765,8 @@
       "descriptionRequired": "请输入描述",
       "expiredAtRequired": "请选择过期时间",
       "createFailed": "创建 API 密钥失败",
+      "updateSuccess": "更新成功",
+      "updateFailed": "更新失败",
       "copied": "已复制到剪贴板"
     }
   },
@@ -4359,9 +4371,53 @@
     "emptyPlans": "暂无检测方案"
   },
   "backend": {
+    "common": {
+      "invalidParams": "请求参数错误"
+    },
+    "user": {
+      "notFound": "用户不存在",
+      "missingUserID": "缺少用户 ID"
+    },
+    "auth": {
+      "currentUser": {
+        "missing": "未获取到当前用户",
+        "invalid": "当前用户身份无效"
+      },
+      "captcha": {
+        "disabled": "验证码已关闭",
+        "loaded": "验证码获取成功",
+        "loadFailed": "获取验证码失败",
+        "turnstileLoaded": "Turnstile 配置获取成功"
+      },
+      "login": {
+        "success": "登录成功",
+        "invalidCredentials": "用户名或密码错误",
+        "ipBanned": "多次登录失败，IP 已被封禁，请 {{minutes}} 分钟后再试",
+        "turnstileRequired": "请完成人机验证",
+        "turnstileFailed": "人机验证失败",
+        "turnstileRejected": "人机验证未通过",
+        "captchaInvalid": "验证码错误",
+        "mfaChallengeFailed": "生成登录验证失败",
+        "mfaRequired": "需要进行二次验证",
+        "tokenFailed": "获取 token 失败"
+      },
+      "logout": {
+        "success": "退出成功"
+      }
+    },
     "accessKeys": {
       "descriptionRequired": "描述不能为空",
-      "descriptionTooLong": "描述不能超过 {{max}} 个字符"
+      "descriptionTooLong": "描述不能超过 {{max}} 个字符",
+      "generateSuccess": "API 密钥生成成功",
+      "generateFailed": "生成 API 密钥失败",
+      "updateSuccess": "API 密钥更新成功",
+      "updateFailed": "更新 API 密钥失败",
+      "deleteSuccess": "API 密钥删除成功",
+      "deleteFailed": "删除 API 密钥失败",
+      "querySuccess": "API 密钥获取成功",
+      "queryFailed": "获取 API 密钥失败",
+      "missingAccessKeyID": "缺少访问密钥 ID",
+      "notFound": "API 密钥不存在"
     }
   }
 }
