@@ -211,6 +211,23 @@ The summary reports the workers used, how many nodes were checked and the
 average pace per node; with more than one worker each log line is prefixed with
 `W1`/`W2`/… so interleaved output can be untangled.
 
+### Host sizing
+
+Each YouTube worker keeps its own Chromium, so the YouTube probe is what needs
+resources; the Rutube probe only makes HTTP requests.
+
+| Setup | RAM | CPU |
+|---|---|---|
+| YouTube, `WORKERS=1` | ~1 GB | ~1 core |
+| every extra YouTube worker | +0.5–1 GB | +1 core |
+| Rutube, `WORKERS=3` | ~0.3 GB | negligible |
+
+A 1 vCPU / 1 GB host (a typical small VPS) runs SublinkPro and the Rutube
+checker fine, but not the YouTube probe: Chromium is the first thing the OOM
+killer takes, and the load average starves the panel. Run the YouTube container
+on another machine and point `SUBLINK_URL` at the server's published API port
+(`http://<server>:8443`), keeping only the Rutube instance on the host.
+
 ## Output
 
 ```

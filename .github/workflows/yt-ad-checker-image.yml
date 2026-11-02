@@ -14,7 +14,12 @@ on:
   push:
     branches: ['**']
     paths:
-      - 'tools/yt-ad-checker/**'
+      # Only what ends up in the image; README/compose edits do not rebuild it.
+      - 'tools/yt-ad-checker/app/**'
+      - 'tools/yt-ad-checker/tests/**'
+      - 'tools/yt-ad-checker/Dockerfile'
+      - 'tools/yt-ad-checker/requirements.txt'
+      - 'tools/yt-ad-checker/docker-entrypoint.sh'
       - '.github/workflows/yt-ad-checker-image.yml'
   workflow_dispatch:
 

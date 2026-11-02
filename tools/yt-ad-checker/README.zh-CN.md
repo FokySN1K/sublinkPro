@@ -190,6 +190,22 @@ docker run --rm --init --shm-size 1g --env-file .env \
 汇总会给出使用的 worker 数量、实际检测的节点数和平均每个节点的耗时；worker 多于
 一个时，每行日志会加上 `W1`/`W2`/… 前缀，便于区分交错的输出。
 
+### 主机规格
+
+每个 YouTube worker 都会常驻一个 Chromium，因此资源消耗集中在 YouTube 检测；Rutube
+检测只发 HTTP 请求。
+
+| 配置 | 内存 | CPU |
+|---|---|---|
+| YouTube，`WORKERS=1` | 约 1 GB | 约 1 核 |
+| 每增加一个 YouTube worker | +0.5–1 GB | +1 核 |
+| Rutube，`WORKERS=3` | 约 0.3 GB | 可忽略 |
+
+1 vCPU / 1 GB 的小型 VPS 可以同时运行 SublinkPro 与 Rutube 检测，但跑不了 YouTube
+检测：OOM killer 会先杀掉 Chromium，随之而来的负载又会拖垮面板。此时应把 YouTube
+容器放到另一台机器上，把 `SUBLINK_URL` 指向服务器映射出的 API 端口
+（`http://<server>:8443`），服务器上只保留 Rutube 实例。
+
 ## 输出
 
 ```
