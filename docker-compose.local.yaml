@@ -8,9 +8,11 @@
 # Rebuild after code changes:
 #   docker compose -f docker-compose.local.yaml up -d --build
 #
-# The YouTube/Rutube ad checker lives behind the "ad-checker" profile:
+# The YouTube/Rutube ad checker lives behind the "ad-checker" profile and is
+# pulled from GHCR (published by .github/workflows/yt-ad-checker-image.yml):
+#   docker compose -f docker-compose.local.yaml --profile ad-checker pull yt-ad-checker
 #   SUBLINK_API_KEY=<access key> docker compose -f docker-compose.local.yaml \
-#     --profile ad-checker up -d --build yt-ad-checker
+#     --profile ad-checker up -d yt-ad-checker
 
 name: sublinkpro-local
 
@@ -117,12 +119,17 @@ services:
   # YouTube/Rutube ad checker: probes every node through its own mihomo and
   # Chromium and mirrors the verdict on the "<service>" / "<service>-ads" tags.
   #
-  # Kept behind a profile so the regular local stack stays unchanged:
+  # Kept behind a profile so the regular local stack stays unchanged, and pulled
+  # from GHCR so there is no 10-minute local build:
+  #   docker compose -f docker-compose.local.yaml --profile ad-checker pull yt-ad-checker
   #   SUBLINK_API_KEY=<access key> docker compose -f docker-compose.local.yaml \
-  #     --profile ad-checker up -d --build yt-ad-checker
+  #     --profile ad-checker up -d yt-ad-checker
   # One-off dry run over the first ten nodes:
   #   docker compose -f docker-compose.local.yaml --profile ad-checker run --rm \
   #     -e ONCE=true -e DRY_RUN=true -e MAX_NODES=10 yt-ad-checker
+  #
+  # Uncomment "build" to run the checkout's own code instead of the published
+  # image (needed while editing the tool itself).
   #
   # Inside this compose project SublinkPro answers as http://sublinkpro:8000, so
   # the checker needs no host.docker.internal mapping. Do not run it next to the
@@ -130,10 +137,10 @@ services:
   # the same nodes.
   yt-ad-checker:
     profiles: ["ad-checker"]
-    build:
-      context: ./tools/yt-ad-checker
-      dockerfile: Dockerfile
-    image: yt-ad-checker:latest
+    image: ghcr.io/fokysn1k/yt-ad-checker:latest
+    # build:
+    #   context: ./tools/yt-ad-checker
+    #   dockerfile: Dockerfile
     container_name: yt-ad-checker-local
     restart: unless-stopped
     init: true
