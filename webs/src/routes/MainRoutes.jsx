@@ -27,6 +27,7 @@ const WebhookList = Loadable(lazy(() => import('views/webhooks')));
 const AirportList = Loadable(lazy(() => import('views/airports')));
 const NodeCheckList = Loadable(lazy(() => import('views/node-check')));
 const Socks5GatewayPage = Loadable(lazy(() => import('views/socks5')));
+const HappDecryptorPage = Loadable(lazy(() => import('views/tools/happ')));
 // ==============================|| MAIN ROUTING ||==============================  //
 
 const MainRoutes = {
@@ -94,6 +95,15 @@ const MainRoutes = {
     {
       path: 'accesskey',
       element: <AccessKeyList />
+    },
+    {
+      path: 'tools',
+      children: [
+        {
+          path: 'happ',
+          element: <HappDecryptorPage />
+        }
+      ]
     },
     {
       path: 'settings',

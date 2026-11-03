@@ -95,6 +95,7 @@
       "subscription": "Subscription Management",
       "script": "Script Management",
       "accessKey": "API Keys",
+      "tools": "Tools",
       "system": "System Settings",
       "changelog": "Changelog"
     },
@@ -117,7 +118,8 @@
       "socks5": "SOCKS5 gateway",
       "changelog": "Changelog",
       "userCenter": "User Center",
-      "appSettings": "Settings"
+      "appSettings": "Settings",
+      "happDecryptor": "happ Decryptor"
     }
   },
   "common": {
@@ -184,6 +186,24 @@
       "label": "Search",
       "placeholder": "Search country code or name"
     }
+  },
+  "happDecryptor": {
+    "subtitle": "Decode happ://crypt, crypt2, crypt3, crypt4 and crypt5 links into the plaintext subscription URL",
+    "inputLabel": "happ link",
+    "inputPlaceholder": "happ://crypt5/...",
+    "decrypt": "Decrypt",
+    "decrypting": "Decrypting...",
+    "clear": "Clear",
+    "resultTitle": "Decrypted URL",
+    "generation": "Link type: {{type}}",
+    "copy": "Copy URL",
+    "copied": "Copied to clipboard",
+    "copyFailed": "Copy failed, please copy manually",
+    "open": "Open",
+    "linkRequired": "Paste a happ link first",
+    "invalidLink": "The link is invalid. It must start with happ://",
+    "privacy": "Decryption runs locally on your SublinkPro server. The link and the result are never sent anywhere else.",
+    "airportHint": "You can also paste a happ link directly into the airport subscription URL field. It is decrypted before saving."
   },
   "airports": {
     "title": "Airport Management",
@@ -291,7 +311,7 @@
       },
       "helpers": {
         "name": "Airport names must be unique. The name is used as the node source.",
-        "subscriptionUrl": "Supports Clash YAML subscriptions and V2Ray Base64 subscriptions",
+        "subscriptionUrl": "Supports Clash YAML subscriptions, V2Ray Base64 subscriptions and happ:// encrypted links",
         "nodeGroup": "Nodes imported from this airport will automatically belong to this group",
         "remark": "Optional notes to help you manage airports and subscriptions",
         "userAgent": "User-Agent used when pulling subscriptions. Leave blank if not needed."
@@ -4418,6 +4438,13 @@
       "queryFailed": "Failed to load API keys",
       "missingAccessKeyID": "Missing access key ID",
       "notFound": "API key not found"
+    },
+    "happ": {
+      "linkRequired": "Enter a happ link",
+      "invalidLink": "This is not a valid happ link. It must start with happ://",
+      "unsupportedLink": "Unsupported happ link type: {{type}}",
+      "decryptFailed": "Unable to decrypt the happ link. Check that the link is complete and has not expired",
+      "decryptSuccess": "happ link decrypted"
     }
   }
 }

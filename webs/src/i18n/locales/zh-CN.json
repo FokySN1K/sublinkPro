@@ -95,6 +95,7 @@
       "subscription": "订阅管理",
       "script": "脚本管理",
       "accessKey": "API 密钥",
+      "tools": "工具箱",
       "system": "系统设置",
       "changelog": "更新日志"
     },
@@ -117,7 +118,8 @@
       "socks5": "SOCKS5 网关",
       "changelog": "更新日志",
       "userCenter": "个人中心",
-      "appSettings": "应用设置"
+      "appSettings": "应用设置",
+      "happDecryptor": "happ 解密"
     }
   },
   "common": {
@@ -184,6 +186,24 @@
       "label": "搜索",
       "placeholder": "搜索国家代码或名称"
     }
+  },
+  "happDecryptor": {
+    "subtitle": "支持 happ://crypt、crypt2、crypt3、crypt4、crypt5 链接，解密为明文订阅地址",
+    "inputLabel": "happ 链接",
+    "inputPlaceholder": "happ://crypt5/...",
+    "decrypt": "解密",
+    "decrypting": "解密中...",
+    "clear": "清空",
+    "resultTitle": "解密结果",
+    "generation": "链接类型：{{type}}",
+    "copy": "复制地址",
+    "copied": "已复制到剪贴板",
+    "copyFailed": "复制失败，请手动复制",
+    "open": "打开",
+    "linkRequired": "请先粘贴 happ 链接",
+    "invalidLink": "链接格式不正确，需要以 happ:// 开头",
+    "privacy": "解密在您自己的 SublinkPro 服务端完成，链接与结果不会发送到任何第三方。",
+    "airportHint": "也可以把 happ 链接直接粘贴到机场的订阅地址中，保存前会自动解密。"
   },
   "airports": {
     "title": "机场管理",
@@ -291,7 +311,7 @@
       },
       "helpers": {
         "name": "机场名称不能重复，名称将作为节点来源",
-        "subscriptionUrl": "支持 Clash YAML 订阅和 V2Ray Base64 订阅",
+        "subscriptionUrl": "支持 Clash YAML 订阅、V2Ray Base64 订阅，以及 happ:// 加密链接",
         "nodeGroup": "从此机场导入的节点将自动归属到此分组",
         "remark": "一些备注信息，方便你对机场和订阅进行管理",
         "userAgent": "拉取订阅时使用的 User-Agent，可留空"
@@ -4418,6 +4438,13 @@
       "queryFailed": "获取 API 密钥失败",
       "missingAccessKeyID": "缺少访问密钥 ID",
       "notFound": "API 密钥不存在"
+    },
+    "happ": {
+      "linkRequired": "请输入 happ 链接",
+      "invalidLink": "不是有效的 happ 链接，链接需以 happ:// 开头",
+      "unsupportedLink": "不支持的 happ 链接类型：{{type}}",
+      "decryptFailed": "happ 链接解密失败，请确认链接完整且未过期",
+      "decryptSuccess": "happ 链接解密成功"
     }
   }
 }

@@ -11,7 +11,8 @@ import {
   IconWorld,
   IconPlane,
   IconFlag,
-  IconRefreshDot
+  IconRefreshDot,
+  IconLockOpen
 } from '@tabler/icons-react';
 
 // ==============================|| SUBSCRIPTION MENU ITEMS ||============================== //
@@ -119,6 +120,26 @@ const accesskey = {
   ]
 };
 
+// ==============================|| TOOLS MENU ITEMS ||============================== //
+
+const tools = {
+  id: 'tools-group',
+  title: 'Tools',
+  titleKey: 'navigation.groups.tools',
+  type: 'group',
+  children: [
+    {
+      id: 'happ-decryptor',
+      title: 'happ Decryptor',
+      titleKey: 'navigation.items.happDecryptor',
+      type: 'item',
+      url: '/tools/happ',
+      icon: IconLockOpen,
+      breadcrumbs: true
+    }
+  ]
+};
+
 // ==============================|| SYSTEM MENU ITEMS ||============================== //
 
 const system = {
@@ -212,4 +233,4 @@ const changelog = {
   ]
 };
 
-export { subscription, script, accesskey, system, changelog };
+export { subscription, script, accesskey, tools, system, changelog };

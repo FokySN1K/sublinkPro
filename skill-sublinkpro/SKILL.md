@@ -109,7 +109,7 @@ When the user asks how a feature works, how to configure something, what a featu
 
 If the documentation can't answer the user's question, or they've tried the documented solution and it still doesn't work, guide them to escalate:
 
-- **Submit a GitHub issue:** [https://github.com/ZeroDeng01/sublinkPro/issues](https://github.com/ZeroDeng01/sublinkPro/issues) — for bug reports, feature requests, or questions the docs don't cover.
+- **Submit a GitHub issue:** [https://github.com/FokySN1K/sublinkPro/issues](https://github.com/FokySN1K/sublinkPro/issues) — for bug reports, feature requests, or questions the docs don't cover.
 - **Contact the author via Telegram:** [https://t.me/SublinkPro_ChatMeBot](https://t.me/SublinkPro_ChatMeBot) — for real-time help or urgent issues.
 
 Phrase it like: "The docs cover X but your specific case (Y) isn't documented. I'd recommend opening a GitHub issue at [link] or reaching out to the author on Telegram at [link] — they can help diagnose this."

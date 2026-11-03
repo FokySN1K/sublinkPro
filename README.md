@@ -4,31 +4,27 @@
   **✨ Powerful proxy subscription management and conversion ✨**
 
   <p>
-    <img src="https://img.shields.io/github/go-mod/go-version/ZeroDeng01/sublinkPro?style=flat-square&logo=go&logoColor=white" alt="Go Version"/>
-    <img src="https://img.shields.io/github/package-json/dependency-version/ZeroDeng01/sublinkPro/react?filename=webs%2Fpackage.json&style=flat-square&logo=react&logoColor=white&color=61DAFB" alt="React Version"/>
-    <img src="https://img.shields.io/github/package-json/dependency-version/ZeroDeng01/sublinkPro/@mui/material?filename=webs%2Fpackage.json&style=flat-square&logo=mui&logoColor=white&label=MUI&color=007FFF" alt="MUI Version"/>
-    <img src="https://img.shields.io/github/package-json/dependency-version/ZeroDeng01/sublinkPro/vite?filename=webs%2Fpackage.json&style=flat-square&logo=vite&logoColor=white&color=646CFF" alt="Vite Version"/>
+    <img src="https://img.shields.io/github/go-mod/go-version/FokySN1K/sublinkPro?style=flat-square&logo=go&logoColor=white" alt="Go Version"/>
+    <img src="https://img.shields.io/github/package-json/dependency-version/FokySN1K/sublinkPro/react?filename=webs%2Fpackage.json&style=flat-square&logo=react&logoColor=white&color=61DAFB" alt="React Version"/>
+    <img src="https://img.shields.io/github/package-json/dependency-version/FokySN1K/sublinkPro/@mui/material?filename=webs%2Fpackage.json&style=flat-square&logo=mui&logoColor=white&label=MUI&color=007FFF" alt="MUI Version"/>
+    <img src="https://img.shields.io/github/package-json/dependency-version/FokySN1K/sublinkPro/vite?filename=webs%2Fpackage.json&style=flat-square&logo=vite&logoColor=white&color=646CFF" alt="Vite Version"/>
   </p>
   <p>
-    <img src="https://img.shields.io/github/v/release/ZeroDeng01/sublinkPro?style=flat-square&logo=github&label=Latest" alt="Latest Release"/>
-    <img src="https://img.shields.io/github/release-date/ZeroDeng01/sublinkPro?style=flat-square&logo=github&label=Release%20Date" alt="Release Date"/>
+    <a href="https://github.com/FokySN1K/sublinkPro/pkgs/container/sublinkpro">
+      <img src="https://img.shields.io/badge/GHCR-sublinkpro-blue?style=flat-square&logo=github" alt="GHCR image"/>
+    </a>
   </p>
   <p>
-    <img src="https://img.shields.io/docker/v/zerodeng/sublink-pro/latest?style=flat-square&logo=docker&logoColor=white&label=Docker%20Stable" alt="Docker Stable Version"/>
-    <img src="https://img.shields.io/docker/pulls/zerodeng/sublink-pro?style=flat-square&logo=docker&logoColor=white&label=Docker%20Pulls" alt="Docker Pulls"/>
-    <img src="https://img.shields.io/docker/image-size/zerodeng/sublink-pro/latest?style=flat-square&logo=docker&logoColor=white&label=Image%20Size" alt="Docker Image Size"/>
+    <img src="https://img.shields.io/github/stars/FokySN1K/sublinkPro?style=flat-square&logo=github&label=Stars" alt="GitHub Stars"/>
+    <img src="https://img.shields.io/github/forks/FokySN1K/sublinkPro?style=flat-square&logo=github&label=Forks" alt="GitHub Forks"/>
+    <img src="https://img.shields.io/github/issues/FokySN1K/sublinkPro?style=flat-square&logo=github&label=Issues" alt="GitHub Issues"/>
+    <img src="https://img.shields.io/github/license/FokySN1K/sublinkPro?style=flat-square&label=License" alt="License"/>
   </p>
   <p>
-    <img src="https://img.shields.io/github/stars/ZeroDeng01/sublinkPro?style=flat-square&logo=github&label=Stars" alt="GitHub Stars"/>
-    <img src="https://img.shields.io/github/forks/ZeroDeng01/sublinkPro?style=flat-square&logo=github&label=Forks" alt="GitHub Forks"/>
-    <img src="https://img.shields.io/github/issues/ZeroDeng01/sublinkPro?style=flat-square&logo=github&label=Issues" alt="GitHub Issues"/>
-    <img src="https://img.shields.io/github/license/ZeroDeng01/sublinkPro?style=flat-square&label=License" alt="License"/>
-  </p>
-  <p>
-    <a href="https://github.com/ZeroDeng01/sublinkPro/issues">
+    <a href="https://github.com/FokySN1K/sublinkPro/issues">
       <img src="https://img.shields.io/badge/Feedback-Issues-blue?style=flat-square&logo=github" alt="Issues"/>
     </a>
-    <a href="https://github.com/ZeroDeng01/sublinkPro/releases">
+    <a href="https://github.com/FokySN1K/sublinkPro/releases">
       <img src="https://img.shields.io/badge/Download-Releases-green?style=flat-square&logo=github" alt="Releases"/>
     </a>
   </p>
@@ -41,6 +37,9 @@ English | [简体中文](README.zh-CN.md)
 ## 📖 Project Overview
 
 `SublinkPro` is a deeply refactored and enhanced project based on the excellent open source projects [sublinkX](https://github.com/gooaclok819/sublinkX) and [sublinkE](https://github.com/eun1e/sublinkE). Thanks to the original authors for their work and contributions.
+
+> [!NOTE]
+> This build is maintained as a fork at [FokySN1K/sublinkPro](https://github.com/FokySN1K/sublinkPro), based on [ZeroDeng01/sublinkPro](https://github.com/ZeroDeng01/sublinkPro). Fork images are published to `ghcr.io/fokysn1k/sublinkpro`.
 
 - 🎨 **Frontend framework**: Based on [Berry Free React Material UI Admin Template](https://github.com/codedthemes/berry-free-react-admin-template)
 - ⚡ **Backend stack**: Go + Gin + Gorm
@@ -94,7 +93,7 @@ Create `docker-compose.yml`:
 ```yaml
 services:
   sublinkpro:
-    image: zerodeng/sublink-pro
+    image: ghcr.io/fokysn1k/sublinkpro:latest
     container_name: sublinkpro
     ports:
       - "8000:8000"
@@ -227,9 +226,9 @@ in credentials; URI components are decoded once, including when links are re-exp
 
 <div align="center">
 
-[//]: # (  <img src="https://repobeez.abhijithganesh.com/api/insert/ZeroDeng01/sublinkPro" alt="Repobeez" height="0" width="0" style="display: none"/>)
+[//]: # (  <img src="https://repobeez.abhijithganesh.com/api/insert/FokySN1K/sublinkPro" alt="Repobeez" height="0" width="0" style="display: none"/>)
   
-  ![Star History Chart](https://star-history.dera.page/svg?repos=ZeroDeng01/sublinkPro&type=Date)
+  ![Star History Chart](https://star-history.dera.page/svg?repos=FokySN1K/sublinkPro&type=Date)
 </div>
 
 ---
@@ -239,7 +238,7 @@ in credentials; URI components are decoded once, including when links are re-exp
 If this project helps you, you are welcome to:
 
 - ⭐ Star the project
-- 🐛 Open an [Issue](https://github.com/ZeroDeng01/sublinkPro/issues) for bugs or suggestions
+- 🐛 Open an [Issue](https://github.com/FokySN1K/sublinkPro/issues) for bugs or suggestions
 - 🔧 Submit a Pull Request
 - 📖 Improve the docs and tutorials
 
@@ -262,5 +261,5 @@ Thanks to these open source projects:
 ---
 
 <div align="center">
-  <sub>Made with ❤️ by <a href="https://github.com/ZeroDeng01">ZeroDeng01</a></sub>
+  <sub>Fork maintained by <a href="https://github.com/FokySN1K">FokySN1K</a> · based on <a href="https://github.com/ZeroDeng01/sublinkPro">ZeroDeng01/sublinkPro</a></sub>
 </div>

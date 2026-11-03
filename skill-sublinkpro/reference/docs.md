@@ -25,8 +25,8 @@ language — summarize and quote the doc, don't invent details.
 - **Raw (fetch this to read content):**
   `https://raw.githubusercontent.com/ZeroDeng01/sublinkPro/main/<path>`
 - **Human page (give this to the user):**
-  `https://github.com/ZeroDeng01/sublinkPro/blob/main/<path>`
-- **Repo root:** `https://github.com/ZeroDeng01/sublinkPro`
+  `https://github.com/FokySN1K/sublinkPro/blob/main/<path>`
+- **Repo root:** `https://github.com/FokySN1K/sublinkPro`
 
 Every doc is maintained in **both languages**: English at `<path>.md`, Simplified
 Chinese at the same path with a `.zh-CN.md` suffix (e.g. `docs/installation.md` →
@@ -90,7 +90,7 @@ suffix for Chinese.
 
 - This map lists every doc that existed when written. If a fetch 404s, the doc may
   have been renamed/moved — fall back to the repo root or `README.md`'s
-  Documentation index (`https://github.com/ZeroDeng01/sublinkPro#-documentation`)
+  Documentation index (`https://github.com/FokySN1K/sublinkPro#-documentation`)
   to find the current path, and tell the user it moved. Don't guess a new path.
 - These docs describe the **project** (install, features, configuration). For
   *operating a live instance* via the REST API, use `reference/api.md`. For

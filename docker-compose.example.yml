@@ -6,9 +6,8 @@
 
 services:
   sublinkpro:
-    # 镜像选择
-    # image: zerodeng/sublink-pro:dev    # 开发版（功能尝鲜）
-    image: zerodeng/sublink-pro:latest   # 稳定版（推荐）
+    # 镜像选择（本仓库构建的镜像）
+    image: ghcr.io/fokysn1k/sublinkpro:latest   # 稳定版（推荐）
     
     container_name: sublinkpro
     

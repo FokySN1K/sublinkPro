@@ -544,7 +544,7 @@ Base: `/api/v1/airports` (all write bodies are JSON)
 
 - **GET** `/airports` (query: `?page=1&pageSize=20`) — list
 - **GET** `/airports/{id}` — one
-- **POST** `/airports` — **JSON** create. Key fields (see `dto.AirportRequest`): `name`(required), `url`(required, valid URL), `cronExpr`(required), `enabled`, `group`, `downloadWithProxy`, `proxyLink`, `userAgent`, `fetchUsageInfo`, `skipTLSVerify`, plus filter/rename/dedup fields (`nodeNameWhitelist`, `nodeNameBlacklist`, `protocolWhitelist`, `protocolBlacklist`, `nodeNamePreprocess`, `deduplicationRule`, `nodeNameUniquify`, ...), and country-fill fields (`autoFillCountry`, `backfillExistingCountry`).
+- **POST** `/airports` — **JSON** create. Key fields (see `dto.AirportRequest`): `name`(required), `url`(required, valid URL; a `happ://crypt…crypt5` link is accepted and decrypted before saving), `cronExpr`(required), `enabled`, `group`, `downloadWithProxy`, `proxyLink`, `userAgent`, `fetchUsageInfo`, `skipTLSVerify`, plus filter/rename/dedup fields (`nodeNameWhitelist`, `nodeNameBlacklist`, `protocolWhitelist`, `protocolBlacklist`, `nodeNamePreprocess`, `deduplicationRule`, `nodeNameUniquify`, ...), and country-fill fields (`autoFillCountry`, `backfillExistingCountry`).
 - **PUT** `/airports/{id}` — **JSON** update (same schema)
 - **POST** `/airports/batch-update` — **JSON** `{ids:[...], applyGroup, group, applySchedule, cronExpr}`
 - **DELETE** `/airports/{id}` (query: `?deleteNodes=false`)
@@ -558,6 +558,24 @@ Country-fill fields apply during airport pulls and use Country Rules against ups
 - `backfillExistingCountry`: fills the country code for every existing node from the same airport whose country is still empty, including nodes that otherwise do not need a name/link/order update. Saving an airport with `backfillExistingCountry:true` also persists `autoFillCountry:true`.
 
 Neither field overwrites an existing country code, and neither performs landing-IP detection.
+
+---
+
+## Tools
+
+Base: `/api/v1/tools`
+
+### Decode a happ:// link
+
+**POST** `/tools/happ/decrypt` — **JSON** `{"link":"happ://crypt5/..."}`
+
+Returns `data.url` with the plaintext subscription address and `data.generation` with the detected type (`crypt`, `crypt2`, `crypt3`, `crypt4`, `crypt5`). Decryption is fully offline: keys are embedded in the binary and no external service is contacted. `crypt`…`crypt4` use RSA PKCS#1 v1.5; `crypt5` uses RSA key recovery plus ChaCha20-Poly1305.
+
+```json
+{"code":200,"msg":"happ link decrypted","data":{"url":"https://example.com/sub?token=...","generation":"crypt5"},"i18nKey":"backend.happ.decryptSuccess"}
+```
+
+Failures keep the standard envelope with `code: 500` and one of these `i18nKey` values: `backend.happ.linkRequired`, `backend.happ.invalidLink`, `backend.happ.unsupportedLink`, `backend.happ.decryptFailed`. Values longer than 64 KiB are rejected.
 
 ---
 

@@ -2,7 +2,7 @@
 
 [简体中文](README.zh-CN.md) | [English](README.md)
 
-一个面向 [SublinkPro](https://github.com/ZeroDeng01/sublinkPro) 的 AI 操作接口——通过自然语言管理代理节点、订阅与分享。
+一个面向 [SublinkPro](https://github.com/FokySN1K/sublinkPro) 的 AI 操作接口——通过自然语言管理代理节点、订阅与分享。
 
 ## 这是什么？
 

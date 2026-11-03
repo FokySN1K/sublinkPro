@@ -173,8 +173,8 @@ Please read our [Code of Conduct](CODE_OF_CONDUCT.md) before contributing.
 ## Getting Help
 
 - 📖 Read the [Development Guide](docs/development.md)
-- 🐛 Report bugs via [GitHub Issues](https://github.com/zerodeng/sublink-pro/issues)
-- 💬 Join discussions on [GitHub Discussions](https://github.com/zerodeng/sublink-pro/discussions)
+- 🐛 Report bugs via [GitHub Issues](https://github.com/ghcr.io/fokysn1k/sublinkpro:latest/issues)
+- 💬 Join discussions on [GitHub Discussions](https://github.com/ghcr.io/fokysn1k/sublinkpro:latest/discussions)
 - 📱 Chat on Telegram: [SublinkPro Community](https://t.me/sublinkpro)
 
 ## License

@@ -43,7 +43,7 @@ const defaultStatus = {
   commandLabel: 'cloudflared tunnel --no-autoupdate run'
 };
 
-const cloudflareTunnelDocsUrl = 'https://github.com/ZeroDeng01/sublinkPro/blob/main/docs/features/cloudflare-tunnel.md';
+const cloudflareTunnelDocsUrl = 'https://github.com/FokySN1K/sublinkPro/blob/main/docs/features/cloudflare-tunnel.md';
 const cloudflaredInstallDocsUrl = `${cloudflareTunnelDocsUrl}#安装-cloudflared`;
 const cloudflareTunnelTokenDocsUrl = `${cloudflareTunnelDocsUrl}#第二步复制-tunnel-token`;
 

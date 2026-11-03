@@ -242,7 +242,7 @@ export default function ScriptList() {
         ) : (
           <Stack direction="row" spacing={1} alignItems="center">
             <Link
-              href="https://github.com/ZeroDeng01/sublinkPro/blob/main/docs/script_support.md"
+              href="https://github.com/FokySN1K/sublinkPro/blob/main/docs/script_support.md"
               target="_blank"
               rel="noopener"
               sx={{ display: 'flex', alignItems: 'center' }}
@@ -263,7 +263,7 @@ export default function ScriptList() {
       {matchDownMd && (
         <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 2 }}>
           <Link
-            href="https://github.com/ZeroDeng01/sublinkPro/blob/main/docs/script_support.md"
+            href="https://github.com/FokySN1K/sublinkPro/blob/main/docs/script_support.md"
             target="_blank"
             rel="noopener"
             sx={{ display: 'flex', alignItems: 'center' }}

@@ -102,7 +102,7 @@ export const StarReminderCard = () => {
   useEffect(() => {
     const fetchStarCount = async () => {
       try {
-        const response = await fetch('https://api.github.com/repos/ZeroDeng01/sublinkPro');
+        const response = await fetch('https://api.github.com/repos/FokySN1K/sublinkPro');
         if (response.ok) {
           const data = await response.json();
           setStarCount(data.stargazers_count);
@@ -115,11 +115,11 @@ export const StarReminderCard = () => {
   }, []);
 
   const handleStar = () => {
-    window.open('https://github.com/ZeroDeng01/sublinkPro', '_blank');
+    window.open('https://github.com/FokySN1K/sublinkPro', '_blank');
   };
 
   const handleFeedback = () => {
-    window.open('https://github.com/ZeroDeng01/sublinkPro/issues', '_blank');
+    window.open('https://github.com/FokySN1K/sublinkPro/issues', '_blank');
   };
 
   return (
@@ -552,7 +552,7 @@ export const ReleaseLogPanel = () => {
   const fetchReleases = async () => {
     try {
       setLoadingReleases(true);
-      const response = await fetch('https://api.github.com/repos/ZeroDeng01/sublinkPro/releases?per_page=5');
+      const response = await fetch('https://api.github.com/repos/FokySN1K/sublinkPro/releases?per_page=5');
       if (!response.ok) throw new Error('Failed to fetch releases');
       const data = await response.json();
       setReleases(data);
