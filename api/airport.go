@@ -173,6 +173,13 @@ func AirportAdd(c *gin.Context) {
 		return
 	}
 
+	// happ:// 链接先还原为明文订阅地址再保存
+	resolvedURL, ok := resolveHappURLValue(c, req.URL)
+	if !ok {
+		return
+	}
+	req.URL = resolvedURL
+
 	requestHeaders, err := normalizeAirportRequestHeaders(req.RequestHeaders)
 	if err != nil {
 		utils.FailWithMsg(c, err.Error())
@@ -255,6 +262,13 @@ func AirportUpdate(c *gin.Context) {
 		utils.FailWithMsg(c, "Cron表达式格式错误")
 		return
 	}
+
+	// happ:// 链接先还原为明文订阅地址再保存
+	resolvedURL, ok := resolveHappURLValue(c, req.URL)
+	if !ok {
+		return
+	}
+	req.URL = resolvedURL
 
 	requestHeaders, err := normalizeAirportRequestHeaders(req.RequestHeaders)
 	if err != nil {

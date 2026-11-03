@@ -15,6 +15,7 @@ import (
 	"strconv"
 	"strings"
 	"sublink/models"
+	"sublink/node/happ"
 	"sublink/node/protocol"
 	"sublink/services/mihomo"
 	"sublink/services/notifications"
@@ -216,6 +217,18 @@ func isTLSError(err error) bool {
 func LoadClashConfigFromURL(id int, urlStr string, subName string, downloadWithProxy bool, proxyLink string, userAgent string) (*UsageInfo, error) {
 	_, usageInfo, err := LoadClashConfigFromURLWithReporter(context.TODO(), id, urlStr, subName, downloadWithProxy, proxyLink, userAgent, nil, nil, false, true)
 	return usageInfo, err
+}
+
+// resolveHappSubscriptionURL 将 happ:// 加密链接还原成明文订阅地址，其他链接原样返回。
+func resolveHappSubscriptionURL(rawURL string) (string, error) {
+	if !happ.IsLink(rawURL) {
+		return rawURL, nil
+	}
+	resolved, err := happ.Decrypt(rawURL)
+	if err != nil {
+		return "", fmt.Errorf("happ 链接解密失败: %w", err)
+	}
+	return resolved, nil
 }
 
 func applyRequestHeaders(req *http.Request, userAgent string, requestHeaders models.AirportRequestHeaders) {
@@ -512,6 +525,11 @@ func LoadClashConfigFromURLWithReporter(ctx context.Context, id int, urlStr stri
 	case <-ctx.Done():
 		return nil, nil, fmt.Errorf("任务已取消")
 	default:
+	}
+
+	urlStr, err := resolveHappSubscriptionURL(urlStr)
+	if err != nil {
+		return nil, nil, err
 	}
 
 	// 创建 HTTP 客户端，配置 TLS

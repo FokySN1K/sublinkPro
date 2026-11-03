@@ -83,7 +83,7 @@ sublinkPro/
 ### 1. 克隆项目
 
 ```bash
-git clone https://github.com/ZeroDeng01/sublinkPro.git
+git clone https://github.com/FokySN1K/sublinkPro.git
 cd sublinkPro
 ```
 

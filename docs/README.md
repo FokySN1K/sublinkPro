@@ -22,6 +22,7 @@ Welcome to SublinkPro documentation. This index helps you find the right documen
 - **[Template AI Editing](features/template-ai.md)** - AI-assisted template generation
 - **[Airport Management](features/airport.md)** - Import, scheduled updates, traffic monitoring
 - **[Subscription Sharing](features/subscription-share.md)** - Multiple links, expiration, stats
+- **[happ Links](features/happ-link.md)** - Decode happ://crypt…crypt5 links, decryptor page, API
 - **[Host Management](features/host.md)** - Domain mappings, DNS, CDN preferred IPs
 - **[Cloudflare Tunnel](features/cloudflare-tunnel.md)** - Secure public access
 - **[Telegram Bot](features/telegram-bot.md)** - Command list, setup guide
@@ -86,6 +87,7 @@ Located in `.agents/skills/`:
 | Secure my deployment | [Security Guidelines](security-guidelines.md) |
 | Contribute code | [Contributing Guide](../CONTRIBUTING.md) |
 | Use speed testing | [Speed Test Feature](features/speedtest.md) |
+| Decode a happ:// link | [happ Links](features/happ-link.md) |
 | Set up MFA | [MFA Feature](features/mfa.md) |
 
 ### By Role
@@ -135,7 +137,7 @@ See [Contributing Guide](../CONTRIBUTING.md) for details.
 
 ## 📞 Need Help?
 
-- **GitHub Issues**: https://github.com/ZeroDeng01/sublinkPro/issues
+- **GitHub Issues**: https://github.com/FokySN1K/sublinkPro/issues
 - **Telegram Group**: See README for link
 - **Skill API**: Use `skill-sublinkpro/` for AI-assisted help
 

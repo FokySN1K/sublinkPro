@@ -173,8 +173,8 @@ go test ./...            # 运行所有测试
 ## 获取帮助
 
 - 📖 阅读 [开发指南](docs/development.zh-CN.md)
-- 🐛 通过 [GitHub Issues](https://github.com/zerodeng/sublink-pro/issues) 报告问题
-- 💬 在 [GitHub Discussions](https://github.com/zerodeng/sublink-pro/discussions) 参与讨论
+- 🐛 通过 [GitHub Issues](https://github.com/ghcr.io/fokysn1k/sublinkpro:latest/issues) 报告问题
+- 💬 在 [GitHub Discussions](https://github.com/ghcr.io/fokysn1k/sublinkpro:latest/discussions) 参与讨论
 - 📱 加入 Telegram: [SublinkPro 社区](https://t.me/sublinkpro)
 
 ## 许可证

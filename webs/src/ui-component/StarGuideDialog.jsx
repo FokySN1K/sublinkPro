@@ -82,13 +82,13 @@ export default function StarGuideDialog() {
   };
 
   const handleStar = () => {
-    window.open('https://github.com/ZeroDeng01/sublinkPro', '_blank');
+    window.open('https://github.com/FokySN1K/sublinkPro', '_blank');
     localStorage.setItem(STORAGE_KEY, 'true');
     setOpen(false);
   };
 
   const handleFeedback = () => {
-    window.open('https://github.com/ZeroDeng01/sublinkPro/issues', '_blank');
+    window.open('https://github.com/FokySN1K/sublinkPro/issues', '_blank');
   };
 
   return (

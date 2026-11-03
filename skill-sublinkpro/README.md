@@ -2,7 +2,7 @@
 
 English | [简体中文](README.zh-CN.md)
 
-An AI-powered interface for [SublinkPro](https://github.com/ZeroDeng01/sublinkPro) — manage proxy nodes, subscriptions, and shares through natural language.
+An AI-powered interface for [SublinkPro](https://github.com/FokySN1K/sublinkPro) — manage proxy nodes, subscriptions, and shares through natural language.
 
 ## What is this?
 

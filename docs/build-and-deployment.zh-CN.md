@@ -230,8 +230,8 @@ docker-compose up -d
 ### Docker 镜像
 
 发布的镜像：
-- `zerodeng/sublink-pro:latest`
-- `zerodeng/sublink-pro:v{version}`
+- `ghcr.io/fokysn1k/sublinkpro:latest`
+- `ghcr.io/fokysn1k/sublinkpro:latest`
 
 ---
 

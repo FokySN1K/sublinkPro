@@ -23,7 +23,7 @@ import { getReadableTextTokens, getSurfaceTokens } from 'themes/surfaceTokens';
 import { withAlpha } from 'utils/colorUtils';
 
 // GitHub 仓库配置
-const GITHUB_REPO = 'ZeroDeng01/sublinkPro';
+const GITHUB_REPO = 'FokySN1K/sublinkPro';
 const GITHUB_URL = `https://github.com/${GITHUB_REPO}`;
 const GITHUB_API_RELEASES = `https://api.github.com/repos/${GITHUB_REPO}/releases/latest`;
 

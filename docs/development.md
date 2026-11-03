@@ -83,7 +83,7 @@ Examples:
 ### 1. Clone the project
 
 ```bash
-git clone https://github.com/ZeroDeng01/sublinkPro.git
+git clone https://github.com/FokySN1K/sublinkPro.git
 cd sublinkPro
 ```
 

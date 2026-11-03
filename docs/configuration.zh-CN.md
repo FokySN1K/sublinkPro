@@ -394,7 +394,7 @@ trusted_proxies: []
 ```yaml
 services:
   sublinkpro:
-    image: zerodeng/sublink-pro:latest
+    image: ghcr.io/fokysn1k/sublinkpro:latest
     container_name: sublinkpro
     ports:
       - "8000:8000"

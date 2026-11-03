@@ -19,7 +19,7 @@ export default function Footer() {
         &copy;{' '}
         <Typography
           component={RouterLink}
-          to="https://github.com/ZeroDeng01/sublinkPro"
+          to="https://github.com/FokySN1K/sublinkPro"
           target="_blank"
           sx={{ textDecoration: 'none', color: 'primary.main' }}
         >
@@ -29,7 +29,7 @@ export default function Footer() {
       <Stack direction="row" sx={{ gap: 1.5, alignItems: 'center', justifyContent: 'space-between' }}>
         <Link
           component={RouterLink}
-          to="https://github.com/ZeroDeng01/sublinkPro"
+          to="https://github.com/FokySN1K/sublinkPro"
           underline="hover"
           target="_blank"
           variant="caption"
@@ -39,7 +39,7 @@ export default function Footer() {
         </Link>
         <Link
           component={RouterLink}
-          to="https://github.com/ZeroDeng01/sublinkPro/blob/master/LICENSE"
+          to="https://github.com/FokySN1K/sublinkPro/blob/main/LICENSE"
           underline="hover"
           target="_blank"
           variant="caption"
@@ -49,7 +49,7 @@ export default function Footer() {
         </Link>
         <Link
           component={RouterLink}
-          to="https://github.com/ZeroDeng01/sublinkPro/issues"
+          to="https://github.com/FokySN1K/sublinkPro/issues"
           underline="hover"
           target="_blank"
           variant="caption"
