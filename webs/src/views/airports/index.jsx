@@ -67,7 +67,7 @@ import {
 
 // utils
 import { withAlpha } from 'utils/colorUtils';
-import { validateCronExpression } from './utils';
+import { validateCronExpression, generateHWIDValue } from './utils';
 
 // ==============================|| 机场管理 ||============================== //
 
@@ -144,6 +144,13 @@ const createAirportFormState = (overrides = {}) => ({
   proxyLink: '',
   userAgent: '',
   requestHeaders: [],
+  hwid: '',
+  disableHWID: false,
+  deviceProfile: '',
+  deviceOS: '',
+  osVersion: '',
+  deviceModel: '',
+  appName: '',
   fetchUsageInfo: false,
   skipTLSVerify: false,
   updateAfterDetect: false,
@@ -505,7 +512,7 @@ export default function AirportList() {
 
   // 添加机场
   const handleAdd = () => {
-    const newForm = createAirportFormState({ requestHeaders: [createEmptyRequestHeader()] });
+    const newForm = createAirportFormState({ requestHeaders: [createEmptyRequestHeader()], hwid: generateHWIDValue() });
     setIsEdit(false);
     setAirportForm(newForm);
     setAirportFormSnapshot(newForm);
@@ -525,6 +532,15 @@ export default function AirportList() {
       proxyLink: airport.proxyLink || '',
       userAgent: airport.userAgent || '',
       requestHeaders: normalizeRequestHeadersForForm(airport.requestHeaders),
+      // 已保存的 HWID 原样带回，空值也不自动生成，避免把机场已有的设备身份换掉
+      hwid: airport.hwid || '',
+      disableHWID: airport.disableHWID === true,
+      deviceProfile: airport.deviceProfile || '',
+      // 设备字段以保存值为准，空值就是空，不再用档位预置回填
+      deviceOS: airport.deviceOS || '',
+      osVersion: airport.osVersion || '',
+      deviceModel: airport.deviceModel || '',
+      appName: airport.appName || '',
       fetchUsageInfo: airport.fetchUsageInfo || false,
       skipTLSVerify: airport.skipTLSVerify || false,
       updateAfterDetect: airport.updateAfterDetect || false,
