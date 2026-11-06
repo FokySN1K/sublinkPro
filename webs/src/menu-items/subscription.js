@@ -186,7 +186,7 @@ const system = {
     },
     {
       id: 'socks5-gateway',
-      title: 'SOCKS5 Gateway',
+      title: 'Proxy Gateway',
       titleKey: 'navigation.items.socks5',
       type: 'item',
       url: '/system/socks5',
