@@ -80,11 +80,12 @@ func FetchAirportUsageInfo(airport *models.Airport) (*UsageInfo, error) {
 		}
 	}
 
-	// 设置通用 User-Agent
-	userAgent := "clash.meta"
-	if airport.UserAgent != "" {
-		userAgent = airport.UserAgent
+	// 设置通用 User-Agent（机场配置了设备伪装时使用设备档位）
+	userAgent := airport.EffectiveUserAgent()
+	if userAgent == "" {
+		userAgent = "clash.meta"
 	}
+	requestHeaders := airport.EffectiveRequestHeaders()
 
 	// 优先使用 HEAD 请求，减少数据传输
 	subscriptionURL, err := resolveHappSubscriptionURL(airport.URL)
@@ -97,7 +98,7 @@ func FetchAirportUsageInfo(airport *models.Airport) (*UsageInfo, error) {
 	if err != nil {
 		return nil, fmt.Errorf("创建请求失败: %v", err)
 	}
-	applyRequestHeaders(headReq, userAgent, airport.RequestHeaders)
+	applyRequestHeaders(headReq, userAgent, requestHeaders)
 
 	resp, err = client.Do(headReq)
 	if err != nil || resp.StatusCode < 200 || resp.StatusCode >= 300 {
@@ -115,7 +116,7 @@ func FetchAirportUsageInfo(airport *models.Airport) (*UsageInfo, error) {
 		if err != nil {
 			return nil, fmt.Errorf("创建请求失败: %v", err)
 		}
-		applyRequestHeaders(getReq, userAgent, airport.RequestHeaders)
+		applyRequestHeaders(getReq, userAgent, requestHeaders)
 
 		resp, err = client.Do(getReq)
 		if err != nil {

@@ -47,6 +47,13 @@ type AirportRequest struct {
 	ProxyLink                    string                 `json:"proxyLink"`
 	UserAgent                    string                 `json:"userAgent"`
 	RequestHeaders               []AirportRequestHeader `json:"requestHeaders"`
+	HWID                         string                 `json:"hwid"`                         // 设备标识（X-HWID），留空时由服务端生成
+	DisableHWID                  bool                   `json:"disableHWID"`                  // 是否停止发送 X-HWID
+	DeviceProfile                string                 `json:"deviceProfile"`                // 设备伪装档位（android/ios/windows/macos/linux/custom）
+	DeviceOS                     string                 `json:"deviceOS"`                     // 自定义设备伪装：系统名称
+	OSVersion                    string                 `json:"osVersion"`                    // 自定义设备伪装：系统版本
+	DeviceModel                  string                 `json:"deviceModel"`                  // 自定义设备伪装：设备型号
+	AppName                      string                 `json:"appName"`                      // 自定义设备伪装：应用名称
 	FetchUsageInfo               bool                   `json:"fetchUsageInfo"`               // 是否获取用量信息
 	SkipTLSVerify                bool                   `json:"skipTLSVerify"`                // 是否跳过TLS证书验证
 	UpdateAfterDetect            bool                   `json:"updateAfterDetect"`            // 更新后是否自动执行节点检测

@@ -45,6 +45,22 @@ func normalizeAirportRequestHeaders(headers []dto.AirportRequestHeader) (models.
 	return normalized, nil
 }
 
+// resolveAirportHWID 返回本次保存使用的设备标识。
+// 未填写时优先保留原值；仅新建（generate=true）才自动生成，避免编辑时把已有设备换掉。
+// 禁用 X-HWID 时仍保留原值，方便之后重新开启。
+func resolveAirportHWID(requested, previous string, disable, generate bool) string {
+	if hwid := strings.TrimSpace(requested); hwid != "" {
+		return hwid
+	}
+	if previous = strings.TrimSpace(previous); previous != "" {
+		return previous
+	}
+	if disable || !generate {
+		return ""
+	}
+	return utils.GenerateHWID()
+}
+
 // AirportWithStats 机场数据（包含节点统计）
 type AirportWithStats struct {
 	models.Airport
@@ -196,6 +212,13 @@ func AirportAdd(c *gin.Context) {
 		ProxyLink:                    req.ProxyLink,
 		UserAgent:                    req.UserAgent,
 		RequestHeaders:               requestHeaders,
+		HWID:                         resolveAirportHWID(req.HWID, "", req.DisableHWID, true),
+		DisableHWID:                  req.DisableHWID,
+		DeviceProfile:                models.NormalizeAirportDeviceProfile(req.DeviceProfile),
+		DeviceOS:                     strings.TrimSpace(req.DeviceOS),
+		OSVersion:                    strings.TrimSpace(req.OSVersion),
+		DeviceModel:                  strings.TrimSpace(req.DeviceModel),
+		AppName:                      strings.TrimSpace(req.AppName),
 		FetchUsageInfo:               req.FetchUsageInfo,
 		SkipTLSVerify:                req.SkipTLSVerify,
 		UpdateAfterDetect:            req.UpdateAfterDetect,
@@ -303,6 +326,13 @@ func AirportUpdate(c *gin.Context) {
 	existing.ProxyLink = req.ProxyLink
 	existing.UserAgent = req.UserAgent
 	existing.RequestHeaders = requestHeaders
+	existing.HWID = resolveAirportHWID(req.HWID, existing.HWID, req.DisableHWID, false)
+	existing.DisableHWID = req.DisableHWID
+	existing.DeviceProfile = models.NormalizeAirportDeviceProfile(req.DeviceProfile)
+	existing.DeviceOS = strings.TrimSpace(req.DeviceOS)
+	existing.OSVersion = strings.TrimSpace(req.OSVersion)
+	existing.DeviceModel = strings.TrimSpace(req.DeviceModel)
+	existing.AppName = strings.TrimSpace(req.AppName)
 	existing.FetchUsageInfo = req.FetchUsageInfo
 	existing.SkipTLSVerify = req.SkipTLSVerify
 	existing.UpdateAfterDetect = req.UpdateAfterDetect

@@ -81,6 +81,13 @@ type Airport struct {
 	ProxyLink         string                `gorm:"type:text" json:"proxyLink"`             // 代理节点链接
 	UserAgent         string                `json:"userAgent"`                              // 自定义User-Agent
 	RequestHeaders    AirportRequestHeaders `gorm:"type:text" json:"requestHeaders"`        // 自定义请求头
+	HWID              string                `json:"hwid"`                                   // 设备标识（X-HWID）
+	DisableHWID       bool                  `gorm:"default:false" json:"disableHWID"`       // 是否停止发送 X-HWID
+	DeviceProfile     string                `json:"deviceProfile"`                          // 设备伪装档位（android/ios/windows/macos/linux/custom）
+	DeviceOS          string                `json:"deviceOS"`                               // 自定义设备伪装：系统名称
+	OSVersion         string                `json:"osVersion"`                              // 自定义设备伪装：系统版本
+	DeviceModel       string                `json:"deviceModel"`                            // 自定义设备伪装：设备型号
+	AppName           string                `json:"appName"`                                // 自定义设备伪装：应用名称
 	NodeCount         int                   `gorm:"-" json:"nodeCount"`                     // 节点数量（非数据库字段）
 	// 用量信息相关字段
 	FetchUsageInfo               bool   `gorm:"default:false" json:"fetchUsageInfo"`               // 是否获取用量信息
@@ -159,6 +166,7 @@ func (a *Airport) Update() error {
 		"Name", "URL", "CronExpr", "Enabled", "LastRunTime", "NextRunTime",
 		"SuccessCount", "Group", "DownloadWithProxy", "ProxyLink", "UserAgent",
 		"RequestHeaders",
+		"HWID", "DisableHWID", "DeviceProfile", "DeviceOS", "OSVersion", "DeviceModel", "AppName",
 		"FetchUsageInfo", "SkipTLSVerify", "UpdateAfterDetect", "UpdateAfterDetectProfileID", "UpdateAfterDetectChangedOnly", "Remark", "Logo",
 		"NodeNameWhitelist", "NodeNameBlacklist", "ProtocolWhitelist", "ProtocolBlacklist", "NodeNamePreprocess",
 		"DeduplicationRule", "NodeNameUniquify", "NodeNamePrefix", "NodeNameIntraUniquify",

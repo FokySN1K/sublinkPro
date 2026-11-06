@@ -320,6 +320,35 @@
         "remark": "可选，记录机场的备忘信息",
         "userAgent": "选择或输入"
       },
+      "deviceProfile": {
+        "label": "设备伪装",
+        "helper": "按所选设备档位拉取订阅：发送 X-Device-OS、X-Ver-OS、X-Device-Model、X-App-Name，未单独设置 User-Agent 时使用档位自带的 User-Agent。",
+        "options": {
+          "none": "不伪装",
+          "android": "Android",
+          "ios": "iOS",
+          "windows": "Windows",
+          "macos": "macOS",
+          "linux": "Linux",
+          "custom": "自定义（手动填写）"
+        },
+        "customFields": {
+          "deviceOS": { "label": "系统名称", "placeholder": "Android" },
+          "osVersion": { "label": "系统版本", "placeholder": "14" },
+          "deviceModel": { "label": "设备型号", "placeholder": "Pixel 7" },
+          "appName": { "label": "应用名称", "placeholder": "v2rayTun" }
+        },
+        "customHint": "User-Agent 取自上方的 User-Agent 字段，留空的字段不会发送。",
+        "presetHint": "这些值来自所选设备档位，可自由修改或清空；清空的字段不会发送。"
+      },
+      "hwid": {
+        "enable": "发送 X-HWID",
+        "description": "让机场把每次拉取都识别为同一台设备",
+        "label": "X-HWID",
+        "placeholder": "32 位设备标识",
+        "helper": "自动生成，保持不变可避免机场把每次拉取当成新设备。",
+        "regenerate": "重新生成"
+      },
       "logoPicker": {
         "set": "点击设置 Logo",
         "change": "点击更换 Logo",

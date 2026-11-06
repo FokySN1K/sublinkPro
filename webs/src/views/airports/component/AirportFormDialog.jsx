@@ -13,9 +13,12 @@ import DialogActions from '@mui/material/DialogActions';
 import DialogContent from '@mui/material/DialogContent';
 import DialogTitle from '@mui/material/DialogTitle';
 import Divider from '@mui/material/Divider';
+import FormControl from '@mui/material/FormControl';
 import IconButton from '@mui/material/IconButton';
+import InputLabel from '@mui/material/InputLabel';
 import Link from '@mui/material/Link';
 import MenuItem from '@mui/material/MenuItem';
+import Select from '@mui/material/Select';
 import Stack from '@mui/material/Stack';
 import Switch from '@mui/material/Switch';
 import TextField from '@mui/material/TextField';
@@ -24,6 +27,7 @@ import Typography from '@mui/material/Typography';
 import AddIcon from '@mui/icons-material/Add';
 import DeleteIcon from '@mui/icons-material/Delete';
 import InfoIcon from '@mui/icons-material/Info';
+import RefreshIcon from '@mui/icons-material/Refresh';
 
 import SearchableNodeSelect from 'components/SearchableNodeSelect';
 import CronExpressionGenerator from 'components/CronExpressionGenerator';
@@ -38,7 +42,7 @@ import { withAlpha } from 'utils/colorUtils';
 import AirportDeduplicationConfig from './AirportDeduplicationConfig';
 import AirportDialogSection from './AirportDialogSection';
 
-import { USER_AGENT_OPTIONS } from '../utils';
+import { AIRPORT_DEVICE_PROFILE_OPTIONS, AIRPORT_DEVICE_PROFILE_PRESETS, USER_AGENT_OPTIONS, generateHWIDValue } from '../utils';
 
 const createEmptyRequestHeader = () => ({ key: '', value: '' });
 
@@ -321,6 +325,125 @@ export default function AirportFormDialog({
                   />
                 )}
               />
+
+              <Box>
+                <FormControl fullWidth size="small">
+                  <InputLabel shrink>{t('airports.form.deviceProfile.label')}</InputLabel>
+                  <Select
+                    value={airportForm.deviceProfile || ''}
+                    label={t('airports.form.deviceProfile.label')}
+                    displayEmpty
+                    onChange={(e) => {
+                      const nextProfile = e.target.value;
+                      const preset = AIRPORT_DEVICE_PROFILE_PRESETS[nextProfile];
+                      // 选择预置档位时填入可编辑字段；切到自定义时保留当前值，关闭伪装时清空
+                      const cleared = { deviceOS: '', osVersion: '', deviceModel: '', appName: '' };
+                      const deviceFields = preset || (nextProfile === 'custom' ? {} : cleared);
+                      setAirportForm({ ...airportForm, deviceProfile: nextProfile, ...deviceFields });
+                    }}
+                  >
+                    {AIRPORT_DEVICE_PROFILE_OPTIONS.map((option) => (
+                      <MenuItem key={option.value || 'none'} value={option.value}>
+                        {t(option.labelKey)}
+                      </MenuItem>
+                    ))}
+                  </Select>
+                </FormControl>
+                <Typography variant="caption" sx={{ color: secondaryText, display: 'block', mt: 0.75, ml: 1.75 }}>
+                  {t('airports.form.deviceProfile.helper')}
+                </Typography>
+                {airportForm.deviceProfile ? (
+                  <Stack spacing={1.5} sx={{ mt: 1.5 }}>
+                    <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5}>
+                      <TextField
+                        fullWidth
+                        size="small"
+                        label={t('airports.form.deviceProfile.customFields.deviceOS.label')}
+                        placeholder={t('airports.form.deviceProfile.customFields.deviceOS.placeholder')}
+                        value={airportForm.deviceOS || ''}
+                        onChange={(e) => setAirportForm({ ...airportForm, deviceOS: e.target.value })}
+                      />
+                      <TextField
+                        fullWidth
+                        size="small"
+                        label={t('airports.form.deviceProfile.customFields.osVersion.label')}
+                        placeholder={t('airports.form.deviceProfile.customFields.osVersion.placeholder')}
+                        value={airportForm.osVersion || ''}
+                        onChange={(e) => setAirportForm({ ...airportForm, osVersion: e.target.value })}
+                      />
+                    </Stack>
+                    <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5}>
+                      <TextField
+                        fullWidth
+                        size="small"
+                        label={t('airports.form.deviceProfile.customFields.deviceModel.label')}
+                        placeholder={t('airports.form.deviceProfile.customFields.deviceModel.placeholder')}
+                        value={airportForm.deviceModel || ''}
+                        onChange={(e) => setAirportForm({ ...airportForm, deviceModel: e.target.value })}
+                      />
+                      <TextField
+                        fullWidth
+                        size="small"
+                        label={t('airports.form.deviceProfile.customFields.appName.label')}
+                        placeholder={t('airports.form.deviceProfile.customFields.appName.placeholder')}
+                        value={airportForm.appName || ''}
+                        onChange={(e) => setAirportForm({ ...airportForm, appName: e.target.value })}
+                      />
+                    </Stack>
+                    <Typography variant="caption" sx={{ color: secondaryText, ml: 1.75 }}>
+                      {airportForm.deviceProfile === 'custom'
+                        ? t('airports.form.deviceProfile.customHint')
+                        : t('airports.form.deviceProfile.presetHint')}
+                    </Typography>
+                  </Stack>
+                ) : null}
+              </Box>
+
+              <Box>
+                <Box sx={{ ...controlRowSx, mb: airportForm.disableHWID ? 0 : 1.5 }}>
+                  <Box>
+                    <Typography variant="body2" sx={{ color: primaryText }}>
+                      {t('airports.form.hwid.enable')}
+                    </Typography>
+                    <Typography variant="caption" sx={{ color: secondaryText }}>
+                      {t('airports.form.hwid.description')}
+                    </Typography>
+                  </Box>
+                  <Switch
+                    checked={!airportForm.disableHWID}
+                    onChange={(e) => {
+                      const enabled = e.target.checked;
+                      setAirportForm({
+                        ...airportForm,
+                        disableHWID: !enabled,
+                        hwid: enabled && !airportForm.hwid ? generateHWIDValue() : airportForm.hwid
+                      });
+                    }}
+                  />
+                </Box>
+                <Collapse in={!airportForm.disableHWID}>
+                  <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1} alignItems={{ xs: 'stretch', sm: 'flex-start' }}>
+                    <TextField
+                      fullWidth
+                      size="small"
+                      label={t('airports.form.hwid.label')}
+                      value={airportForm.hwid || ''}
+                      placeholder={t('airports.form.hwid.placeholder')}
+                      helperText={t('airports.form.hwid.helper')}
+                      onChange={(e) => setAirportForm({ ...airportForm, hwid: e.target.value })}
+                    />
+                    <Button
+                      variant="outlined"
+                      size="small"
+                      startIcon={<RefreshIcon />}
+                      onClick={() => setAirportForm({ ...airportForm, hwid: generateHWIDValue() })}
+                      sx={{ whiteSpace: 'nowrap', flexShrink: 0, mt: { xs: 0, sm: 0.25 } }}
+                    >
+                      {t('airports.form.hwid.regenerate')}
+                    </Button>
+                  </Stack>
+                </Collapse>
+              </Box>
 
               <Box sx={requestHeaderPanelSx}>
                 <Stack spacing={1.5}>
@@ -741,6 +864,13 @@ AirportFormDialog.propTypes = {
         value: PropTypes.string
       })
     ),
+    hwid: PropTypes.string,
+    disableHWID: PropTypes.bool,
+    deviceProfile: PropTypes.string,
+    deviceOS: PropTypes.string,
+    osVersion: PropTypes.string,
+    deviceModel: PropTypes.string,
+    appName: PropTypes.string,
     fetchUsageInfo: PropTypes.bool,
     skipTLSVerify: PropTypes.bool,
     updateAfterDetect: PropTypes.bool,
