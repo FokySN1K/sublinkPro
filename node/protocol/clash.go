@@ -1,6 +1,7 @@
 package protocol
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"io"
@@ -8,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"sort"
 	"strconv"
 	"strings"
 	"sublink/cache"
@@ -406,14 +408,70 @@ func EncodeClash(urls []Urls, config OutputConfig) ([]byte, error) {
 	return DecodeClash(proxys, config.Clash, config.CustomProxyGroups)
 }
 
+// clashAllProxiesPlaceholder 是代理组内展开全部节点的占位符，与 subconverter 行为一致。
+const clashAllProxiesPlaceholder = "__ALL_PROXIES__"
+
 // DecodeClash 用于解析 Clash 配置文件并合并新节点
 // proxys: 新增的节点列表
 // yamlfile: 模板文件路径或 URL
 // customGroups: 自定义代理组列表（可选，由链式代理规则生成）
+//
+// 模板优先按原文拼接：只在文本上重写顶层 proxies、代理组的 proxies 与追加自定义组，
+// 其余字节（注释、空行、缩进、键顺序、流式写法）与模板完全一致。
+// 结构过于复杂（流式代理组、锚点、缺少 proxies 键等）时退回节点树重编码。
 func DecodeClash(proxys []Proxy, yamlfile string, customGroups ...[]CustomProxyGroup) ([]byte, error) {
-	// 读取 YAML 文件
-	var data []byte
-	var err error
+	data, err := readClashTemplate(yamlfile)
+	if err != nil {
+		return nil, err
+	}
+
+	// 解析 YAML 文件
+	var document yaml.Node
+	if err := yaml.Unmarshal(data, &document); err != nil {
+		utils.Error("error: %v", err)
+		return nil, err
+	}
+	root, err := clashTemplateRoot(&document)
+	if err != nil {
+		utils.Error("error: %v", err)
+		return nil, err
+	}
+
+	// 添加新代理：节点写进模板的 proxies 序列，模板其余内容保持原样
+	proxiesNodes := make([]*yaml.Node, 0, len(proxys))
+	proxiesNameList := make([]string, 0, len(proxys))
+	for _, proxy := range proxys {
+		node := &yaml.Node{}
+		if err := node.Encode(proxy); err != nil {
+			utils.Error("error: %v", err)
+			return nil, err
+		}
+		proxiesNodes = append(proxiesNodes, node)
+		proxiesNameList = append(proxiesNameList, proxy.Name)
+	}
+
+	// 自定义代理组（链式代理规则生成）统一追加在模板组之后
+	customGroupNodes := make([]*yaml.Node, 0)
+	if len(customGroups) > 0 {
+		for _, customGroup := range customGroups[0] {
+			node := &yaml.Node{}
+			if err := node.Encode(buildCustomProxyGroup(customGroup)); err != nil {
+				utils.Error("error: %v", err)
+				return nil, err
+			}
+			customGroupNodes = append(customGroupNodes, node)
+		}
+	}
+
+	// 优先按模板原文拼接，未改动的字节原样保留
+	if merged, ok := mergeClashTemplateText(data, root, proxiesNodes, proxiesNameList, customGroupNodes); ok {
+		return merged, nil
+	}
+	return encodeClashTemplateNodes(&document, root, proxiesNodes, proxiesNameList, customGroupNodes)
+}
+
+// readClashTemplate 读取模板内容，本地文件优先走模板缓存。
+func readClashTemplate(yamlfile string) ([]byte, error) {
 	if strings.Contains(yamlfile, "://") {
 		req, err := http.NewRequestWithContext(context.Background(), http.MethodGet, yamlfile, nil)
 		if err != nil {
@@ -426,196 +484,335 @@ func DecodeClash(proxys []Proxy, yamlfile string, customGroups ...[]CustomProxyG
 			return nil, err
 		}
 		defer func() { _ = resp.Body.Close() }()
-		data, err = io.ReadAll(resp.Body)
+		data, err := io.ReadAll(resp.Body)
 		if err != nil {
 			utils.Error("error: %v", err)
 			return nil, err
 		}
-	} else {
-		// 优先从缓存读取模板内容（本地文件使用缓存）
-		filename := filepath.Base(yamlfile)
-		if cached, ok := cache.GetTemplateContent(filename); ok {
-			data = []byte(cached)
-		} else {
-			data, err = os.ReadFile(yamlfile)
-			if err != nil {
-				utils.Error("error: %v", err)
-				return nil, err
-			}
-			// 写入缓存
-			cache.SetTemplateContent(filename, string(data))
-		}
+		return data, nil
 	}
-	// 解析 YAML 文件
-	config := make(map[string]any)
-	err = yaml.Unmarshal(data, &config)
+	// 优先从缓存读取模板内容（本地文件使用缓存）
+	filename := filepath.Base(yamlfile)
+	if cached, ok := cache.GetTemplateContent(filename); ok {
+		return []byte(cached), nil
+	}
+	data, err := os.ReadFile(yamlfile)
 	if err != nil {
 		utils.Error("error: %v", err)
 		return nil, err
 	}
+	cache.SetTemplateContent(filename, string(data))
+	return data, nil
+}
 
-	// 检查 "proxies" 键是否存在于 config 中
-	proxies, ok := config["proxies"].([]any)
-	if !ok {
-		// 如果 "proxies" 键不存在，创建一个新的切片
-		proxies = []any{}
+// encodeClashTemplateNodes 是文本拼接失败时的后备路径：在 yaml.Node 树上原地修改后整体序列化。
+// 注释和键顺序仍然保留，但空行会被 YAML 编码器归一化。
+func encodeClashTemplateNodes(document, root *yaml.Node, proxiesNodes []*yaml.Node, proxiesNameList []string, customGroupNodes []*yaml.Node) ([]byte, error) {
+	proxiesNode := clashTemplateSequence(root, "proxies")
+	proxiesNode.Content = append(proxiesNode.Content, proxiesNodes...)
+	if len(proxiesNodes) > 0 {
+		// proxies: [] / proxies: ~ 追加节点后展开为块格式，避免输出成一行超长 YAML
+		proxiesNode.Style &^= yaml.FlowStyle
 	}
-	// 定义一个代理列表名字
-	ProxiesNameList := []string{}
-	// 添加新代理
-	for _, p := range proxys {
-		ProxiesNameList = append(ProxiesNameList, p.Name)
-		proxies = append(proxies, p)
-	}
-	// proxies = append(proxies, newProxy)
-	config["proxies"] = proxies
 	// 往ProxyGroup中插入代理列表
-	proxyGroups, ok := config["proxy-groups"].([]any)
-	if !ok {
-		proxyGroups = []any{}
+	groupsNode := clashTemplateSequence(root, "proxy-groups")
+	templateGroupCount := len(groupsNode.Content)
+
+	// 插入自定义代理组（在模板组之后），模板组本身保持原样
+	if len(customGroupNodes) > 0 {
+		groupsNode.Content = append(groupsNode.Content, customGroupNodes...)
+		groupsNode.Style &^= yaml.FlowStyle
 	}
 
-	// 插入自定义代理组（在模板组之后）
-	// 使用 _custom_group 标记来标识自定义代理组，后续循环时跳过节点追加
-	if len(customGroups) > 0 && len(customGroups[0]) > 0 {
-		for _, cg := range customGroups[0] {
-			// 构建代理组 map
-			groupMap := map[string]any{
-				"name":          cg.Name,
-				"type":          cg.Type,
-				"proxies":       cg.Proxies,
-				"_custom_group": true, // 标记为自定义代理组，不追加所有节点
-			}
-
-			// 根据组类型添加相应配置
-			switch cg.Type {
-			case "url-test", "fallback":
-				// url-test 和 fallback 类型需要 url、interval、tolerance
-				if cg.URL != "" {
-					groupMap["url"] = cg.URL
-				} else {
-					groupMap["url"] = "http://www.gstatic.com/generate_204"
-				}
-				if cg.Interval > 0 {
-					groupMap["interval"] = cg.Interval
-				} else {
-					groupMap["interval"] = 300 // 默认 300 秒
-				}
-				if cg.Tolerance > 0 {
-					groupMap["tolerance"] = cg.Tolerance
-				} else {
-					groupMap["tolerance"] = 50 // 默认 50 毫秒
-				}
-
-			case "load-balance":
-				// load-balance 类型需要 url、interval、strategy
-				if cg.URL != "" {
-					groupMap["url"] = cg.URL
-				} else {
-					groupMap["url"] = "http://www.gstatic.com/generate_204"
-				}
-				if cg.Interval > 0 {
-					groupMap["interval"] = cg.Interval
-				} else {
-					groupMap["interval"] = 300 // 默认 300 秒
-				}
-				if cg.Strategy != "" {
-					groupMap["strategy"] = cg.Strategy
-				} else {
-					groupMap["strategy"] = "consistent-hashing" // 默认一致性哈希
-				}
-			}
-
-			proxyGroups = append(proxyGroups, groupMap)
-		}
+	for index := 0; index < templateGroupCount; index++ {
+		mergeClashProxyGroup(groupsNode.Content[index], proxiesNameList)
 	}
 
-	for i, pg := range proxyGroups {
-		proxyGroup, ok := pg.(map[string]any)
-		if !ok {
+	// 将修改后的内容写回：保留模板里的注释、键顺序与写法
+	astralSubstitutions := substituteClashAstralCharacters(document)
+	var output bytes.Buffer
+	encoder := yaml.NewEncoder(&output)
+	encoder.SetIndent(2)
+	if err := encoder.Encode(document); err != nil {
+		utils.Error("error: %v", err)
+		return nil, err
+	}
+	if err := encoder.Close(); err != nil {
+		utils.Error("error: %v", err)
+		return nil, err
+	}
+	return restoreClashAstralCharacters(output.Bytes(), astralSubstitutions), nil
+}
+
+// clashTemplateRoot 返回模板的顶层映射节点，空模板按空映射处理。
+func clashTemplateRoot(document *yaml.Node) (*yaml.Node, error) {
+	if len(document.Content) == 0 {
+		mapping := &yaml.Node{Kind: yaml.MappingNode, Tag: "!!map"}
+		document.Kind = yaml.DocumentNode
+		document.Content = []*yaml.Node{mapping}
+		return mapping, nil
+	}
+	mapping := yamlMappingNode(document)
+	if mapping == nil {
+		return nil, fmt.Errorf("clash 模板必须是 YAML 映射")
+	}
+	return mapping, nil
+}
+
+// clashTemplateSequence 返回顶层键对应的序列节点，缺失或写成空值时原地创建。
+func clashTemplateSequence(root *yaml.Node, key string) *yaml.Node {
+	value := yamlMappingValue(root, key)
+	if value == nil {
+		value = &yaml.Node{Kind: yaml.SequenceNode, Tag: "!!seq"}
+		yamlMappingSet(root, key, value)
+		return value
+	}
+	if resolved := resolveYAMLAlias(value); resolved != nil && resolved.Kind == yaml.SequenceNode {
+		return resolved
+	}
+	if value.Kind != yaml.AliasNode {
+		// 就地改造成空序列，保留节点上的注释
+		value.Kind = yaml.SequenceNode
+		value.Tag = "!!seq"
+		value.Value = ""
+		value.Style = 0
+		value.Content = nil
+		return value
+	}
+	empty := &yaml.Node{Kind: yaml.SequenceNode, Tag: "!!seq"}
+	yamlMappingSet(root, key, empty)
+	return empty
+}
+
+// mergeClashProxyGroup 把节点名合并进单个代理组，组本身的字段顺序和注释保持不变。
+func mergeClashProxyGroup(group *yaml.Node, proxiesNameList []string) {
+	group = resolveYAMLAlias(group)
+	if group == nil || group.Kind != yaml.MappingNode {
+		return
+	}
+	if typeValue := yamlMappingValue(group, "type"); typeValue != nil {
+		var groupType string
+		if err := typeValue.Decode(&groupType); err == nil && groupType == "relay" {
+			return
+		}
+	}
+	var fields map[string]any
+	if err := group.Decode(&fields); err != nil {
+		utils.Error("代理组解析失败: %v", err)
+		return
+	}
+	// include-all、use/filter 等自动匹配组应保持模板原意，不能强行展开为固定节点列表。
+	if shouldPreserveProxyGroup(fields) {
+		return
+	}
+
+	proxiesNode := resolveYAMLAlias(yamlMappingValue(group, "proxies"))
+	switch {
+	case proxiesNode == nil:
+		proxiesNode = &yaml.Node{Kind: yaml.SequenceNode, Tag: "!!seq"}
+		yamlMappingSet(group, "proxies", proxiesNode)
+	case proxiesNode.Kind == yaml.ScalarNode && proxiesNode.Tag == "!!null":
+		// 模板写成 proxies: 后面留空时按空列表处理，与旧版行为一致
+		proxiesNode.Kind = yaml.SequenceNode
+		proxiesNode.Tag = "!!seq"
+		proxiesNode.Value = ""
+		proxiesNode.Style = 0
+		proxiesNode.Content = nil
+	case proxiesNode.Kind != yaml.SequenceNode:
+		return
+	}
+
+	// 占位符 __ALL_PROXIES__ 展开为全部节点，保留占位符前后的组引用
+	for index, item := range proxiesNode.Content {
+		resolved := resolveYAMLAlias(item)
+		if resolved == nil || resolved.Kind != yaml.ScalarNode || resolved.Value != clashAllProxiesPlaceholder {
 			continue
 		}
+		merged := make([]*yaml.Node, 0, len(proxiesNode.Content)-1+len(proxiesNameList))
+		merged = append(merged, proxiesNode.Content[:index]...)
+		merged = append(merged, yamlStringNodes(proxiesNameList)...)
+		merged = append(merged, proxiesNode.Content[index+1:]...)
+		proxiesNode.Content = merged
+		proxiesNode.Style &^= yaml.FlowStyle
+		return
+	}
 
-		// 链式代理不处理
-		if proxyGroup["type"] == "relay" {
-			continue
+	// 模板里已列出组引用的保持不变，只有空列表才追加所有节点
+	if len(proxiesNode.Content) > 0 {
+		return
+	}
+	names := proxiesNameList
+	if len(names) == 0 {
+		names = []string{"DIRECT"}
+	}
+	proxiesNode.Content = append(proxiesNode.Content, yamlStringNodes(names)...)
+	proxiesNode.Style &^= yaml.FlowStyle
+}
+
+// buildCustomProxyGroup 把链式代理规则生成的自定义代理组转换成 Clash 组配置。
+func buildCustomProxyGroup(customGroup CustomProxyGroup) map[string]any {
+	groupMap := map[string]any{
+		"name":    customGroup.Name,
+		"type":    customGroup.Type,
+		"proxies": customGroup.Proxies,
+	}
+	interval := customGroup.Interval
+	if interval <= 0 {
+		interval = 300 // 默认 300 秒
+	}
+	switch customGroup.Type {
+	case "url-test", "fallback":
+		// url-test 和 fallback 类型需要 url、interval、tolerance
+		groupMap["url"] = defaultString(customGroup.URL, "http://www.gstatic.com/generate_204")
+		groupMap["interval"] = interval
+		tolerance := customGroup.Tolerance
+		if tolerance <= 0 {
+			tolerance = 50 // 默认 50 毫秒
 		}
+		groupMap["tolerance"] = tolerance
+	case "load-balance":
+		// load-balance 类型需要 url、interval、strategy
+		groupMap["url"] = defaultString(customGroup.URL, "http://www.gstatic.com/generate_204")
+		groupMap["interval"] = interval
+		groupMap["strategy"] = defaultString(customGroup.Strategy, "consistent-hashing") // 默认一致性哈希
+	}
+	return groupMap
+}
 
-		// 自定义代理组（由链式代理规则生成）已有自己的节点列表，跳过节点追加
-		if isCustom, ok := proxyGroup["_custom_group"].(bool); ok && isCustom {
-			// 删除内部标记，避免输出到配置文件
-			delete(proxyGroup, "_custom_group")
-			proxyGroups[i] = proxyGroup
-			continue
+// clashAstralPlaceholderStart 是替换 BMP 之外字符时使用的私有区起点。
+// yaml.v3 会把 U+10000 及以上的字符（emoji、国旗等）转义成 \UXXXXXXXX，
+// 先用 BMP 内的私有区占位符替换，编码后再还原，保证输出与模板保持一致。
+const clashAstralPlaceholderStart = 0xE000
+
+// clashAstralSubstitution 记录一个占位符与原始字符的对应关系。
+type clashAstralSubstitution struct {
+	placeholder string
+	original    string
+}
+
+// substituteClashAstralCharacters 把文档中 BMP 之外的字符替换成占位符，返回还原所需的映射。
+// 私有区不足以分配占位符时返回 nil，此时保持 yaml.v3 的 \U 转义输出。
+func substituteClashAstralCharacters(document *yaml.Node) []clashAstralSubstitution {
+	used := make(map[rune]struct{})
+	astral := make(map[rune]struct{})
+	walkClashScalarNodes(document, func(node *yaml.Node) {
+		for _, char := range node.Value {
+			used[char] = struct{}{}
+			if char > 0xFFFF {
+				astral[char] = struct{}{}
+			}
 		}
+	})
+	if len(astral) == 0 {
+		return nil
+	}
 
-		// include-all、use/filter 等自动匹配组应保持模板原意，不能强行展开为固定节点列表。
-		if shouldPreserveProxyGroup(proxyGroup) {
-			continue
-		}
+	originals := make([]rune, 0, len(astral))
+	for char := range astral {
+		originals = append(originals, char)
+	}
+	sort.Slice(originals, func(left, right int) bool { return originals[left] < originals[right] })
 
-		// 获取现有的 proxies 列表
-		var existingProxies []any
-		if proxyGroup["proxies"] != nil {
-			existingProxies, _ = proxyGroup["proxies"].([]any)
-		}
-
-		// 检查是否包含 __ALL_PROXIES__ 占位符（与 subconverter 行为一致）
-		// 如果有占位符，将其替换为所有节点
-		hasPlaceholder := false
-		placeholderIndex := -1
-		for idx, proxy := range existingProxies {
-			if proxyStr, ok := proxy.(string); ok && proxyStr == "__ALL_PROXIES__" {
-				hasPlaceholder = true
-				placeholderIndex = idx
+	placeholders := make(map[rune]rune, len(originals))
+	substitutions := make([]clashAstralSubstitution, 0, len(originals))
+	next := rune(clashAstralPlaceholderStart)
+	for _, original := range originals {
+		for next <= 0xF8FF {
+			if _, taken := used[next]; !taken {
 				break
 			}
+			next++
 		}
-
-		if hasPlaceholder {
-			// 构建新的 proxies 列表：占位符之前的元素 + 所有节点
-			var newProxies []any
-			// 添加占位符之前的元素（组引用如 🔯 故障转移、♻️ 自动选择、DIRECT 等）
-			for j := 0; j < placeholderIndex; j++ {
-				newProxies = append(newProxies, existingProxies[j])
-			}
-			// 添加所有节点
-			for _, newProxy := range ProxiesNameList {
-				newProxies = append(newProxies, newProxy)
-			}
-			// 添加占位符之后的元素（如果有的话）
-			for j := placeholderIndex + 1; j < len(existingProxies); j++ {
-				newProxies = append(newProxies, existingProxies[j])
-			}
-			proxyGroup["proxies"] = newProxies
-			proxyGroups[i] = proxyGroup
-			continue
+		if next > 0xF8FF {
+			return nil
 		}
-
-		// 原有逻辑：只有当 proxies 列表为空时才追加所有节点
-		// 如果已有 proxies（组引用如 🚀 节点选择、DIRECT 等），保持不变
-		if len(existingProxies) == 0 {
-			// 没有任何 proxies，追加所有节点
-			var validProxies []any
-			for _, newProxy := range ProxiesNameList {
-				validProxies = append(validProxies, newProxy)
-			}
-			// 如果仍然为空，插入 DIRECT 作为后备
-			if len(validProxies) == 0 {
-				validProxies = append(validProxies, "DIRECT")
-			}
-			proxyGroup["proxies"] = validProxies
-			proxyGroups[i] = proxyGroup
-		}
-		// 已有 proxies 的组保持不变
+		used[next] = struct{}{}
+		placeholders[original] = next
+		substitutions = append(substitutions, clashAstralSubstitution{
+			placeholder: string(next),
+			original:    string(original),
+		})
+		next++
 	}
 
-	config["proxy-groups"] = proxyGroups
+	walkClashScalarNodes(document, func(node *yaml.Node) {
+		if !strings.ContainsFunc(node.Value, func(char rune) bool { return char > 0xFFFF }) {
+			return
+		}
+		node.Value = strings.Map(func(char rune) rune {
+			if placeholder, ok := placeholders[char]; ok {
+				return placeholder
+			}
+			return char
+		}, node.Value)
+	})
+	return substitutions
+}
 
-	// 将修改后的内容写回文件
-	newData, err := yaml.Marshal(config)
-	if err != nil {
-		utils.Error("error: %v", err)
+// restoreClashAstralCharacters 把编码结果里的占位符还原成原始字符。
+func restoreClashAstralCharacters(data []byte, substitutions []clashAstralSubstitution) []byte {
+	for _, substitution := range substitutions {
+		data = bytes.ReplaceAll(data, []byte(substitution.placeholder), []byte(substitution.original))
 	}
-	return newData, nil
+	return data
+}
+
+// walkClashScalarNodes 遍历文档中的所有标量节点。
+func walkClashScalarNodes(node *yaml.Node, visit func(*yaml.Node)) {
+	if node == nil {
+		return
+	}
+	if node.Kind == yaml.ScalarNode {
+		visit(node)
+	}
+	for _, child := range node.Content {
+		walkClashScalarNodes(child, visit)
+	}
+}
+
+// defaultString 在值为空时回退到默认值。
+func defaultString(value, fallback string) string {
+	if value == "" {
+		return fallback
+	}
+	return value
+}
+
+// yamlMappingValue 返回映射节点中键对应的值节点。
+func yamlMappingValue(mapping *yaml.Node, key string) *yaml.Node {
+	for index := 0; index+1 < len(mapping.Content); index += 2 {
+		if mapping.Content[index].Value == key {
+			return mapping.Content[index+1]
+		}
+	}
+	return nil
+}
+
+// yamlMappingSet 写入键值对：键已存在时只替换值节点，保持模板原有的键顺序。
+func yamlMappingSet(mapping *yaml.Node, key string, value *yaml.Node) {
+	for index := 0; index+1 < len(mapping.Content); index += 2 {
+		if mapping.Content[index].Value == key {
+			mapping.Content[index+1] = value
+			return
+		}
+	}
+	mapping.Content = append(mapping.Content,
+		&yaml.Node{Kind: yaml.ScalarNode, Tag: "!!str", Value: key}, value)
+}
+
+// resolveYAMLAlias 跳过锚点别名，返回真正承载数据的节点。
+func resolveYAMLAlias(node *yaml.Node) *yaml.Node {
+	for node != nil && node.Kind == yaml.AliasNode {
+		node = node.Alias
+	}
+	return node
+}
+
+// yamlStringNodes 把字符串列表转换成 YAML 标量节点。
+func yamlStringNodes(values []string) []*yaml.Node {
+	nodes := make([]*yaml.Node, 0, len(values))
+	for _, value := range values {
+		nodes = append(nodes, &yaml.Node{Kind: yaml.ScalarNode, Tag: "!!str", Value: value})
+	}
+	return nodes
 }

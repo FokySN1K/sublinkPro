@@ -61,7 +61,7 @@ Case 3: Access tracking
 
 ## Expanded Client Formats
 
-- Native outputs remain available through `/c?client=clash`, `/c?client=mihomo`, `/c?client=surge`, and `/c?client=v2ray`.
+- Native outputs remain available through `/c?client=clash`, `/c?client=mihomo`, `/c?client=surge`, and `/c?client=v2ray`. `client=clashmeta` and `client=clash-meta` are treated as aliases of `mihomo`, so they use the native template renderer instead of the Sub-Store sidecar.
 - When **Application Settings -> Sub-Store** is enabled and targets are selected, share links can also request the selected expanded targets: `loon`, `egern`, `stash`, `surfboard`, `shadowrocket`, `quanx`, `sing-box`, `uri`, and `json`.
 - Expanded outputs use SublinkPro's mihomo/Clash YAML as the bridge format and call the external Sub-Store sidecar. The sidecar parser converts proxy nodes only; strategy groups, rules, DNS sections, and other full Clash configuration sections are not preserved in those expanded outputs.
 - If an expanded client is requested while the sidecar is not configured or the target is not selected in Application Settings, the request returns a clear error instead of silently falling back to V2ray.
@@ -79,6 +79,14 @@ Case 3: Access tracking
 - Dynamic group selection stores group names and resolves the current nodes in those groups whenever the subscription is generated.
 - Dynamic airport selection stores airport IDs and resolves the current nodes imported from those airports whenever the subscription is generated.
 - Mixed mode can combine manual nodes, dynamic groups, and dynamic airports. Output order follows the configured sort order, and duplicate effective node names keep the first occurrence.
+
+## Template Rendering Notes
+
+- Clash/mihomo templates are edited on the template text itself. Comments, blank lines, indentation width, key order, anchors/aliases, and flow style stay byte-for-byte identical to the template; only the rewritten lists below change.
+- Only two places are rewritten: the top-level `proxies` list and the `proxies` list of each template proxy group. Template groups keep their order and definitions, `include-all` / `use` / `filter` groups stay untouched, and `__ALL_PROXIES__` expands in place so references before and after it keep their position.
+- Emoji and other characters outside the Basic Multilingual Plane are written literally, exactly as they appear in the template.
+- Every Clash-family link (`client=clash`, `client=mihomo`, `client=clashmeta`, `client=clash-meta`) goes through this native path, so the same template comments, key order, and emoji survive whichever alias the client requests.
+- Templates the text merge cannot handle safely (flow-style `proxy-groups`, anchors on the template lists, a missing top-level `proxies` key) fall back to rewriting the YAML node tree. Comments and key order still survive in that case, but indentation is re-emitted with two spaces and blank lines are dropped. Surge templates are merged line by line, so their comments and section order are preserved as well.
 
 ## Node Naming Variables
 

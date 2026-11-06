@@ -38,6 +38,23 @@ const testSurgeTemplate = `[General]
 test = select
 `
 
+// testCommentedClashTemplate 同时覆盖注释、键顺序、流式占位符和 emoji，
+// 用于验证 Clash 家族链接都走原生模板渲染，而不是交给 Sub-Store 重新生成。
+const testCommentedClashTemplate = `# 顶部注释
+mixed-port: 7890
+# 节点注释
+proxies: ~
+# 组注释
+proxy-groups:
+  # 手选组
+  - name: 🚀 节点选择
+    type: select
+    proxies: [__ALL_PROXIES__]
+# 规则注释
+rules:
+  - MATCH,🚀 节点选择
+`
+
 func setupClientsAPITestDB(t *testing.T) {
 	t.Helper()
 
@@ -183,6 +200,24 @@ func writeTestClashTemplate(t *testing.T) string {
 	}
 	if err := file.Close(); err != nil {
 		t.Fatalf("close clash template: %v", err)
+	}
+
+	return filepath.ToSlash(file.Name())
+}
+
+func writeCommentedClashTemplate(t *testing.T) string {
+	t.Helper()
+
+	file, err := os.CreateTemp(t.TempDir(), "clash-comment-template-*.yaml")
+	if err != nil {
+		t.Fatalf("create commented clash template: %v", err)
+	}
+	if _, err := file.WriteString(testCommentedClashTemplate); err != nil {
+		_ = file.Close()
+		t.Fatalf("write commented clash template: %v", err)
+	}
+	if err := file.Close(); err != nil {
+		t.Fatalf("close commented clash template: %v", err)
 	}
 
 	return filepath.ToSlash(file.Name())
@@ -1489,5 +1524,65 @@ func TestGetClientConcurrentSurgeRequestsKeepSubscriptionScoped(t *testing.T) {
 	}
 	if callCount != 2 {
 		t.Fatalf("expected two hook invocations, got %d", callCount)
+	}
+}
+
+// TestGetClientClashFamilyPreservesTemplateLayout 验证 Clash 家族的所有链接名
+// 都复用原生模板渲染：注释、顶层键顺序和 emoji 原样输出，不会被重排或交给
+// Sub-Store 重新生成 YAML。
+func TestGetClientClashFamilyPreservesTemplateLayout(t *testing.T) {
+	setupClientsAPITestDB(t)
+	clashTemplatePath := writeCommentedClashTemplate(t)
+	surgeTemplatePath := writeTestSurgeTemplate(t)
+	createClientSubscriptionFixture(t, clashTemplatePath, surgeTemplatePath, "comment-order-sub", "comment-order-token", "Comment Node")
+
+	for _, clientType := range []string{"clash", "mihomo", "clashmeta", "clash-meta"} {
+		t.Run(clientType, func(t *testing.T) {
+			recorder := performClientRequest(t, http.MethodGet, "/c/?token=comment-order-token&client="+clientType)
+			if recorder.Code != http.StatusOK {
+				t.Fatalf("expected 200 for %s, got %d body=%q", clientType, recorder.Code, recorder.Body.String())
+			}
+			body := recorder.Body.String()
+
+			for _, comment := range []string{
+				"# 顶部注释",
+				"# 节点注释",
+				"# 组注释",
+				"# 手选组",
+				"# 规则注释",
+			} {
+				if !strings.Contains(body, comment) {
+					t.Fatalf("expected template comment %q in %s output, got %q", comment, clientType, body)
+				}
+			}
+			if !strings.Contains(body, "  - name: Comment Node") {
+				t.Fatalf("expected generated node in %s output, got %q", clientType, body)
+			}
+			if !strings.Contains(body, "proxies: [Comment Node]") {
+				t.Fatalf("expected generated node in group list for %s, got %q", clientType, body)
+			}
+			// 模板文本按原样拼接：注释行与下一行之间不能凭空插入空行
+			if !strings.Contains(body, "# 顶部注释\nmixed-port: 7890") {
+				t.Fatalf("template layout changed in %s output, got %q", clientType, body)
+			}
+			if !strings.Contains(body, "🚀 节点选择") {
+				t.Fatalf("expected literal emoji group name in %s output, got %q", clientType, body)
+			}
+			if strings.Contains(body, `\U0001F680`) {
+				t.Fatalf("emoji must not be escaped in %s output, got %q", clientType, body)
+			}
+
+			previous := -1
+			for _, key := range []string{"\nmixed-port:", "\nproxies:", "\nproxy-groups:", "\nrules:"} {
+				index := strings.Index(body, key)
+				if index < 0 {
+					t.Fatalf("expected top-level key %q in %s output, got %q", strings.TrimPrefix(key, "\n"), clientType, body)
+				}
+				if index < previous {
+					t.Fatalf("top-level key %q left template order in %s output, got %q", strings.TrimPrefix(key, "\n"), clientType, body)
+				}
+				previous = index
+			}
+		})
 	}
 }

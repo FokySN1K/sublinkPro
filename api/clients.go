@@ -193,7 +193,7 @@ func prepareClientResponse(c *gin.Context, clientType, token string) (preparedCl
 }
 
 func resolveSubscriptionClient(c *gin.Context) string {
-	clientIndex := strings.ToLower(strings.TrimSpace(c.Query("client")))
+	clientIndex := normalizeClashFamilyClient(strings.ToLower(strings.TrimSpace(c.Query("client"))))
 	switch clientIndex {
 	case "clash", "mihomo", "surge", "v2ray", "uri", "v2ray-uri":
 		return clientIndex
@@ -213,6 +213,18 @@ func resolveSubscriptionClient(c *gin.Context) string {
 	}
 
 	return "v2ray"
+}
+
+// normalizeClashFamilyClient 把 Clash 家族别名收敛到原生类型。
+// clashmeta / clash-meta 原本会落到 Sub-Store 的 ClashMeta 目标，
+// 由 sidecar 重新生成 YAML，模板注释和键顺序都会丢失；
+// 收敛到 mihomo 后复用原生模板渲染，输出与 client=mihomo 完全一致。
+func normalizeClashFamilyClient(client string) string {
+	switch client {
+	case "clashmeta", "clash-meta":
+		return "mihomo"
+	}
+	return client
 }
 
 func dispatchPreparedClientResponse(c *gin.Context, prepared preparedClientResponse) {
