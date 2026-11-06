@@ -316,10 +316,11 @@ Base: `/api/v1/shares`
 **GET** `/shares/logs` (query: `?shareId=123`)
 
 ### Consume Subscription (the actual output a client fetches)
-**GET** `/c/` (query: `?token=<shareToken>&client=<idx>`)
+**GET** `/c/` (query: `?token=<shareToken>&client=<idx>&substore=<target>`)
 - Use `--raw` (this is NOT a JSON envelope — it's the rendered clash/v2ray/surge output).
 - `token` is the **share token** (from `/shares/get` or `/shares/add`), NOT the API key.
 - Client type auto-detected from User-Agent, or force with `client`.
+- Clash-family names (`clash`, `mihomo`, `clashmeta`, `clash-meta`) are always rendered natively from the subscription template, so template comments and key order are preserved. Add `substore=<target>` (for example `substore=ClashMeta`, `substore=Stash`) to force the Sub-Store sidecar conversion instead; unsupported values are ignored. The sidecar must be configured, otherwise the request returns 503.
 
 ---
 
@@ -544,7 +545,7 @@ Base: `/api/v1/airports` (all write bodies are JSON)
 
 - **GET** `/airports` (query: `?page=1&pageSize=20`) — list
 - **GET** `/airports/{id}` — one
-- **POST** `/airports` — **JSON** create. Key fields (see `dto.AirportRequest`): `name`(required), `url`(required, valid URL; a `happ://crypt…crypt5` link is accepted and decrypted before saving), `cronExpr`(required), `enabled`, `group`, `downloadWithProxy`, `proxyLink`, `userAgent`, `fetchUsageInfo`, `skipTLSVerify`, plus filter/rename/dedup fields (`nodeNameWhitelist`, `nodeNameBlacklist`, `protocolWhitelist`, `protocolBlacklist`, `nodeNamePreprocess`, `deduplicationRule`, `nodeNameUniquify`, ...), and country-fill fields (`autoFillCountry`, `backfillExistingCountry`).
+- **POST** `/airports` — **JSON** create. Key fields (see `dto.AirportRequest`): `name`(required), `url`(required, valid URL; a `happ://crypt…crypt5` link is accepted and decrypted before saving), `cronExpr`(required), `enabled`, `group`, `downloadWithProxy`, `proxyLink`, `userAgent`, `hwid`, `disableHWID`, `deviceProfile`, `deviceOS`, `osVersion`, `deviceModel`, `appName`, `requestHeaders` (`[{key, value}]`), `fetchUsageInfo`, `skipTLSVerify`, plus filter/rename/dedup fields (`nodeNameWhitelist`, `nodeNameBlacklist`, `protocolWhitelist`, `protocolBlacklist`, `nodeNamePreprocess`, `deduplicationRule`, `nodeNameUniquify`, ...), and country-fill fields (`autoFillCountry`, `backfillExistingCountry`).
 - **PUT** `/airports/{id}` — **JSON** update (same schema)
 - **POST** `/airports/batch-update` — **JSON** `{ids:[...], applyGroup, group, applySchedule, cronExpr}`
 - **DELETE** `/airports/{id}` (query: `?deleteNodes=false`)
@@ -558,6 +559,14 @@ Country-fill fields apply during airport pulls and use Country Rules against ups
 - `backfillExistingCountry`: fills the country code for every existing node from the same airport whose country is still empty, including nodes that otherwise do not need a name/link/order update. Saving an airport with `backfillExistingCountry:true` also persists `autoFillCountry:true`.
 
 Neither field overwrites an existing country code, and neither performs landing-IP detection.
+
+Device identification fields control what the airport sees when SublinkPro pulls the subscription or refreshes usage:
+
+- `hwid`: device identifier sent as `X-HWID`, normally a random 32-character hex string. Keep it stable — panels such as Remnawave then treat every pull as the same device instead of creating new ones. When it is omitted on create, the server generates one; on update an empty/omitted value keeps the stored one. Airports stored before this field existed are backfilled at startup with a stable identifier derived from the airport ID, so `GET` always returns a value.
+- `disableHWID`: `true` stops sending `X-HWID`. Defaults to `false` (enabled). The stored value is kept so it can be re-enabled later.
+- `deviceProfile`: one of `android`, `ios`, `windows`, `macos`, `linux`, `custom`, or empty. Presets only prefill the device fields in the UI and provide a default User-Agent when `userAgent` is empty.
+- `deviceOS`, `osVersion`, `deviceModel`, `appName`: the exact values sent as `X-Device-OS`, `X-Ver-OS`, `X-Device-Model`, `X-App-Name`. An empty field means the header is omitted — presets are never applied implicitly at request time. On update, send the full set you want stored; omitted/empty fields clear the stored value.
+- `requestHeaders` entries always win over generated headers, compared case-insensitively — an explicit `X-HWID` or `X-Device-OS` entry overrides the generated value.
 
 ---
 

@@ -391,6 +391,38 @@ func RunMigrations() error {
 		utils.Error("执行迁移 0039_add_accesskey_last_used_columns 失败: %v", err)
 	}
 
+	// 0040_backfill_airport_hwid - 为历史机场补齐 X-HWID，避免编辑机场时字段为空
+	if err := database.RunCustomMigration("0040_backfill_airport_hwid", func() error {
+		var airports []Airport
+		if err := db.Select("ID", "HWID", "DisableHWID").Find(&airports).Error; err != nil {
+			return err
+		}
+		backfilled := 0
+		for i := range airports {
+			if airports[i].DisableHWID || strings.TrimSpace(airports[i].HWID) != "" {
+				continue
+			}
+			if err := db.Model(&Airport{}).Where("id = ?", airports[i].ID).Update("HWID", utils.DeriveHWID(airports[i].ID)).Error; err != nil {
+				return err
+			}
+			backfilled++
+		}
+		if backfilled > 0 {
+			utils.Info("已为 %d 个机场回填 X-HWID", backfilled)
+		}
+		return nil
+	}); err != nil {
+		utils.Error("执行迁移 0040_backfill_airport_hwid 失败: %v", err)
+	}
+
+	// 0041_backfill_airport_device_preset_fields - 将设备档位预置值落库，
+	// 使设备伪装字段成为唯一运行时来源（留空即不发送）。
+	if err := database.RunCustomMigration("0041_backfill_airport_device_preset_fields", func() error {
+		return backfillAirportDevicePresetFields(db)
+	}); err != nil {
+		utils.Error("执行迁移 0041_backfill_airport_device_preset_fields 失败: %v", err)
+	}
+
 	if err := database.RunCustomMigration("0024_migrate_legacy_webhook_settings", func() error {
 		legacyURL, _ := GetSetting("webhook_url")
 		legacyMethod, _ := GetSetting("webhook_method")

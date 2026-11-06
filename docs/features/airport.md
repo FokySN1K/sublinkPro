@@ -154,6 +154,8 @@ Note: Manual remark edits are rejected if they duplicate another node remark. Wh
 Airport “Request Settings” configure request parameters used when fetching subscriptions:
 
 - `User-Agent`: set with a dedicated input for common client UAs or manual input.
+- **Device profile**: pretend to be a device family (`Android`, `iOS`, `Windows`, `macOS`, `Linux`). The system then sends `X-Device-OS`, `X-Ver-OS`, `X-Device-Model`, and `X-App-Name`, and uses a matching client User-Agent when no explicit UA is configured. Useful for panels that treat requests from different devices differently. Pick **Custom** to enter the OS name, OS version, device model, and app name manually. Presets prefill the same fields when you select them, and everything stays editable: the saved field values are exactly what gets sent, so a cleared field means the header is omitted (presets are never re-applied implicitly at request time). The User-Agent comes from the User-Agent field above.
+- **X-HWID**: enabled by default. New airports get a prefilled random 32-character device ID, which is sent as `X-HWID` on every subscription and usage request. Airports that bind a subscription to a device (for example Remnawave-based panels) then keep returning the same subscription instead of creating a new device each time. Use **Regenerate** to produce a new value, or switch it off to stop sending the header.
 - **Custom Header**: add multiple headers with `Header name` + `Header value`, useful for airports that need extra auth or source identification.
 - `Use proxy download`: fetch subscriptions through a specified node or automatically selected best node.
 
@@ -162,6 +164,9 @@ Notes:
 - Custom Header values are sent with airport subscription requests.
 - If “fetch usage information” is enabled, the system reuses the same custom Header values when refreshing airport usage.
 - `User-Agent` is managed as a separate field. Custom Header does not allow another `User-Agent` entry.
+- Custom headers take precedence over the automatic device and `X-HWID` headers. Defining, for example, your own `X-HWID` entry stops the generated value from being sent, and header names are compared case-insensitively.
+- Airports created before this feature are backfilled with a stable value derived from the airport ID on startup (migration `0040_backfill_airport_hwid`), so the edit dialog always shows a value and the upstream panel keeps seeing one consistent device. Use **Regenerate** or edit the field to replace it.
+- Editing an airport never replaces a stored `X-HWID` on its own: the value is only regenerated when you press **Regenerate**, type a new one, or enable the switch on an airport that has no stored value.
 
 ### Configure scheduled updates
 

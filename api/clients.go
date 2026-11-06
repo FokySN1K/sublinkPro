@@ -193,7 +193,12 @@ func prepareClientResponse(c *gin.Context, clientType, token string) (preparedCl
 }
 
 func resolveSubscriptionClient(c *gin.Context) string {
-	clientIndex := strings.ToLower(strings.TrimSpace(c.Query("client")))
+	// ?substore=<target> 显式要求交给 Sub-Store 转换：Clash 家族默认走原生模板渲染，
+	// 需要 sidecar 重新生成的 ClashMeta / Stash 等目标时用它指定。
+	if target := normalizeSubstoreTarget(c.Query("substore")); target != "" {
+		return target
+	}
+	clientIndex := normalizeClashFamilyClient(strings.ToLower(strings.TrimSpace(c.Query("client"))))
 	switch clientIndex {
 	case "clash", "mihomo", "surge", "v2ray", "uri", "v2ray-uri":
 		return clientIndex
@@ -213,6 +218,28 @@ func resolveSubscriptionClient(c *gin.Context) string {
 	}
 
 	return "v2ray"
+}
+
+// normalizeSubstoreTarget 返回 ?substore= 指定的 Sub-Store 转换目标，
+// 未指定或目标不支持时返回空字符串，回落到常规的 client / User-Agent 判定。
+func normalizeSubstoreTarget(value string) string {
+	target := strings.ToLower(strings.TrimSpace(value))
+	if target == "" || !substore.IsSupportedTarget(target) {
+		return ""
+	}
+	return target
+}
+
+// normalizeClashFamilyClient 把 Clash 家族别名收敛到原生类型。
+// clashmeta / clash-meta 原本会落到 Sub-Store 的 ClashMeta 目标，
+// 由 sidecar 重新生成 YAML，模板注释和键顺序都会丢失；
+// 收敛到 mihomo 后复用原生模板渲染，输出与 client=mihomo 完全一致。
+func normalizeClashFamilyClient(client string) string {
+	switch client {
+	case "clashmeta", "clash-meta":
+		return "mihomo"
+	}
+	return client
 }
 
 func dispatchPreparedClientResponse(c *gin.Context, prepared preparedClientResponse) {

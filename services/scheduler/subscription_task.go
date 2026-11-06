@@ -39,8 +39,8 @@ func executeSubscriptionTask(id int, url string, subName string, trigger models.
 	} else {
 		downloadWithProxy = airport.DownloadWithProxy
 		proxyLink = airport.ProxyLink
-		userAgent = airport.UserAgent
-		requestHeaders = airport.RequestHeaders
+		userAgent = airport.EffectiveUserAgent()
+		requestHeaders = airport.EffectiveRequestHeaders()
 		fetchUsageInfo = airport.FetchUsageInfo
 		skipTLSVerify = airport.SkipTLSVerify
 	}

@@ -817,3 +817,651 @@ proxy-groups:
 		t.Fatalf("include-all-providers 丢失: %#v", thirdGroup["include-all-providers"])
 	}
 }
+
+func TestEncodeClashPreservesTemplateCommentsAndKeyOrder(t *testing.T) {
+	tempDir := t.TempDir()
+	templatePath := filepath.Join(tempDir, "clash-comment-template.yaml")
+	template := `# 订阅模板：顶部注释
+mixed-port: 7890
+allow-lan: true
+# 节点列表注释
+proxies: ~
+# 代理组注释
+proxy-groups:
+  # 手选组
+  - name: 🚀 节点选择
+    # 组内注释
+    type: select
+    proxies: []
+rules:
+  # 规则注释
+  - MATCH,DIRECT
+`
+	if err := os.WriteFile(templatePath, []byte(template), 0o600); err != nil {
+		t.Fatalf("写入模板失败: %v", err)
+	}
+
+	ss := Ss{
+		Name:   "Comment-SS",
+		Server: "example.com",
+		Port:   8388,
+		Param: Param{
+			Cipher:   "aes-256-gcm",
+			Password: "password",
+		},
+	}
+
+	data, err := EncodeClash([]Urls{{Url: EncodeSSURL(ss)}}, OutputConfig{
+		Clash: templatePath,
+		Udp:   true,
+	})
+	if err != nil {
+		t.Fatalf("EncodeClash 失败: %v", err)
+	}
+
+	output := string(data)
+	for _, comment := range []string{
+		"# 订阅模板：顶部注释",
+		"# 节点列表注释",
+		"# 代理组注释",
+		"# 手选组",
+		"# 组内注释",
+		"# 规则注释",
+	} {
+		assertContains(t, "模板注释", output, comment)
+	}
+	assertContains(t, "代理组节点", output, "- Comment-SS")
+
+	// 顶层键顺序必须与模板一致，不能被字母序重排
+	mixedIndex := strings.Index(output, "mixed-port:")
+	allowLanIndex := strings.Index(output, "allow-lan:")
+	proxiesIndex := strings.Index(output, "\nproxies:")
+	groupsIndex := strings.Index(output, "\nproxy-groups:")
+	rulesIndex := strings.Index(output, "\nrules:")
+	if mixedIndex < 0 || allowLanIndex < 0 || proxiesIndex < 0 || groupsIndex < 0 || rulesIndex < 0 {
+		t.Fatalf("输出缺少模板键: %s", output)
+	}
+	if mixedIndex > allowLanIndex || allowLanIndex > proxiesIndex || proxiesIndex > groupsIndex || groupsIndex > rulesIndex {
+		t.Fatalf("模板键顺序被改写: %s", output)
+	}
+}
+
+func TestEncodeClashKeepsEmojiLiteral(t *testing.T) {
+	tempDir := t.TempDir()
+	templatePath := filepath.Join(tempDir, "clash-emoji-template.yaml")
+	template := `# 顶部注释
+mixed-port: 7890
+proxies: ~
+proxy-groups:
+  # 手选组
+  - name: 🚀 节点选择
+    type: select
+    proxies: [__ALL_PROXIES__, DIRECT]
+  - name: 🇭🇰 香港节点
+    type: select
+    proxies: []
+rules:
+  - MATCH,🚀 节点选择
+`
+	if err := os.WriteFile(templatePath, []byte(template), 0o600); err != nil {
+		t.Fatalf("写入模板失败: %v", err)
+	}
+
+	ss := Ss{
+		Name:   "🇯🇵 东京 01",
+		Server: "example.com",
+		Port:   8388,
+		Param: Param{
+			Cipher:   "aes-256-gcm",
+			Password: "password",
+		},
+	}
+
+	data, err := EncodeClash([]Urls{{Url: EncodeSSURL(ss)}}, OutputConfig{Clash: templatePath, Udp: true})
+	if err != nil {
+		t.Fatalf("EncodeClash 失败: %v", err)
+	}
+
+	output := string(data)
+	for _, literal := range []string{"🚀 节点选择", "🇭🇰 香港节点", "🇯🇵 东京 01"} {
+		assertContains(t, "模板 emoji", output, literal)
+	}
+	if strings.Contains(output, `\U0001F`) {
+		t.Fatalf("emoji 不应被转义成 \\U 序列: %s", output)
+	}
+
+	// 重新解析后名称必须与模板和节点名一致
+	var parsed struct {
+		Proxies []struct {
+			Name string `yaml:"name"`
+		} `yaml:"proxies"`
+		ProxyGroups []struct {
+			Name string `yaml:"name"`
+		} `yaml:"proxy-groups"`
+	}
+	if err := yaml.Unmarshal(data, &parsed); err != nil {
+		t.Fatalf("输出不是合法 YAML: %v", err)
+	}
+	if len(parsed.Proxies) != 1 || parsed.Proxies[0].Name != "🇯🇵 东京 01" {
+		t.Fatalf("节点名称丢失 emoji: %#v", parsed.Proxies)
+	}
+	if len(parsed.ProxyGroups) != 2 || parsed.ProxyGroups[0].Name != "🚀 节点选择" || parsed.ProxyGroups[1].Name != "🇭🇰 香港节点" {
+		t.Fatalf("代理组名称丢失 emoji: %#v", parsed.ProxyGroups)
+	}
+}
+
+func TestEncodeClashKeepsLiteralBackslashSequences(t *testing.T) {
+	tempDir := t.TempDir()
+	templatePath := filepath.Join(tempDir, "clash-backslash-template.yaml")
+	template := "proxies: ~\nproxy-groups:\n  - name: 手动切换\n    type: select\n    proxies: []\n"
+	if err := os.WriteFile(templatePath, []byte(template), 0o600); err != nil {
+		t.Fatalf("写入模板失败: %v", err)
+	}
+
+	name := `token\U0001F680name`
+	ss := Ss{
+		Name:   name,
+		Server: "example.com",
+		Port:   8388,
+		Param: Param{
+			Cipher:   "aes-256-gcm",
+			Password: "password",
+		},
+	}
+
+	data, err := EncodeClash([]Urls{{Url: EncodeSSURL(ss)}}, OutputConfig{Clash: templatePath, Udp: true})
+	if err != nil {
+		t.Fatalf("EncodeClash 失败: %v", err)
+	}
+
+	var parsed struct {
+		Proxies []struct {
+			Name string `yaml:"name"`
+		} `yaml:"proxies"`
+	}
+	if err := yaml.Unmarshal(data, &parsed); err != nil {
+		t.Fatalf("输出不是合法 YAML: %v", err)
+	}
+	if len(parsed.Proxies) != 1 || parsed.Proxies[0].Name != name {
+		t.Fatalf("字面反斜杠序列被改写: %#v", parsed.Proxies)
+	}
+}
+
+func TestDecodeClashAppendsCustomGroupsAfterTemplate(t *testing.T) {
+	templatePath := filepath.Join(t.TempDir(), "clash-custom-group-template.yaml")
+	template := `proxies: ~
+proxy-groups:
+  # 模板组保持在前
+  - name: 手动切换
+    type: select
+    proxies: [__ALL_PROXIES__]
+`
+	if err := os.WriteFile(templatePath, []byte(template), 0o600); err != nil {
+		t.Fatalf("写入模板失败: %v", err)
+	}
+
+	data, err := DecodeClash(
+		[]Proxy{{Name: "Node-A", Type: "ss", Server: "example.com", Port: FlexPort(8388)}},
+		templatePath,
+		[]CustomProxyGroup{
+			{Name: "链式-手选", Type: "select", Proxies: []string{"Node-A", "DIRECT"}},
+			{Name: "链式-测速", Type: "url-test", Proxies: []string{"Node-A"}},
+			{Name: "链式-均衡", Type: "load-balance", Proxies: []string{"Node-A"}, Strategy: "round-robin"},
+		},
+	)
+	if err != nil {
+		t.Fatalf("DecodeClash 失败: %v", err)
+	}
+
+	var parsed struct {
+		ProxyGroups []struct {
+			Name      string   `yaml:"name"`
+			Type      string   `yaml:"type"`
+			Proxies   []string `yaml:"proxies"`
+			URL       string   `yaml:"url"`
+			Interval  int      `yaml:"interval"`
+			Tolerance int      `yaml:"tolerance"`
+			Strategy  string   `yaml:"strategy"`
+		} `yaml:"proxy-groups"`
+	}
+	if err := yaml.Unmarshal(data, &parsed); err != nil {
+		t.Fatalf("输出不是合法 YAML: %v", err)
+	}
+
+	want := []string{"手动切换", "链式-手选", "链式-测速", "链式-均衡"}
+	if len(parsed.ProxyGroups) != len(want) {
+		t.Fatalf("自定义组应追加在模板组之后: %#v", parsed.ProxyGroups)
+	}
+	for index, name := range want {
+		if parsed.ProxyGroups[index].Name != name {
+			t.Fatalf("代理组顺序不符: got %s want %s", parsed.ProxyGroups[index].Name, name)
+		}
+	}
+	if len(parsed.ProxyGroups[0].Proxies) != 1 || parsed.ProxyGroups[0].Proxies[0] != "Node-A" {
+		t.Fatalf("模板组占位符未展开: %#v", parsed.ProxyGroups[0].Proxies)
+	}
+
+	speed := parsed.ProxyGroups[2]
+	if speed.URL != "http://www.gstatic.com/generate_204" || speed.Interval != 300 || speed.Tolerance != 50 {
+		t.Fatalf("url-test 默认值错误: %#v", speed)
+	}
+	balance := parsed.ProxyGroups[3]
+	if balance.URL != "http://www.gstatic.com/generate_204" || balance.Interval != 300 || balance.Strategy != "round-robin" {
+		t.Fatalf("load-balance 配置错误: %#v", balance)
+	}
+	if strings.Contains(string(data), "_custom_group") {
+		t.Fatalf("自定义组不应输出内部标记: %s", data)
+	}
+}
+
+// TestEncodeClashKeepsTemplateTextVerbatim 验证模板文本按原样保留：
+// 注释、空行、缩进、行内分隔空格和代理组写法都不被 YAML 编码器归一化。
+func TestEncodeClashKeepsTemplateTextVerbatim(t *testing.T) {
+	templatePath := filepath.Join(t.TempDir(), "clash-verbatim-template.yaml")
+	template := `port: 7890
+socks-port: 7891
+allow-lan: true
+#Здесь ставим dns
+dns:
+  enabled: true
+  nameserver:
+    - 119.29.29.29
+proxies: ~
+
+proxy-groups:
+  - name:  节点选择
+    type: select
+    proxies:
+      -  自动选择
+      -  手动切换
+      - DIRECT
+  - name:  手动切换
+    type: select
+    proxies:
+      - __ALL_PROXIES__
+  - name:  香港节点
+    type: url-test
+    url: http://www.gstatic.com/generate_204
+    interval: 300
+    tolerance: 50
+    include-all: true
+    filter: (港|HK|hk|Hong Kong)
+    proxies:
+
+rules:
+  - RULE-SET,LocalAreaNetwork, 节点选择
+  - MATCH, 节点选择
+
+rule-providers:
+  LocalAreaNetwork:
+    type: http
+    behavior: classical
+    url: https://example.com/LocalAreaNetwork.list
+    interval: 86400
+`
+	if err := os.WriteFile(templatePath, []byte(template), 0o600); err != nil {
+		t.Fatalf("写入模板失败: %v", err)
+	}
+
+	data, err := DecodeClash(
+		[]Proxy{{Name: "Node-A", Type: "ss", Server: "example.com", Port: FlexPort(8388)}},
+		templatePath,
+	)
+	if err != nil {
+		t.Fatalf("DecodeClash 失败: %v", err)
+	}
+	output := string(data)
+
+	// 注释行与 dns 之间不应凭空多出空行
+	assertContains(t, "注释紧贴 dns", output, "#Здесь ставим dns\ndns:\n  enabled: true\n")
+	// proxies 之前的内容逐字保留
+	prefix := "port: 7890\nsocks-port: 7891\nallow-lan: true\n#Здесь ставим dns\ndns:\n  enabled: true\n" +
+		"  nameserver:\n    - 119.29.29.29\nproxies:"
+	if !strings.HasPrefix(output, prefix) {
+		t.Fatalf("proxies 之前的模板内容被改写:\n%s", output)
+	}
+	// 节点写进模板 proxies 的块序列，空行与缩进保持模板原样
+	assertContains(t, "proxies 块序列", output, "proxies:\n  - name: Node-A\n")
+	assertContains(t, "proxies 与 proxy-groups 之间空行", output, "\n\nproxy-groups:\n  - name:  节点选择")
+	// 未改动的组内容逐字保留
+	assertContains(t, "手选组成员", output, "    proxies:\n      -  自动选择\n      -  手动切换\n      - DIRECT\n")
+	assertContains(t, "占位符就地展开", output, "  - name:  手动切换\n    type: select\n    proxies:\n      - Node-A\n")
+	assertContains(t, "include-all 组保持原样", output, "    filter: (港|HK|hk|Hong Kong)\n    proxies:\n\nrules:")
+
+	// rules 之后的内容逐字保留，包括空行
+	suffix := "\n\nrules:\n  - RULE-SET,LocalAreaNetwork, 节点选择\n  - MATCH, 节点选择\n\n" +
+		"rule-providers:\n  LocalAreaNetwork:\n    type: http\n    behavior: classical\n" +
+		"    url: https://example.com/LocalAreaNetwork.list\n    interval: 86400\n"
+	if !strings.HasSuffix(output, suffix) {
+		t.Fatalf("rules 之后的模板内容被改写:\n%s", output)
+	}
+
+	var parsed struct {
+		Proxies []struct {
+			Name string `yaml:"name"`
+		} `yaml:"proxies"`
+		ProxyGroups []struct {
+			Name       string   `yaml:"name"`
+			Proxies    []string `yaml:"proxies"`
+			IncludeAll bool     `yaml:"include-all"`
+		} `yaml:"proxy-groups"`
+	}
+	if err := yaml.Unmarshal(data, &parsed); err != nil {
+		t.Fatalf("输出不是合法 YAML: %v", err)
+	}
+	if len(parsed.Proxies) != 1 || parsed.Proxies[0].Name != "Node-A" {
+		t.Fatalf("节点未写入模板: %#v", parsed.Proxies)
+	}
+	if len(parsed.ProxyGroups) != 3 {
+		t.Fatalf("代理组数量错误: %#v", parsed.ProxyGroups)
+	}
+	if got := parsed.ProxyGroups[1].Proxies; len(got) != 1 || got[0] != "Node-A" {
+		t.Fatalf("占位符展开错误: %#v", got)
+	}
+	if !parsed.ProxyGroups[2].IncludeAll || len(parsed.ProxyGroups[2].Proxies) != 0 {
+		t.Fatalf("include-all 组被改写: %#v", parsed.ProxyGroups[2])
+	}
+}
+
+// TestEncodeClashKeepsGroupKeyLineComment 验证组内 proxies 键行上的注释不会丢失。
+func TestEncodeClashKeepsGroupKeyLineComment(t *testing.T) {
+	templatePath := filepath.Join(t.TempDir(), "clash-key-comment-template.yaml")
+	template := "proxies: ~\nproxy-groups:\n  - name: 手动切换\n    type: select\n    proxies:  # 手动补充\n"
+	if err := os.WriteFile(templatePath, []byte(template), 0o600); err != nil {
+		t.Fatalf("写入模板失败: %v", err)
+	}
+
+	data, err := DecodeClash(
+		[]Proxy{{Name: "Node-A", Type: "ss", Server: "example.com", Port: FlexPort(8388)}},
+		templatePath,
+	)
+	if err != nil {
+		t.Fatalf("DecodeClash 失败: %v", err)
+	}
+
+	assertContains(t, "组内键行注释", string(data), "    proxies: # 手动补充\n      - Node-A\n")
+}
+
+// TestDecodeClashAppendsCustomGroupsKeepsBlankLines 验证自定义组追加后模板空行仍然保留。
+func TestDecodeClashAppendsCustomGroupsKeepsBlankLines(t *testing.T) {
+	templatePath := filepath.Join(t.TempDir(), "clash-custom-layout-template.yaml")
+	template := "proxies: ~\nproxy-groups:\n  - name: 手动切换\n    type: select\n    proxies: [__ALL_PROXIES__]\n\n" +
+		"rules:\n  - MATCH,DIRECT\n"
+	if err := os.WriteFile(templatePath, []byte(template), 0o600); err != nil {
+		t.Fatalf("写入模板失败: %v", err)
+	}
+
+	data, err := DecodeClash(
+		[]Proxy{{Name: "Node-A", Type: "ss", Server: "example.com", Port: FlexPort(8388)}},
+		templatePath,
+		[]CustomProxyGroup{{Name: "链式-手选", Type: "select", Proxies: []string{"Node-A", "DIRECT"}}},
+	)
+	if err != nil {
+		t.Fatalf("DecodeClash 失败: %v", err)
+	}
+	output := string(data)
+
+	assertContains(t, "自定义组追加位置", output, "\n  - name: 链式-手选\n")
+	assertContains(t, "自定义组节点", output, "      - Node-A\n      - DIRECT\n")
+	assertContains(t, "模板空行保留", output, "\n\nrules:\n  - MATCH,DIRECT\n")
+}
+
+// TestEncodeClashKeepsDefaultTemplateLayout 用仓库自带的默认模板验证空行、注释
+// 和固定成员列表都按原文保留，只有节点列表与占位符会被替换。
+func TestEncodeClashKeepsDefaultTemplateLayout(t *testing.T) {
+	templatePath := filepath.Join("..", "..", "template", "clash.yaml")
+	templateBytes, err := os.ReadFile(templatePath)
+	if err != nil {
+		t.Skipf("默认模板不可用: %v", err)
+	}
+
+	data, err := DecodeClash(
+		[]Proxy{{Name: "Node-A", Type: "ss", Server: "example.com", Port: FlexPort(8388)}},
+		templatePath,
+	)
+	if err != nil {
+		t.Fatalf("DecodeClash 失败: %v", err)
+	}
+
+	output := strings.ReplaceAll(string(data), "\r\n", "\n")
+	templateText := strings.ReplaceAll(string(templateBytes), "\r\n", "\n")
+
+	if got, want := strings.Count(output, "\n\n"), strings.Count(templateText, "\n\n"); got != want {
+		t.Fatalf("模板空行数量被改写: got %d want %d", got, want)
+	}
+	for _, line := range strings.Split(templateText, "\n") {
+		trimmed := strings.TrimSpace(line)
+		if trimmed == "" || !strings.HasPrefix(trimmed, "#") {
+			continue
+		}
+		if !strings.Contains(output, line) {
+			t.Fatalf("模板注释丢失: %q", line)
+		}
+	}
+	// 固定成员列表的代理组保持模板原文（含 emoji）
+	assertContains(t, "手选组成员", output, "    proxies:\n      - ♻️ 自动选择\n      - 🇭🇰 香港节点\n")
+	// 占位符就地展开为节点名
+	assertContains(t, "占位符展开", output, "  - name: 🚀 手动切换\n    type: select\n    proxies:\n      - Node-A\n")
+	// 模板 proxies 的键行与后面的空行保持原样
+	assertContains(t, "proxies 段落", output, "proxies:\n  - name: Node-A\n")
+}
+
+// TestEncodeClashAppendsToZeroIndentProxies 验证零缩进的序列只追加到列表末尾，
+// 不会把后面的 proxy-groups / rules 一起吞掉。
+func TestEncodeClashAppendsToZeroIndentProxies(t *testing.T) {
+	templatePath := filepath.Join(t.TempDir(), "clash-zero-indent-template.yaml")
+	template := `mixed-port: 7890
+proxies:
+- name: Template-Node
+  type: ss
+  server: 127.0.0.1
+  port: 8388
+proxy-groups:
+- name: 节点选择
+  type: select
+  proxies: []
+rules:
+- MATCH,DIRECT
+`
+	if err := os.WriteFile(templatePath, []byte(template), 0o600); err != nil {
+		t.Fatalf("写入模板失败: %v", err)
+	}
+
+	data, err := DecodeClash(
+		[]Proxy{{Name: "Node-A", Type: "ss", Server: "example.com", Port: FlexPort(8388)}},
+		templatePath,
+	)
+	if err != nil {
+		t.Fatalf("DecodeClash 失败: %v", err)
+	}
+	output := string(data)
+
+	assertContains(t, "节点追加到零缩进列表末尾", output, "  port: 8388\n- name: Node-A\n")
+	assertContains(t, "零缩进组成员", output, "- name: 节点选择\n  type: select\n  proxies:\n    - Node-A\n")
+	assertContains(t, "rules 段落原样", output, "rules:\n- MATCH,DIRECT\n")
+
+	var parsed struct {
+		Proxies []struct {
+			Name string `yaml:"name"`
+		} `yaml:"proxies"`
+		ProxyGroups []struct {
+			Name    string   `yaml:"name"`
+			Proxies []string `yaml:"proxies"`
+		} `yaml:"proxy-groups"`
+		Rules []string `yaml:"rules"`
+	}
+	if err := yaml.Unmarshal(data, &parsed); err != nil {
+		t.Fatalf("输出不是合法 YAML: %v\n%s", err, output)
+	}
+	if len(parsed.Proxies) != 2 || parsed.Proxies[1].Name != "Node-A" {
+		t.Fatalf("节点未追加到模板 proxies: %#v", parsed.Proxies)
+	}
+	if len(parsed.ProxyGroups) != 1 || len(parsed.ProxyGroups[0].Proxies) != 1 ||
+		parsed.ProxyGroups[0].Proxies[0] != "Node-A" {
+		t.Fatalf("代理组列表错误: %#v", parsed.ProxyGroups)
+	}
+	if len(parsed.Rules) != 1 || parsed.Rules[0] != "MATCH,DIRECT" {
+		t.Fatalf("rules 被改写: %#v", parsed.Rules)
+	}
+}
+
+// TestEncodeClashFillsMissingGroupProxies 验证缺少 proxies 键的组只在组内补上列表。
+func TestEncodeClashFillsMissingGroupProxies(t *testing.T) {
+	templatePath := filepath.Join(t.TempDir(), "clash-missing-group-proxies-template.yaml")
+	template := "proxies: ~\nproxy-groups:\n- name: 手动切换\n  type: select\n- name: 备用\n  type: select\n  proxies: []\n" +
+		"rules:\n- MATCH,DIRECT\n"
+	if err := os.WriteFile(templatePath, []byte(template), 0o600); err != nil {
+		t.Fatalf("写入模板失败: %v", err)
+	}
+
+	data, err := DecodeClash(
+		[]Proxy{{Name: "Node-A", Type: "ss", Server: "example.com", Port: FlexPort(8388)}},
+		templatePath,
+	)
+	if err != nil {
+		t.Fatalf("DecodeClash 失败: %v", err)
+	}
+
+	var parsed struct {
+		ProxyGroups []struct {
+			Name    string   `yaml:"name"`
+			Proxies []string `yaml:"proxies"`
+		} `yaml:"proxy-groups"`
+		Rules []string `yaml:"rules"`
+	}
+	if err := yaml.Unmarshal(data, &parsed); err != nil {
+		t.Fatalf("输出不是合法 YAML: %v\n%s", err, string(data))
+	}
+	if len(parsed.ProxyGroups) != 2 {
+		t.Fatalf("代理组数量错误: %#v", parsed.ProxyGroups)
+	}
+	for index, group := range parsed.ProxyGroups {
+		if len(group.Proxies) != 1 || group.Proxies[0] != "Node-A" {
+			t.Fatalf("第 %d 组成员错误: %#v", index, group)
+		}
+	}
+	if len(parsed.Rules) != 1 || parsed.Rules[0] != "MATCH,DIRECT" {
+		t.Fatalf("rules 被改写: %#v", parsed.Rules)
+	}
+}
+
+// TestEncodeClashReplacesNullOnNextLine 验证值另起一行的 ~ 会随键行一起被替换。
+func TestEncodeClashReplacesNullOnNextLine(t *testing.T) {
+	templatePath := filepath.Join(t.TempDir(), "clash-null-next-line-template.yaml")
+	template := "mixed-port: 7890\nproxies:\n  ~\nproxy-groups:\n  - name: 手动切换\n    type: select\n    proxies: []\n"
+	if err := os.WriteFile(templatePath, []byte(template), 0o600); err != nil {
+		t.Fatalf("写入模板失败: %v", err)
+	}
+
+	data, err := DecodeClash(
+		[]Proxy{{Name: "Node-A", Type: "ss", Server: "example.com", Port: FlexPort(8388)}},
+		templatePath,
+	)
+	if err != nil {
+		t.Fatalf("DecodeClash 失败: %v", err)
+	}
+	output := string(data)
+
+	assertContains(t, "独立行 null 被替换", output, "proxies:\n  - name: Node-A\n")
+	if strings.Contains(output, "~") {
+		t.Fatalf("模板里的 null 残留:\n%s", output)
+	}
+
+	var parsed struct {
+		Proxies []struct {
+			Name string `yaml:"name"`
+		} `yaml:"proxies"`
+	}
+	if err := yaml.Unmarshal(data, &parsed); err != nil {
+		t.Fatalf("输出不是合法 YAML: %v\n%s", err, output)
+	}
+	if len(parsed.Proxies) != 1 || parsed.Proxies[0].Name != "Node-A" {
+		t.Fatalf("节点未写入模板: %#v", parsed.Proxies)
+	}
+}
+
+// TestEncodeClashKeepsCommentBeforeNextSection 验证序列末尾的段落注释仍属于下面的键。
+func TestEncodeClashKeepsCommentBeforeNextSection(t *testing.T) {
+	templatePath := filepath.Join(t.TempDir(), "clash-section-comment-template.yaml")
+	template := "proxies:\n  - name: Template-Node\n    type: ss\n    server: 127.0.0.1\n    port: 8388\n" +
+		"  # Ниже — прокси-группы\nproxy-groups:\n  - name: 手动切换\n    type: select\n    proxies: []\n"
+	if err := os.WriteFile(templatePath, []byte(template), 0o600); err != nil {
+		t.Fatalf("写入模板失败: %v", err)
+	}
+
+	data, err := DecodeClash(
+		[]Proxy{{Name: "Node-A", Type: "ss", Server: "example.com", Port: FlexPort(8388)}},
+		templatePath,
+	)
+	if err != nil {
+		t.Fatalf("DecodeClash 失败: %v", err)
+	}
+	output := string(data)
+
+	assertContains(t, "段落注释仍贴在 proxy-groups 前", output, "  # Ниже — прокси-группы\nproxy-groups:\n")
+	nodeIndex := strings.Index(output, "- name: Node-A")
+	commentIndex := strings.Index(output, "# Ниже — прокси-группы")
+	if nodeIndex < 0 || commentIndex < 0 || nodeIndex > commentIndex {
+		t.Fatalf("节点被插到了段落注释之后:\n%s", output)
+	}
+}
+
+// TestEncodeClashAliasTemplateFallsBack 验证别名模板走节点树重编码且结果合法。
+func TestEncodeClashAliasTemplateFallsBack(t *testing.T) {
+	templatePath := filepath.Join(t.TempDir(), "clash-alias-template.yaml")
+	template := "shared: &nodes\n  - name: Template-Node\n    type: ss\n    server: 127.0.0.1\n    port: 8388\n" +
+		"proxies: *nodes\nproxy-groups:\n  - name: 手动切换\n    type: select\n    proxies: []\n"
+	if err := os.WriteFile(templatePath, []byte(template), 0o600); err != nil {
+		t.Fatalf("写入模板失败: %v", err)
+	}
+
+	data, err := DecodeClash(
+		[]Proxy{{Name: "Node-A", Type: "ss", Server: "example.com", Port: FlexPort(8388)}},
+		templatePath,
+	)
+	if err != nil {
+		t.Fatalf("DecodeClash 失败: %v", err)
+	}
+
+	var parsed struct {
+		Proxies []struct {
+			Name string `yaml:"name"`
+		} `yaml:"proxies"`
+	}
+	if err := yaml.Unmarshal(data, &parsed); err != nil {
+		t.Fatalf("输出不是合法 YAML: %v\n%s", err, string(data))
+	}
+	if len(parsed.Proxies) != 2 || parsed.Proxies[1].Name != "Node-A" {
+		t.Fatalf("节点未追加到别名列表: %#v", parsed.Proxies)
+	}
+}
+
+// TestEncodeClashCROnlyTemplateFallsBack 验证只有 CR 换行的模板不会按错误行号改写。
+func TestEncodeClashCROnlyTemplateFallsBack(t *testing.T) {
+	templatePath := filepath.Join(t.TempDir(), "clash-cr-template.yaml")
+	template := strings.ReplaceAll(
+		"proxies: ~\nproxy-groups:\n  - name: 手动切换\n    type: select\n    proxies: []\n", "\n", "\r")
+	if err := os.WriteFile(templatePath, []byte(template), 0o600); err != nil {
+		t.Fatalf("写入模板失败: %v", err)
+	}
+
+	data, err := DecodeClash(
+		[]Proxy{{Name: "Node-A", Type: "ss", Server: "example.com", Port: FlexPort(8388)}},
+		templatePath,
+	)
+	if err != nil {
+		t.Fatalf("DecodeClash 失败: %v", err)
+	}
+
+	var parsed struct {
+		Proxies []struct {
+			Name string `yaml:"name"`
+		} `yaml:"proxies"`
+	}
+	if err := yaml.Unmarshal(data, &parsed); err != nil {
+		t.Fatalf("输出不是合法 YAML: %v\n%s", err, string(data))
+	}
+	if len(parsed.Proxies) != 1 || parsed.Proxies[0].Name != "Node-A" {
+		t.Fatalf("节点未写入模板: %#v", parsed.Proxies)
+	}
+}

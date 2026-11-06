@@ -320,6 +320,35 @@
         "remark": "Optional memo for this airport",
         "userAgent": "Select or enter"
       },
+      "deviceProfile": {
+        "label": "Device Profile",
+        "helper": "Pretend to pull as the selected device: sends X-Device-OS, X-Ver-OS, X-Device-Model and X-App-Name, and uses its User-Agent when no User-Agent is set.",
+        "options": {
+          "none": "None (no impersonation)",
+          "android": "Android",
+          "ios": "iOS",
+          "windows": "Windows",
+          "macos": "macOS",
+          "linux": "Linux",
+          "custom": "Custom (fill in manually)"
+        },
+        "customFields": {
+          "deviceOS": { "label": "Device OS", "placeholder": "Android" },
+          "osVersion": { "label": "OS version", "placeholder": "14" },
+          "deviceModel": { "label": "Device model", "placeholder": "Pixel 7" },
+          "appName": { "label": "App name", "placeholder": "v2rayTun" }
+        },
+        "customHint": "User-Agent is taken from the User-Agent field above; empty fields are not sent.",
+        "presetHint": "Values are prefilled from the selected profile. Edit or clear them freely: a cleared field is not sent."
+      },
+      "hwid": {
+        "enable": "Send X-HWID",
+        "description": "Let the airport treat these pulls as one stable device",
+        "label": "X-HWID",
+        "placeholder": "32-character device identifier",
+        "helper": "Generated automatically. Keep it unchanged so the airport does not count the pull as a new device.",
+        "regenerate": "Regenerate"
+      },
       "logoPicker": {
         "set": "Click to set Logo",
         "change": "Click to change Logo",

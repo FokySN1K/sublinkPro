@@ -61,7 +61,7 @@
 
 ## 扩展客户端格式
 
-- 原生输出仍通过 `/c?client=clash`、`/c?client=mihomo`、`/c?client=surge`、`/c?client=v2ray` 提供。
+- 原生输出仍通过 `/c?client=clash`、`/c?client=mihomo`、`/c?client=surge`、`/c?client=v2ray` 提供；`client=clashmeta` 与 `client=clash-meta` 视为 `mihomo` 的别名，同样走原生模板渲染，不再交给 Sub-Store sidecar。
 - 在 **用户中心 -> Sub-Store** 启用 sidecar 并选择目标后，分享链接还可以请求已选中的扩展目标：`loon`、`egern`、`stash`、`surfboard`、`shadowrocket`、`quanx`、`sing-box`、`uri`、`json`。
 - 扩展输出使用 SublinkPro 的 mihomo/Clash YAML 作为桥接格式，并调用外部 Sub-Store sidecar。sidecar parser 只转换代理节点，不保留策略组、规则、DNS 等完整 Clash 配置段。
 - 如果请求扩展客户端时未配置 sidecar，或目标未在用户中心选中，请求会返回明确错误，不会静默回退到 V2ray。
@@ -79,6 +79,14 @@
 - 动态选择分组会保存分组名称，每次生成订阅时解析这些分组下的当前节点。
 - 动态选择机场会保存机场 ID，每次生成订阅时解析这些机场当前导入的节点。
 - 混合模式可以同时组合手动节点、动态分组和动态机场。输出顺序遵循已配置的排序，同名有效节点只保留最先出现的一份。
+
+## 模板渲染说明
+
+- Clash/mihomo 模板直接在模板原文上拼接：注释、空行、缩进宽度、键顺序、锚点与流式写法都与模板逐字一致，只有下面列出的列表会被重写。
+- 只有两处会被重写：顶层 `proxies` 列表，以及模板中每个代理组的 `proxies` 列表。模板代理组保持原有顺序与定义，`include-all` / `use` / `filter` 组保持不变，`__ALL_PROXIES__` 在原位置展开，前后的组引用位置不变。
+- emoji 等 BMP 之外的字符按模板原样输出，不会被转义成 `\U` 序列。
+- Clash 家族的所有链接（`client=clash`、`client=mihomo`、`client=clashmeta`、`client=clash-meta`）都走这条原生路径，因此无论客户端请求哪个别名，模板注释、键顺序与 emoji 都会保留。如果需要 Sub-Store sidecar 的输出（例如它的 `ClashMeta` 目标），在链接上追加 `substore=<目标>`，例如 `/c/?token=...&client=clashmeta&substore=ClashMeta`；不支持的目标会被忽略，回落到原生渲染。
+- 文本拼接无法安全处理的模板（`proxy-groups` 或根映射使用流式写法、`proxies` 写成别名、缺少顶层 `proxies` 键、只有 CR 换行）会退回 YAML 节点树重编码：注释与键顺序仍然保留，但缩进会统一成两空格、空行会被丢弃。Surge 模板按行合并，注释与分节顺序同样保留。
 
 ## 节点命名变量
 
