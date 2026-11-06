@@ -1586,3 +1586,40 @@ func TestGetClientClashFamilyPreservesTemplateLayout(t *testing.T) {
 		})
 	}
 }
+
+// TestGetClientSubstoreParamRoutesToSidecar 验证 ?substore=<target> 显式把请求交给
+// Sub-Store：Clash 家族默认走原生模板渲染，而这个参数仍能拿到 sidecar 的 ClashMeta 输出。
+func TestGetClientSubstoreParamRoutesToSidecar(t *testing.T) {
+	setupClientsAPITestDB(t)
+	clashTemplatePath := writeCommentedClashTemplate(t)
+	surgeTemplatePath := writeTestSurgeTemplate(t)
+	createClientSubscriptionFixture(t, clashTemplatePath, surgeTemplatePath, "substore-param-sub", "substore-param-token", "Substore Node")
+
+	recorder := performClientRequest(t, http.MethodGet,
+		"/c/?token=substore-param-token&client=clashmeta&substore=ClashMeta")
+	// 测试环境未配置 Sub-Store：请求必须落在 sidecar 分支并返回 503，
+	// 而不是被静默当成原生 mihomo 渲染。
+	if recorder.Code != http.StatusServiceUnavailable {
+		t.Fatalf("expected 503 from Sub-Store branch, got %d body=%q", recorder.Code, recorder.Body.String())
+	}
+	if !strings.Contains(recorder.Body.String(), "Sub-Store") {
+		t.Fatalf("expected Sub-Store error message, got %q", recorder.Body.String())
+	}
+}
+
+// TestGetClientIgnoresUnsupportedSubstoreParam 验证不支持的 substore 目标会被忽略。
+func TestGetClientIgnoresUnsupportedSubstoreParam(t *testing.T) {
+	setupClientsAPITestDB(t)
+	clashTemplatePath := writeCommentedClashTemplate(t)
+	surgeTemplatePath := writeTestSurgeTemplate(t)
+	createClientSubscriptionFixture(t, clashTemplatePath, surgeTemplatePath, "substore-bad-sub", "substore-bad-token", "Fallback Node")
+
+	recorder := performClientRequest(t, http.MethodGet,
+		"/c/?token=substore-bad-token&client=mihomo&substore=not-a-target")
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("expected 200 for native mihomo output, got %d body=%q", recorder.Code, recorder.Body.String())
+	}
+	if !strings.Contains(recorder.Body.String(), "  - name: Fallback Node") {
+		t.Fatalf("expected native template output, got %q", recorder.Body.String())
+	}
+}

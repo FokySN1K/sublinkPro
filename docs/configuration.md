@@ -49,7 +49,7 @@ SublinkPro supports several configuration methods. Priority from highest to lowe
 
 ## Sub-Store Sidecar Conversion
 
-SublinkPro can use an external Sub-Store backend as an optional sidecar for additional subscription output formats. Native `clash`/`mihomo` (including the `clashmeta` and `clash-meta` aliases), `surge`, and `v2ray` links stay handled by SublinkPro. Expanded targets such as `loon`, `egern`, `stash`, `surfboard`, `shadowrocket`, `quanx`, `sing-box`, `uri`, and `json` first generate SublinkPro's mihomo/Clash bridge YAML, then send the proxy list to Sub-Store's `/api/proxy/parse` endpoint.
+SublinkPro can use an external Sub-Store backend as an optional sidecar for additional subscription output formats. Native `clash`/`mihomo` (including the `clashmeta` and `clash-meta` aliases), `surge`, and `v2ray` links stay handled by SublinkPro. To route a Clash-family link through the sidecar anyway, append `substore=<target>` to the consume link (for example `substore=ClashMeta`). Expanded targets such as `loon`, `egern`, `stash`, `surfboard`, `shadowrocket`, `quanx`, `sing-box`, `uri`, and `json` first generate SublinkPro's mihomo/Clash bridge YAML, then send the proxy list to Sub-Store's `/api/proxy/parse` endpoint.
 
 Sign in and open **Application Settings -> Sub-Store** to enable the sidecar, set its base URL, adjust timeout/response limits, choose allowed targets, and test the connection. Sub-Store settings are page-managed only; this integration is not configured through environment variables or `config.yaml` keys.
 

@@ -23,11 +23,20 @@ func mergeClashTemplateText(data []byte, root *yaml.Node, proxyNodes []*yaml.Nod
 	// 统一按 LF 处理行，最后再还原模板原本的换行符（Windows 模板常见 CRLF）
 	text := string(data)
 	eol := "\n"
-	if strings.Contains(text, "\r\n") {
+	switch {
+	case strings.Contains(text, "\r\n"):
 		eol = "\r\n"
 		text = strings.ReplaceAll(text, "\r\n", "\n")
+	case strings.Contains(text, "\r"):
+		// 只有 CR 换行的模板无法按行对齐，交给节点树重编码
+		return nil, false
 	}
 	lines := strings.Split(text, "\n")
+
+	// 流式根映射（整份模板写在一行里）无法逐行替换
+	if root.Style&yaml.FlowStyle != 0 {
+		return nil, false
+	}
 
 	proxiesKey, proxiesValue, ok := clashMappingKeyValue(root, "proxies")
 	if !ok {
@@ -90,6 +99,10 @@ func clashSequenceAppendEdit(lines []string, keyNode, valueNode *yaml.Node, item
 	if len(itemNodes) == 0 {
 		return clashTextEdit{start: keyLine, end: keyLine}, true
 	}
+	if valueNode.Kind == yaml.AliasNode {
+		// 别名指向别处定义的列表，逐行替换会改到错误的段落
+		return clashTextEdit{}, false
+	}
 	resolved := resolveYAMLAlias(valueNode)
 	if resolved == nil {
 		return clashTextEdit{}, false
@@ -97,15 +110,15 @@ func clashSequenceAppendEdit(lines []string, keyNode, valueNode *yaml.Node, item
 
 	switch {
 	case resolved.Kind == yaml.ScalarNode && resolved.Tag == "!!null":
-		return clashInlineSequenceEdit(lines, keyLine, keyNode, itemNodes, defaultIndent)
+		return clashInlineSequenceEdit(lines, keyLine, keyNode, resolved, itemNodes, defaultIndent)
 	case resolved.Kind == yaml.SequenceNode && resolved.Style&yaml.FlowStyle != 0:
 		if len(resolved.Content) != 0 {
 			return clashTextEdit{}, false
 		}
-		return clashInlineSequenceEdit(lines, keyLine, keyNode, itemNodes, defaultIndent)
+		return clashInlineSequenceEdit(lines, keyLine, keyNode, resolved, itemNodes, defaultIndent)
 	case resolved.Kind == yaml.SequenceNode:
 		if len(resolved.Content) == 0 {
-			return clashInlineSequenceEdit(lines, keyLine, keyNode, itemNodes, defaultIndent)
+			return clashInlineSequenceEdit(lines, keyLine, keyNode, resolved, itemNodes, defaultIndent)
 		}
 		itemIndent := clashBlockItemIndent(lines, resolved, defaultIndent)
 		itemLines, ok := clashBlockItemLines(itemNodes, itemIndent)
@@ -120,7 +133,7 @@ func clashSequenceAppendEdit(lines []string, keyNode, valueNode *yaml.Node, item
 }
 
 // clashInlineSequenceEdit 把键行上的内联值（~ / null / []）改成块序列。
-func clashInlineSequenceEdit(lines []string, keyLine int, keyNode *yaml.Node, itemNodes []*yaml.Node, indent int) (clashTextEdit, bool) {
+func clashInlineSequenceEdit(lines []string, keyLine int, keyNode, valueNode *yaml.Node, itemNodes []*yaml.Node, indent int) (clashTextEdit, bool) {
 	itemLines, ok := clashBlockItemLines(itemNodes, indent)
 	if !ok {
 		return clashTextEdit{}, false
@@ -129,8 +142,41 @@ func clashInlineSequenceEdit(lines []string, keyLine int, keyNode *yaml.Node, it
 	if !ok {
 		return clashTextEdit{}, false
 	}
+	end, ok := clashInlineValueEnd(lines, keyNode, valueNode, keyLine)
+	if !ok {
+		return clashTextEdit{}, false
+	}
 	replacement := append([]string{rewritten}, itemLines...)
-	return clashTextEdit{start: keyLine, end: keyLine + 1, lines: replacement}, true
+	return clashTextEdit{start: keyLine, end: end, lines: replacement}, true
+}
+
+// clashInlineValueEnd 返回键行内联值需要替换到的行下标（右端不含）。
+// 值写在下一行（如 proxies: 换行 ~）时一并替换，无法安全判断时 ok=false。
+func clashInlineValueEnd(lines []string, keyNode, valueNode *yaml.Node, keyLine int) (int, bool) {
+	if valueNode == nil || valueNode.Line != keyNode.Line+1 || keyLine+1 >= len(lines) {
+		return keyLine + 1, true
+	}
+	trimmed := strings.TrimSpace(lines[keyLine+1])
+	if trimmed == "" || strings.HasPrefix(trimmed, "#") {
+		return keyLine + 1, true
+	}
+	switch clashInlineValueToken(trimmed) {
+	case "~", "null", "Null", "NULL", "[]":
+		return keyLine + 2, true
+	}
+	if strings.HasPrefix(trimmed, "[") || strings.HasPrefix(trimmed, "{") {
+		// 值写成了下一行的流式集合，逐行替换不安全
+		return 0, false
+	}
+	return keyLine + 1, true
+}
+
+// clashInlineValueToken 取出一行里的第一个标量记号。
+func clashInlineValueToken(line string) string {
+	if index := strings.IndexAny(line, " \t"); index >= 0 {
+		return line[:index]
+	}
+	return line
 }
 
 // clashProxyGroupEdit 计算单个代理组在模板文本里的改动。
@@ -163,7 +209,7 @@ func clashProxyGroupEdit(lines []string, group *yaml.Node, proxyNames []string) 
 		return clashTextEdit{start: end, end: end, lines: replacement}, true, true
 	}
 
-	return clashProxyNamesEdit(lines, keyNode, valueNode, proxyNames, group.Column-1+2)
+	return clashProxyNamesEdit(lines, keyNode, valueNode, proxyNames)
 }
 
 // clashFillNames 返回填充空代理组时使用的节点名列表，空订阅回退到 DIRECT。
@@ -175,21 +221,26 @@ func clashFillNames(names []string) []string {
 }
 
 // clashProxyNamesEdit 用节点名替换单个代理组的 proxies 内容。
-func clashProxyNamesEdit(lines []string, keyNode, valueNode *yaml.Node, names []string, defaultIndent int) (clashTextEdit, bool, bool) {
+func clashProxyNamesEdit(lines []string, keyNode, valueNode *yaml.Node, names []string) (clashTextEdit, bool, bool) {
 	keyLine := keyNode.Line - 1
 	if keyLine < 0 || keyLine >= len(lines) {
+		return clashTextEdit{}, false, false
+	}
+	if valueNode.Kind == yaml.AliasNode {
+		// 别名指向别处定义的列表，逐行替换会改到错误的段落
 		return clashTextEdit{}, false, false
 	}
 	resolved := resolveYAMLAlias(valueNode)
 	if resolved == nil {
 		return clashTextEdit{}, false, false
 	}
+	itemIndent := clashLineIndent(lines[keyLine]) + 2
 
 	if resolved.Kind == yaml.ScalarNode {
 		if resolved.Tag != "!!null" {
 			return clashTextEdit{}, false, false
 		}
-		itemLines, ok := clashNameItemLines(clashFillNames(names), defaultIndent)
+		itemLines, ok := clashNameItemLines(clashFillNames(names), itemIndent)
 		if !ok {
 			return clashTextEdit{}, false, false
 		}
@@ -197,8 +248,12 @@ func clashProxyNamesEdit(lines []string, keyNode, valueNode *yaml.Node, names []
 		if !ok {
 			return clashTextEdit{}, false, false
 		}
+		end, ok := clashInlineValueEnd(lines, keyNode, resolved, keyLine)
+		if !ok {
+			return clashTextEdit{}, false, false
+		}
 		replacement := append([]string{rewritten}, itemLines...)
-		return clashTextEdit{start: keyLine, end: keyLine + 1, lines: replacement}, true, true
+		return clashTextEdit{start: keyLine, end: end, lines: replacement}, true, true
 	}
 
 	if resolved.Kind != yaml.SequenceNode {
@@ -207,7 +262,7 @@ func clashProxyNamesEdit(lines []string, keyNode, valueNode *yaml.Node, names []
 
 	if resolved.Style&yaml.FlowStyle != 0 {
 		if len(resolved.Content) == 0 {
-			itemLines, ok := clashNameItemLines(clashFillNames(names), defaultIndent)
+			itemLines, ok := clashNameItemLines(clashFillNames(names), itemIndent)
 			if !ok {
 				return clashTextEdit{}, false, false
 			}
@@ -215,8 +270,12 @@ func clashProxyNamesEdit(lines []string, keyNode, valueNode *yaml.Node, names []
 			if !ok {
 				return clashTextEdit{}, false, false
 			}
+			end, ok := clashInlineValueEnd(lines, keyNode, resolved, keyLine)
+			if !ok {
+				return clashTextEdit{}, false, false
+			}
 			replacement := append([]string{rewritten}, itemLines...)
-			return clashTextEdit{start: keyLine, end: keyLine + 1, lines: replacement}, true, true
+			return clashTextEdit{start: keyLine, end: end, lines: replacement}, true, true
 		}
 		hasPlaceholder := false
 		for _, item := range resolved.Content {
@@ -423,7 +482,11 @@ func clashTemplateItemIndent(lines []string, root *yaml.Node) int {
 		if groupsNode := resolveYAMLAlias(groupsValue); groupsNode != nil &&
 			groupsNode.Kind == yaml.SequenceNode && groupsNode.Style&yaml.FlowStyle == 0 &&
 			len(groupsNode.Content) > 0 {
-			if indent, ok := clashLineDashIndent(lines[groupsNode.Content[0].Line-1]); ok {
+			line := groupsNode.Content[0].Line - 1
+			if line < 0 || line >= len(lines) {
+				return 2
+			}
+			if indent, ok := clashLineDashIndent(lines[line]); ok {
 				return indent
 			}
 		}
@@ -461,22 +524,41 @@ func clashBlockSequenceEnd(lines []string, sequence *yaml.Node) int {
 	}
 	last := firstLine
 	for index := firstLine + 1; index < len(lines); index++ {
-		if strings.TrimSpace(lines[index]) == "" {
+		trimmed := strings.TrimSpace(lines[index])
+		if trimmed == "" {
 			continue
 		}
-		if strings.HasPrefix(strings.TrimSpace(lines[index]), "#") {
-			if clashLineIndent(lines[index]) >= itemIndent {
+		indent := clashLineIndent(lines[index])
+		if strings.HasPrefix(trimmed, "#") {
+			// 注释后面跟着更外层的内容时，它属于后面的键，不能算进本序列
+			if indent >= itemIndent && !clashCommentLeadsNextKey(lines, index+1, itemIndent) {
 				last = index
 				continue
 			}
 			break
 		}
-		if clashLineIndent(lines[index]) < itemIndent {
+		if indent < itemIndent {
+			break
+		}
+		// 与条目同缩进却不是 "-" 开头，说明已经进入下一个键（零缩进序列很常见）
+		if indent == itemIndent && !strings.HasPrefix(trimmed, "-") {
 			break
 		}
 		last = index
 	}
 	return last + 1
+}
+
+// clashCommentLeadsNextKey 判断从 start 行起注释之后的第一个内容行是否属于外层结构。
+func clashCommentLeadsNextKey(lines []string, start, indent int) bool {
+	for index := start; index < len(lines); index++ {
+		trimmed := strings.TrimSpace(lines[index])
+		if trimmed == "" || strings.HasPrefix(trimmed, "#") {
+			continue
+		}
+		return clashLineIndent(lines[index]) < indent
+	}
+	return true
 }
 
 // clashBlockMappingEnd 返回块映射最后一行的下一行下标。
@@ -488,17 +570,19 @@ func clashBlockMappingEnd(lines []string, mapping *yaml.Node) int {
 	indent := mapping.Column - 1
 	last := start
 	for index := start + 1; index < len(lines); index++ {
-		if strings.TrimSpace(lines[index]) == "" {
+		trimmed := strings.TrimSpace(lines[index])
+		if trimmed == "" {
 			continue
 		}
-		if strings.HasPrefix(strings.TrimSpace(lines[index]), "#") {
-			if clashLineIndent(lines[index]) >= indent {
+		lineIndent := clashLineIndent(lines[index])
+		if strings.HasPrefix(trimmed, "#") {
+			if lineIndent >= indent && !clashCommentLeadsNextKey(lines, index+1, indent) {
 				last = index
 				continue
 			}
 			break
 		}
-		if clashLineIndent(lines[index]) < indent {
+		if lineIndent < indent {
 			break
 		}
 		last = index

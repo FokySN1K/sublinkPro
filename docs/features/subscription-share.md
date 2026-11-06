@@ -82,11 +82,11 @@ Case 3: Access tracking
 
 ## Template Rendering Notes
 
-- Clash/mihomo templates are edited on the template text itself. Comments, blank lines, indentation width, key order, anchors/aliases, and flow style stay byte-for-byte identical to the template; only the rewritten lists below change.
+- Clash/mihomo templates are edited on the template text itself. Comments, blank lines, indentation width, key order, anchors, and flow style stay byte-for-byte identical to the template; only the rewritten lists below change.
 - Only two places are rewritten: the top-level `proxies` list and the `proxies` list of each template proxy group. Template groups keep their order and definitions, `include-all` / `use` / `filter` groups stay untouched, and `__ALL_PROXIES__` expands in place so references before and after it keep their position.
 - Emoji and other characters outside the Basic Multilingual Plane are written literally, exactly as they appear in the template.
-- Every Clash-family link (`client=clash`, `client=mihomo`, `client=clashmeta`, `client=clash-meta`) goes through this native path, so the same template comments, key order, and emoji survive whichever alias the client requests.
-- Templates the text merge cannot handle safely (flow-style `proxy-groups`, anchors on the template lists, a missing top-level `proxies` key) fall back to rewriting the YAML node tree. Comments and key order still survive in that case, but indentation is re-emitted with two spaces and blank lines are dropped. Surge templates are merged line by line, so their comments and section order are preserved as well.
+- Every Clash-family link (`client=clash`, `client=mihomo`, `client=clashmeta`, `client=clash-meta`) goes through this native path, so the same template comments, key order, and emoji survive whichever alias the client requests. To get the Sub-Store sidecar output instead (for example its `ClashMeta` target), add `substore=<target>` to the link, e.g. `/c/?token=...&client=clashmeta&substore=ClashMeta`; unsupported values are ignored and the link falls back to the native renderer.
+- Templates the text merge cannot handle safely (flow-style `proxy-groups` or root mapping, a `proxies` value written as an alias, a missing top-level `proxies` key, CR-only line endings) fall back to rewriting the YAML node tree. Comments and key order still survive in that case, but indentation is re-emitted with two spaces and blank lines are dropped. Surge templates are merged line by line, so their comments and section order are preserved as well.
 
 ## Node Naming Variables
 

@@ -316,10 +316,11 @@ Base: `/api/v1/shares`
 **GET** `/shares/logs` (query: `?shareId=123`)
 
 ### Consume Subscription (the actual output a client fetches)
-**GET** `/c/` (query: `?token=<shareToken>&client=<idx>`)
+**GET** `/c/` (query: `?token=<shareToken>&client=<idx>&substore=<target>`)
 - Use `--raw` (this is NOT a JSON envelope — it's the rendered clash/v2ray/surge output).
 - `token` is the **share token** (from `/shares/get` or `/shares/add`), NOT the API key.
 - Client type auto-detected from User-Agent, or force with `client`.
+- Clash-family names (`clash`, `mihomo`, `clashmeta`, `clash-meta`) are always rendered natively from the subscription template, so template comments and key order are preserved. Add `substore=<target>` (for example `substore=ClashMeta`, `substore=Stash`) to force the Sub-Store sidecar conversion instead; unsupported values are ignored. The sidecar must be configured, otherwise the request returns 503.
 
 ---
 

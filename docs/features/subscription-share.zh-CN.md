@@ -82,11 +82,11 @@
 
 ## 模板渲染说明
 
-- Clash/mihomo 模板直接在模板原文上拼接：注释、空行、缩进宽度、键顺序、锚点/别名与流式写法都与模板逐字一致，只有下面列出的列表会被重写。
+- Clash/mihomo 模板直接在模板原文上拼接：注释、空行、缩进宽度、键顺序、锚点与流式写法都与模板逐字一致，只有下面列出的列表会被重写。
 - 只有两处会被重写：顶层 `proxies` 列表，以及模板中每个代理组的 `proxies` 列表。模板代理组保持原有顺序与定义，`include-all` / `use` / `filter` 组保持不变，`__ALL_PROXIES__` 在原位置展开，前后的组引用位置不变。
 - emoji 等 BMP 之外的字符按模板原样输出，不会被转义成 `\U` 序列。
-- Clash 家族的所有链接（`client=clash`、`client=mihomo`、`client=clashmeta`、`client=clash-meta`）都走这条原生路径，因此无论客户端请求哪个别名，模板注释、键顺序与 emoji 都会保留。
-- 文本拼接无法安全处理的模板（`proxy-groups` 使用流式写法、模板列表带锚点、缺少顶层 `proxies` 键）会退回 YAML 节点树重编码：注释与键顺序仍然保留，但缩进会统一成两空格、空行会被丢弃。Surge 模板按行合并，注释与分节顺序同样保留。
+- Clash 家族的所有链接（`client=clash`、`client=mihomo`、`client=clashmeta`、`client=clash-meta`）都走这条原生路径，因此无论客户端请求哪个别名，模板注释、键顺序与 emoji 都会保留。如果需要 Sub-Store sidecar 的输出（例如它的 `ClashMeta` 目标），在链接上追加 `substore=<目标>`，例如 `/c/?token=...&client=clashmeta&substore=ClashMeta`；不支持的目标会被忽略，回落到原生渲染。
+- 文本拼接无法安全处理的模板（`proxy-groups` 或根映射使用流式写法、`proxies` 写成别名、缺少顶层 `proxies` 键、只有 CR 换行）会退回 YAML 节点树重编码：注释与键顺序仍然保留，但缩进会统一成两空格、空行会被丢弃。Surge 模板按行合并，注释与分节顺序同样保留。
 
 ## 节点命名变量
 
