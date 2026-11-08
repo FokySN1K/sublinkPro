@@ -390,6 +390,16 @@ MustRegisterProtocol(newProxyProtocolSpec(...))
 - 不要把 `xhttp` 静默降级成 `http`、`h2`、`grpc`。
 - 用户在订阅设置中勾选“跳过证书验证”后，会通过 `OutputConfig.Cert` 强制覆盖输出配置；对于 `xhttp`，这条规则同时作用于顶层 `skip-cert-verify` 和 `download-settings.skip-cert-verify`。
 
+### TLS 扩展参数映射（Reality / ECH / finalmask）
+
+VLESS 与 Trojan 共用同一套 TLS 扩展映射：
+
+- `pbk` / `sid` 映射到 `reality-opts.public-key` / `reality-opts.short-id`。
+- `ech` 映射到 `ech-opts`，语义与上文 ECH 一致。
+- `fm`（Xray finalmask）映射到 `fragment`：只映射 `tcp` 下 `type: fragment` 且 `packets: tlshello` 的条目，其余模式整体丢弃；`fm` 为空时不输出该选项。
+- 只有 `public-key` 非空时才输出 `reality-opts`。缺少 `public-key` 的 `reality-opts` 会让 mihomo 拒绝整个配置（`'reality-opts' has unset fields: public-key`），因此这个保护是必需的。
+- 原版 mihomo 并未实现 `fragment`：该选项只为支持 finalmask 的内核保留，不支持的内核会忽略它。
+
 ### 字段元数据说明
 
 `newProtocolSpec(...)` 最后可以追加 `FieldMeta`，用于驱动前端字段展示：

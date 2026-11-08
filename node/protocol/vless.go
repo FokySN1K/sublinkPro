@@ -146,7 +146,10 @@ func buildVLESSProxy(link Urls, config OutputConfig) (Proxy, error) {
 	DeleteOpts(grpcOpts)
 	DeleteOpts(xhttpOpts)
 	DeleteOpts(realityOpts)
-	if vless.Query.Security == "reality" && vless.Query.SupportX25519MLKEM768 != nil {
+	// public-key 缺失时 reality-opts 会让 mihomo 拒绝整个配置，直接省略这组参数
+	if _, ok := realityOpts["public-key"]; !ok {
+		realityOpts = nil
+	} else if vless.Query.Security == "reality" && vless.Query.SupportX25519MLKEM768 != nil {
 		realityOpts["support-x25519mlkem768"] = *vless.Query.SupportX25519MLKEM768
 	}
 	tls := vless.Query.Security != "" && vless.Query.Security != "none"
@@ -470,14 +473,12 @@ func ConvertProxyToVless(proxy Proxy) VLESS {
 		vless.Query.AllowInsecure = 1
 	}
 
-	// 处理 security 参数（TLS/Reality/none）
-	if len(proxy.Reality_opts) > 0 {
+	// 处理 security 参数（TLS/Reality/none）；public-key 为空时无法构成 Reality
+	if pbk, ok := proxy.Reality_opts["public-key"].(string); ok && pbk != "" {
 		vless.Query.Security = "reality"
+		vless.Query.Pbk = pbk
 		if value, ok := proxy.Reality_opts["support-x25519mlkem768"].(bool); ok {
 			vless.Query.SupportX25519MLKEM768 = &value
-		}
-		if pbk, ok := proxy.Reality_opts["public-key"].(string); ok {
-			vless.Query.Pbk = pbk
 		}
 		if sid, ok := proxy.Reality_opts["short-id"].(string); ok {
 			vless.Query.Sid = sid

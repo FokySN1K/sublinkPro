@@ -371,12 +371,10 @@ func ConvertProxyToTrojan(proxy Proxy) Trojan {
 		trojan.Query.Mode = "gun"
 	}
 
-	// 处理 Reality 参数
-	if len(proxy.Reality_opts) > 0 {
+	// 处理 Reality 参数；public-key 为空时无法构成 Reality
+	if pbk, ok := proxy.Reality_opts["public-key"].(string); ok && pbk != "" {
 		trojan.Query.Security = "reality"
-		if pbk, ok := proxy.Reality_opts["public-key"].(string); ok {
-			trojan.Query.Pbk = pbk
-		}
+		trojan.Query.Pbk = pbk
 		if sid, ok := proxy.Reality_opts["short-id"].(string); ok {
 			trojan.Query.Sid = sid
 		}
@@ -404,6 +402,10 @@ func buildTrojanProxy(link Urls, config OutputConfig) (Proxy, error) {
 	// pbk/sid 与 vless 一样转成 reality-opts；缺失时保持为空，不影响普通 trojan 节点
 	realityOpts := map[string]any{"public-key": trojan.Query.Pbk, "short-id": trojan.Query.Sid}
 	DeleteOpts(realityOpts)
+	// public-key 缺失时 reality-opts 会让 mihomo 拒绝整个配置，直接省略这组参数
+	if _, ok := realityOpts["public-key"]; !ok {
+		realityOpts = nil
+	}
 	skipCert := config.Cert || trojan.Query.AllowInsecure == 1
 	echOpts := buildECHOpts(trojan.Query.Ech)
 	fragmentOpts := buildFinalMaskFragmentOpts(trojan.Query.Fm)
