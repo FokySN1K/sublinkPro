@@ -287,6 +287,12 @@ Nodes that hold several URI links are checked link by link; the node counts as
 * If a whole cycle reports no ads, the summary warns about `YOUTUBE_VIDEOS`: the
   probe list may have lost its ads for your exits. Replace the entries with a
   popular video that still shows a pre-roll in the target regions.
+* The virtual display lives in `/tmp`, which is not a volume. `docker stop`
+  signals only PID 1, so Xvfb is killed without its own cleanup and leaves
+  `/tmp/.X99-lock` and `/tmp/.X11-unix/X99` behind; the entrypoint therefore
+  removes both before starting a new display. A leftover lock makes Xvfb refuse
+  to start while the stale socket still looks alive — the
+  `Missing X server or $DISPLAY` crash a restarted container used to hit.
 * Chromium needs shared memory; the compose file sets `shm_size: 1gb` (YouTube only).
 
 ## Tests
@@ -295,7 +301,8 @@ The unit tests run inside the image, so the host needs no Python setup:
 
 ```bash
 docker build -t yt-ad-checker .
-docker run --rm --entrypoint python yt-ad-checker -m unittest discover -s tests -t .
+docker run --rm --shm-size 512m --entrypoint python yt-ad-checker \
+    -m unittest discover -s tests -t .
 ```
 
 They cover tag mirroring (`clean`/`ads` flip the pair, `unreachable`/`unknown`
@@ -305,7 +312,9 @@ node never reaches the probe and keeps its tags), node selection (`ONLY_TAGS`,
 `SKIP_TAGS`, `MAX_NODES`), the worker port/state layout, cycle statistics (a
 stopped run reports `checked < nodes` and is flagged as interrupted), and the
 Rutube probe (ad-slot parsing, the two-answer rule, request timeouts and the
-abort on a dead node).
+abort on a dead node). The entrypoint is covered too: a lock naming a live PID
+plus a dead socket in `/tmp` (exactly what a restart leaves behind) must end
+with a working display instead of `Missing X server or $DISPLAY`.
 
 ## Publishing the image
 
@@ -332,3 +341,5 @@ upstream ships the tool from source and keeps its own release pipeline.
 | every node `unreachable` | SublinkPro URL unreachable from the container |
 | every node `unknown` with `LOGIN_REQUIRED` | YouTube bot check for the exit IPs |
 | `mihomo exited during start-up` | invalid node URIs; see the logged mihomo output |
+| `Missing X server or $DISPLAY` | the virtual display is not running; read `docker exec yt-ad-checker cat /tmp/xvfb.log` |
+| `Xvfb did not start on :99` in `docker logs` | the display is held by another X server or a leftover lock; recreate the container (`docker compose up -d --force-recreate`) |

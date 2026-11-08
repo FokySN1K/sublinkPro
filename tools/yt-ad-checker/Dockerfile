@@ -28,3 +28,4 @@ VOLUME ["/data"]
 # Chromium runs headful inside a virtual display: YouTube serves ads (and bot
 # checks) differently to an obviously headless browser.
 ENTRYPOINT ["/usr/local/bin/docker-entrypoint.sh"]
+CMD ["python", "-m", "app.main"]
