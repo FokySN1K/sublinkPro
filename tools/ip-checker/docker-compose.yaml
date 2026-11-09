@@ -1,0 +1,55 @@
+name: ip-checker
+
+services:
+  ip-checker:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: ip-checker:latest
+    container_name: ip-checker
+    restart: unless-stopped
+    init: true
+    # A node in flight may need up to PROBE_TIMEOUT to finish on SIGTERM.
+    stop_grace_period: 60s
+    environment:
+      SUBLINK_URL: ${SUBLINK_URL:-http://host.docker.internal:8000}
+      SUBLINK_API_KEY: ${SUBLINK_API_KEY:?SUBLINK_API_KEY is required}
+      SOURCES: ${SOURCES:-}
+      CLEAN_TAG: ${CLEAN_TAG:-clean-ip}
+      IPLOCATE_API_KEY: ${IPLOCATE_API_KEY:-}
+      PROXYCHECK_KEY: ${PROXYCHECK_KEY:-}
+      IPQUALITYSCORE_KEY: ${IPQUALITYSCORE_KEY:-}
+      VPNAPI_KEY: ${VPNAPI_KEY:-}
+      CHECK_INTERVAL: ${CHECK_INTERVAL:-24h}
+      RUN_ON_START: ${RUN_ON_START:-true}
+      ONCE: ${ONCE:-false}
+      ONLY_TAGS: ${ONLY_TAGS:-}
+      SKIP_TAGS: ${SKIP_TAGS:-}
+      MAX_NODES: ${MAX_NODES:-0}
+      REQUIRE_CLEAN: ${REQUIRE_CLEAN:-1}
+      WORKERS: ${WORKERS:-1}
+      ENSURE_TAG: ${ENSURE_TAG:-true}
+      DRY_RUN: ${DRY_RUN:-false}
+      PROBE_TIMEOUT: ${PROBE_TIMEOUT:-15}
+      EXIT_IP_URL: ${EXIT_IP_URL:-https://api.ipify.org?format=json}
+      REACHABILITY_URL: ${REACHABILITY_URL:-https://www.gstatic.com/generate_204}
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+    extra_hosts:
+      # Lets the container reach SublinkPro published on the Docker host.
+      - "host.docker.internal:host-gateway"
+    volumes:
+      - ip-checker-data:/data
+    # To reach SublinkPro over a shared Docker network instead of the host,
+    # drop the extra_hosts block above, uncomment the two sections below and
+    # set SUBLINK_URL=http://sublinkpro:8000 in .env.
+    #
+    # networks:
+    #   - sublinkpro
+    #
+# networks:
+#   sublinkpro:
+#     external: true
+#     name: sublinkpro_default
+
+volumes:
+  ip-checker-data:
