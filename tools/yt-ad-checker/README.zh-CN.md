@@ -258,6 +258,11 @@ docker run --rm --init --shm-size 1g --env-file .env \
   时间预算。
 * 若整轮检测都没有出现广告，汇总会提示检查 `YOUTUBE_VIDEOS`：检测列表对当前出口
   可能已不再投放广告，需要换成目标地区仍有前贴片的视频。
+* 虚拟显示位于 `/tmp`，而它不是数据卷。`docker stop` 只会向 PID 1 发送信号，Xvfb
+  被直接杀死而来不及自行清理，留下 `/tmp/.X99-lock` 与 `/tmp/.X11-unix/X99`；
+  因此入口脚本会在拉起新显示前先删除这两个文件。残留的锁会让新的 Xvfb 以
+  `Server is already active` 拒绝启动，而残留的套接字又会让等待逻辑误判为已就绪，
+  这正是容器重启后出现 `Missing X server or $DISPLAY` 崩溃的原因。
 * Chromium 需要共享内存，compose 已设置 `shm_size: 1gb`。
 
 ## 测试
@@ -266,7 +271,8 @@ docker run --rm --init --shm-size 1g --env-file .env \
 
 ```bash
 docker build -t yt-ad-checker .
-docker run --rm --entrypoint python yt-ad-checker -m unittest discover -s tests -t .
+docker run --rm --shm-size 512m --entrypoint python yt-ad-checker \
+    -m unittest discover -s tests -t .
 ```
 
 覆盖标签同步（`clean`/`ads` 互换标签对，`unreachable`/`unknown` 保持不变，
@@ -275,6 +281,8 @@ docker run --rm --entrypoint python yt-ad-checker -m unittest discover -s tests 
 （`ONLY_TAGS`、`SKIP_TAGS`、`MAX_NODES`）、worker 的端口与状态目录划分、轮次统计
 （被中断的轮次满足 `checked < nodes` 并标记为 `interrupted`），以及
 Rutube 检测（广告位解析、至少两个视频应答的规则、请求超时与节点不通时的提前放弃）。
+入口脚本同样有测试：`/tmp` 中残留指向存活 PID 的锁与失效套接字（正是重启后的现场）
+时，必须拉起可用的显示，而不是以 `Missing X server or $DISPLAY` 崩溃。
 
 ## 发布镜像
 
@@ -299,3 +307,5 @@ docker run --rm -e SUBLINK_URL=... -e SUBLINK_API_KEY=... ghcr.io/<owner>/yt-ad-
 | 所有节点 `unreachable` | 容器内无法访问 SublinkPro 地址 |
 | 所有节点 `unknown` 且为 `LOGIN_REQUIRED` | 出口 IP 触发 YouTube 机器人校验 |
 | `mihomo exited during start-up` | 节点 URI 非法，查看 mihomo 日志输出 |
+| `Missing X server or $DISPLAY` | 虚拟显示没有起来；执行 `docker exec yt-ad-checker cat /tmp/xvfb.log` 查看 Xvfb 输出 |
+| `docker logs` 中出现 `Xvfb did not start on :99` | 显示被其他 X 服务或残留锁占用；重建容器（`docker compose up -d --force-recreate`） |

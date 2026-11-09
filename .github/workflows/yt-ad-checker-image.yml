@@ -94,7 +94,8 @@ jobs:
       - name: Run the checker unit tests in the built image
         env:
           VERSION: ${{ steps.meta.outputs.version }}
-        run: docker run --rm --entrypoint python "${VERSION}" -m unittest discover -s tests -t .
+        # The entrypoint test starts a real Xvfb, so the display needs room.
+        run: docker run --rm --shm-size 512m --entrypoint python "${VERSION}" -m unittest discover -s tests -t .
 
       - name: Push
         env:
