@@ -1,0 +1,5 @@
+"""Exit IP reputation checker for SublinkPro nodes."""
+
+__all__ = ["__version__"]
+
+__version__ = "1.0.0"
