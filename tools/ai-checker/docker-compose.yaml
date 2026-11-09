@@ -1,0 +1,50 @@
+name: ai-checker
+
+services:
+  ai-checker:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: ai-checker:latest
+    container_name: ai-checker
+    restart: unless-stopped
+    init: true
+    # A node in flight may need up to PROBE_TIMEOUT to finish on SIGTERM.
+    stop_grace_period: 60s
+    environment:
+      SUBLINK_URL: ${SUBLINK_URL:-http://host.docker.internal:8000}
+      SUBLINK_API_KEY: ${SUBLINK_API_KEY:?SUBLINK_API_KEY is required}
+      SERVICES: ${SERVICES:-}
+      TAG_PREFIX: ${TAG_PREFIX:-ai-}
+      CHECK_INTERVAL: ${CHECK_INTERVAL:-6h}
+      RUN_ON_START: ${RUN_ON_START:-true}
+      ONCE: ${ONCE:-false}
+      ONLY_TAGS: ${ONLY_TAGS:-}
+      SKIP_TAGS: ${SKIP_TAGS:-}
+      MAX_NODES: ${MAX_NODES:-0}
+      WORKERS: ${WORKERS:-1}
+      ENSURE_TAG: ${ENSURE_TAG:-true}
+      DRY_RUN: ${DRY_RUN:-false}
+      PROBE_TIMEOUT: ${PROBE_TIMEOUT:-15}
+      REACHABILITY_URL: ${REACHABILITY_URL:-https://www.gstatic.com/generate_204}
+      PROBE_USER_AGENT: ${PROBE_USER_AGENT:-}
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+    extra_hosts:
+      # Lets the container reach SublinkPro published on the Docker host.
+      - "host.docker.internal:host-gateway"
+    volumes:
+      - ai-checker-data:/data
+    # To reach SublinkPro over a shared Docker network instead of the host,
+    # drop the extra_hosts block above, uncomment the two sections below and
+    # set SUBLINK_URL=http://sublinkpro:8000 in .env.
+    #
+    # networks:
+    #   - sublinkpro
+    #
+# networks:
+#   sublinkpro:
+#     external: true
+#     name: sublinkpro_default
+
+volumes:
+  ai-checker-data:
