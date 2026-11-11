@@ -194,6 +194,7 @@ func RunMigrations() error {
 		{name: "SubcriptionAirport", model: &SubcriptionAirport{}},
 		{name: "SubcriptionScript", model: &SubcriptionScript{}},
 		{name: "Template", model: &Template{}},
+		{name: "TemplateVersion", model: &TemplateVersion{}},
 		{name: "Tag", model: &Tag{}},
 		{name: "TagRule", model: &TagRule{}},
 		{name: "Task", model: &Task{}},

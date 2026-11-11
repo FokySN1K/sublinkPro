@@ -250,6 +250,7 @@ func UpdateTemp(c *gin.Context) {
 	useProxy := c.PostForm("useProxy") == "true"
 	proxyLink := c.PostForm("proxyLink")
 	enableIncludeAll := c.PostForm("enableIncludeAll") == "true"
+	comment := strings.TrimSpace(c.PostForm("comment"))
 
 	if filename == "" || oldname == "" || text == "" {
 		utils.FailWithMsg(c, "文件名或内容不能为空")
@@ -283,6 +284,13 @@ func UpdateTemp(c *gin.Context) {
 		utils.Error("检查旧文件存在性失败: %v", err)
 		utils.FailWithMsg(c, "服务器错误：检查旧文件失败")
 		return
+	}
+
+	// 在覆盖前读取原始内容，用于首次保存历史时的基线版本
+	oldContent, readErr := os.ReadFile(oldFullPath)
+	if readErr != nil {
+		utils.Warn("读取模板原始内容失败，跳过基线版本: %v", readErr)
+		oldContent = nil
 	}
 
 	// 如果新旧文件名不同，则检查新文件是否已存在
@@ -347,6 +355,20 @@ func UpdateTemp(c *gin.Context) {
 		tmpl.EnableIncludeAll = enableIncludeAll
 		if err := tmpl.Update(); err != nil {
 			utils.Error("更新模板元数据失败: %v", err)
+		}
+	}
+
+	// 保存内容历史版本，首次保存时先记录改动前的基线内容
+	if tmpl.ID > 0 {
+		if err := models.EnsureTemplateBaseline(baseTemplateDir, tmpl.ID, oldContent, templateAuthorFromContext(c)); err != nil {
+			models.LogTemplateVersionError("保存基线", err)
+		}
+		source := models.TemplateVersionSourceSave
+		if oldname != filename {
+			source = models.TemplateVersionSourceRename
+		}
+		if _, _, err := models.AppendTemplateVersion(baseTemplateDir, tmpl.ID, []byte(text), source, comment, templateAuthorFromContext(c)); err != nil {
+			models.LogTemplateVersionError("保存", err)
 		}
 	}
 
@@ -429,6 +451,7 @@ func AddTemp(c *gin.Context) {
 	useProxy := c.PostForm("useProxy") == "true"
 	proxyLink := c.PostForm("proxyLink")
 	enableIncludeAll := c.PostForm("enableIncludeAll") == "true"
+	comment := strings.TrimSpace(c.PostForm("comment"))
 
 	if filename == "" || text == "" {
 		utils.FailWithMsg(c, "文件名或内容不能为空")
@@ -444,6 +467,14 @@ func AddTemp(c *gin.Context) {
 		utils.Error("创建模板失败: %v", err)
 		utils.FailWithMsg(c, err.Error())
 		return
+	}
+
+	// 新模板的首个版本
+	var tmpl models.Template
+	if err := tmpl.FindByName(filename); err == nil {
+		if _, _, err := models.AppendTemplateVersion(baseTemplateDir, tmpl.ID, []byte(text), models.TemplateVersionSourceAdd, comment, templateAuthorFromContext(c)); err != nil {
+			models.LogTemplateVersionError("创建", err)
+		}
 	}
 
 	utils.OkWithMsg(c, "上传成功")
@@ -490,6 +521,8 @@ func DelTemp(c *gin.Context) {
 	if err := tmpl.FindByName(filename); err == nil {
 		if err := tmpl.Delete(); err != nil {
 			utils.Error("删除模板元数据失败: %v", err)
+		} else if err := models.DeleteTemplateVersions(baseTemplateDir, tmpl.ID); err != nil {
+			models.LogTemplateVersionError("删除历史", err)
 		}
 	}
 

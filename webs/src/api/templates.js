@@ -307,3 +307,71 @@ export function convertRules(data) {
     data
   });
 }
+
+// 获取模板历史版本列表
+// params: { filename, page, pageSize }
+export function getTemplateVersions(params) {
+  return request({
+    url: '/v1/template/versions',
+    method: 'get',
+    params
+  });
+}
+
+// 获取单个版本的内容
+export function getTemplateVersion(filename, version) {
+  return request({
+    url: `/v1/template/versions/${version}`,
+    method: 'get',
+    params: { filename }
+  });
+}
+
+// 对比两个版本，to=0 表示当前模板内容
+// params: { filename, from, to }
+export function getTemplateVersionDiff(params) {
+  return request({
+    url: '/v1/template/versions/diff',
+    method: 'get',
+    params
+  });
+}
+
+// 下载指定版本的快照文件
+export async function downloadTemplateVersion(data) {
+  const blob = await request({
+    url: `/v1/template/versions/${data.version}/download`,
+    method: 'get',
+    params: { filename: data.filename },
+    responseType: 'blob'
+  });
+
+  // 业务错误在 HTTP 200 中以 JSON 返回，需要从 Blob 中解析
+  if (blob && blob.type && blob.type.includes('application/json')) {
+    const payload = await blob
+      .text()
+      .then((text) => JSON.parse(text))
+      .catch(() => null);
+    throw new Error(payload?.msg || '下载失败');
+  }
+
+  return blob;
+}
+
+// 恢复指定版本内容
+export function restoreTemplateVersion(data) {
+  const formData = new FormData();
+  Object.keys(data).forEach((key) => {
+    if (data[key] !== undefined && data[key] !== null) {
+      formData.append(key, data[key]);
+    }
+  });
+  return request({
+    url: '/v1/template/versions/restore',
+    method: 'post',
+    data: formData,
+    headers: {
+      'Content-Type': 'multipart/form-data'
+    }
+  });
+}
