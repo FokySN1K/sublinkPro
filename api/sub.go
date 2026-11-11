@@ -118,8 +118,9 @@ func SubGet(c *gin.Context) {
 	}
 
 	// 如果提供了分页参数，返回分页响应
+	subType := strings.TrimSpace(c.Query("type"))
 	if page > 0 && pageSize > 0 {
-		subs, total, err := Sub.ListPaginated(page, pageSize)
+		subs, total, err := Sub.ListPaginatedByType(subType, page, pageSize)
 		if err != nil {
 			utils.FailWithMsg(c, "获取订阅列表失败")
 			return
@@ -139,7 +140,7 @@ func SubGet(c *gin.Context) {
 	}
 
 	// 不带分页参数，返回全部（向后兼容）
-	Subs, err := Sub.List()
+	Subs, err := Sub.ListByType(subType)
 	if err != nil {
 		utils.FailWithMsg(c, "node list error")
 		return
@@ -151,6 +152,7 @@ func SubGet(c *gin.Context) {
 func SubAdd(c *gin.Context) {
 	var sub models.Subcription
 	name := c.PostForm("name")
+	subType := models.NormalizeSubcriptionType(c.PostForm("type"))
 	config := c.PostForm("config")
 	nodeIds := c.PostForm("nodeIds") // 改为接收节点ID列表
 	groups := c.PostForm("groups")   // 新增：分组列表
@@ -194,10 +196,30 @@ func SubAdd(c *gin.Context) {
 	if ipType == "" && onlyNative {
 		ipType = "native"
 	}
+	airportID, _ := strconv.Atoi(strings.TrimSpace(c.PostForm("AirportID")))
 
-	if name == "" || (nodeIds == "" && groups == "" && airports == "") {
-		utils.FailWithMsg(c, "订阅名称不能为空，且节点、分组或机场至少选择一项")
+	if name == "" {
+		utils.FailWithMsg(c, "订阅名称不能为空")
 		return
+	}
+	if subType == models.SubcriptionTypeProxy {
+		if airportID <= 0 {
+			utils.FailWithMsg(c, "请选择要原样转发的机场")
+			return
+		}
+		if _, err := models.GetAirportByID(airportID); err != nil {
+			utils.FailWithMsg(c, "所选机场不存在")
+			return
+		}
+		// 代理订阅只转发机场上游内容，不参与 IP 黑白名单控制。
+		ipWhitelist, ipBlacklist = "", ""
+	} else {
+		// 聚合订阅不使用代理订阅的机场；避免类型切换时残留旧引用。
+		airportID = 0
+		if nodeIds == "" && groups == "" && airports == "" {
+			utils.FailWithMsg(c, "节点、分组或机场至少选择一项")
+			return
+		}
 	}
 	if ipWhitelist != "" {
 		ok := utils.IpFormatValidation(ipWhitelist)
@@ -250,6 +272,8 @@ func SubAdd(c *gin.Context) {
 
 	sub.Config = config
 	sub.Name = name
+	sub.Type = subType
+	sub.AirportID = airportID
 	sub.IPWhitelist = ipWhitelist
 	sub.IPBlacklist = ipBlacklist
 	sub.DelayTime = delayTime
@@ -352,6 +376,7 @@ func SubUpdate(c *gin.Context) {
 	var sub models.Subcription
 	name := c.PostForm("name")
 	oldname := c.PostForm("oldname")
+	subType := models.NormalizeSubcriptionType(c.PostForm("type"))
 	config := c.PostForm("config")
 	nodeIds := c.PostForm("nodeIds") // 改为接收节点ID列表
 	groups := c.PostForm("groups")   // 新增：分组列表
@@ -395,10 +420,30 @@ func SubUpdate(c *gin.Context) {
 	if ipType == "" && onlyNative {
 		ipType = "native"
 	}
+	airportID, _ := strconv.Atoi(strings.TrimSpace(c.PostForm("AirportID")))
 
-	if name == "" || (nodeIds == "" && groups == "" && airports == "") {
-		utils.FailWithMsg(c, "订阅名称不能为空，且节点、分组或机场至少选择一项")
+	if name == "" {
+		utils.FailWithMsg(c, "订阅名称不能为空")
 		return
+	}
+	if subType == models.SubcriptionTypeProxy {
+		if airportID <= 0 {
+			utils.FailWithMsg(c, "请选择要原样转发的机场")
+			return
+		}
+		if _, err := models.GetAirportByID(airportID); err != nil {
+			utils.FailWithMsg(c, "所选机场不存在")
+			return
+		}
+		// 代理订阅只转发机场上游内容，不参与 IP 黑白名单控制。
+		ipWhitelist, ipBlacklist = "", ""
+	} else {
+		// 聚合订阅不使用代理订阅的机场；避免类型切换时残留旧引用。
+		airportID = 0
+		if nodeIds == "" && groups == "" && airports == "" {
+			utils.FailWithMsg(c, "节点、分组或机场至少选择一项")
+			return
+		}
 	}
 	if ipWhitelist != "" {
 		ok := utils.IpFormatValidation(ipWhitelist)
@@ -435,6 +480,8 @@ func SubUpdate(c *gin.Context) {
 	// 更新节点
 	sub.Config = config
 	sub.Name = name
+	sub.Type = subType
+	sub.AirportID = airportID
 	sub.CreateDate = time.Now().Format("2006-01-02 15:04:05")
 	sub.Nodes = []models.Node{}
 	if nodeIds != "" {

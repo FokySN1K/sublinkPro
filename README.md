@@ -65,6 +65,7 @@ English | [简体中文](README.zh-CN.md)
 | ✈️ **Airport management** | Multi format import, scheduled updates, traffic monitoring, one click full refresh | [📖](docs/features/airport.md) |
 | 🗂️ **Group ordering** | Drag airport priority within a group to control node order in subscription output | [📖](docs/development.md) |
 | 📋 **Subscription sharing** | Multiple links, expiration policies, access statistics | [📖](docs/features/subscription-share.md) |
+| 🔀 **Proxy subscriptions** | Pick an airport and relay its upstream subscription as-is through a single share link, with expiry and access logs | [📖](docs/features/subscription-proxy.md) |
 | 🌐 **Host management** | Domain mappings, DNS configuration, CDN preferred IPs | [📖](docs/features/host.md) |
 | ☁️ **Cloudflare Tunnel** | Expose the admin UI without a public IP, with cloudflared managed from the page | [📖](docs/features/cloudflare-tunnel.md) |
 | 💾 **WebDAV backup** | Encrypt WebDAV credentials, upload system backups on demand or by cron, list remote ZIP files, and restore from the page | [📖](docs/features/backup.md) |
@@ -165,6 +166,7 @@ If your earlier instance used SQLite and you now want to migrate to MySQL or Pos
 | [🤖 AI template editing](docs/features/template-ai.md) | Operation based previews, read-only diff review, accept into editor, normal save |
 | [✈️ Airport management](docs/features/airport.md) | Subscription import, scheduled updates, traffic monitoring |
 | [📋 Subscription sharing](docs/features/subscription-share.md) | Multiple links, expiration policies, access statistics |
+| [🔀 Proxy subscriptions](docs/features/subscription-proxy.md) | Relay an airport's upstream subscription as-is, relayed headers, errors, limits |
 | [🌐 Host management](docs/features/host.md) | Domain mappings, DNS configuration, speed test persistence |
 | [☁️ Cloudflare Tunnel](docs/features/cloudflare-tunnel.md) | Create a Tunnel, get a token, configure public access |
 | [🤖 Telegram Bot](docs/features/telegram-bot.md) | Command list and setup guide |

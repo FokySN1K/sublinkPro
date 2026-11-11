@@ -873,17 +873,23 @@ export default function ShareManageDialog({ open, subscription, onClose, showMes
     return [...NATIVE_CLIENT_LINKS, ...EXPANDED_CLIENT_LINKS.filter((item) => allowedTargets.has(item.client))];
   }, [subStoreTargets]);
 
-  const detailClientUrls = detailShare
-    ? visibleClientLinks.reduce(
-        (urls, item) => ({
-          ...urls,
-          [t(`subscriptions.share.clients.${item.key}`)]: `${getServerUrl()}/c/?token=${detailShare.token}&client=${item.client}`
-        }),
-        {
-          [t('subscriptions.share.clients.auto')]: `${getServerUrl()}/c/?token=${detailShare.token}`
-        }
-      )
-    : {};
+  const isProxySubscription = (subscription?.Type || 'collection') === 'proxy';
+
+  const detailClientUrls = useMemo(() => {
+    if (!detailShare) return {};
+    const baseUrl = `${getServerUrl()}/c/?token=${detailShare.token}`;
+    if (isProxySubscription) {
+      // 代理订阅原样转发上游内容，client 参数无效，只提供一个订阅链接。
+      return { [t('subscriptions.share.proxyClientUrl')]: baseUrl };
+    }
+    return visibleClientLinks.reduce(
+      (urls, item) => ({
+        ...urls,
+        [t(`subscriptions.share.clients.${item.key}`)]: `${baseUrl}&client=${item.client}`
+      }),
+      { [t('subscriptions.share.clients.auto')]: baseUrl }
+    );
+  }, [detailShare, getServerUrl, isProxySubscription, t, visibleClientLinks]);
 
   return (
     <>
@@ -1295,6 +1301,7 @@ export default function ShareManageDialog({ open, subscription, onClose, showMes
         selectedShares={shares.filter((s) => selectedShares.includes(s.id))}
         serverUrl={getServerUrl()}
         subStoreTargets={subStoreTargets}
+        isProxy={isProxySubscription}
       />
     </>
   );

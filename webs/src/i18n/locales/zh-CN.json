@@ -2533,6 +2533,18 @@
         "tagGroupDesc": "指定标签组中的标签(点击选择标签组)"
       }
     },
+    "proxyDialog": {
+      "addTitle": "添加代理订阅",
+      "editTitle": "编辑代理订阅",
+      "description": "SublinkPro 在服务端请求所选机场的上游订阅，并将内容原样返回：不解析、不过滤、不重命名节点。请求使用机场自身的地址、User-Agent、请求头、设备信息、代理和 TLS 设置，修改机场后转发配置会自动生效。分享和访问记录与普通订阅一致；不启用 IP 黑白名单，每个分享只提供一个订阅链接。",
+      "confirm": "保存",
+      "fields": {
+        "name": "订阅名称",
+        "airport": "机场",
+        "airportHelp": "上游订阅地址与请求配置均取自该机场",
+        "airportMissing": "所选机场已不存在，请重新选择"
+      }
+    },
     "mobileCard": {
       "sorting": "排序中",
       "nodeCount": "{{count}} 个节点",
@@ -2595,7 +2607,13 @@
       "title": "订阅管理",
       "actions": {
         "groupSort": "分组排序",
-        "addSubscription": "添加订阅"
+        "addSubscription": "添加订阅",
+        "addProxySubscription": "添加代理订阅"
+      },
+      "tabs": {
+        "aggregated": "聚合订阅",
+        "proxy": "代理订阅",
+        "proxyHint": "代理订阅原样转发所选机场的上游订阅内容，不解析、不过滤、不重命名节点。"
       },
       "search": {
         "label": "搜索订阅",
@@ -2614,6 +2632,7 @@
         "copySuccess": "复制成功",
         "copyFailed": "复制失败",
         "nameRequired": "请输入订阅名称",
+        "airportRequired": "请选择机场",
         "updateSuccess": "更新成功",
         "updateFailed": "更新失败",
         "addSuccess": "添加成功",
@@ -2631,6 +2650,8 @@
     "table": {
       "name": "订阅名称",
       "nodesAndGroups": "节点/分组/机场",
+      "airport": "机场",
+      "airportMissing": "机场已删除",
       "createdAt": "创建时间",
       "actions": "操作",
       "sorting": "排序中",
@@ -2896,6 +2917,7 @@
       "cardMeta": "{{expire}} · 访问 {{count}} 次",
       "empty": "暂无分享链接，点击“新增”创建第一个分享",
       "detailTitle": "分享链接",
+      "proxyClientUrl": "订阅链接",
       "logsTitle": "访问日志 - {{name}}",
       "clients": {
         "auto": "自动识别",

@@ -433,6 +433,17 @@ func AirportDelete(c *gin.Context) {
 		return
 	}
 
+	// 代理订阅直接引用机场；被引用时阻止删除，避免订阅静默失效。
+	proxySubCount, err := models.CountProxySubcriptionsByAirport(id)
+	if err != nil {
+		utils.FailWithMsg(c, "检查代理订阅引用失败")
+		return
+	}
+	if proxySubCount > 0 {
+		utils.FailWithMsg(c, "该机场正被 "+strconv.Itoa(int(proxySubCount))+" 个代理订阅使用，请先修改或删除这些代理订阅")
+		return
+	}
+
 	// 检查是否需要同时删除关联节点
 	deleteNodes := c.Query("deleteNodes") == "true"
 	if deleteNodes {

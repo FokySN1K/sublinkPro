@@ -515,6 +515,78 @@ func parseClashConfigData(ctx context.Context, client *http.Client, rootSubscrip
 	return config, errYaml, providerErr
 }
 
+// NewSubscriptionHTTPClient 创建拉取订阅使用的 HTTP 客户端。
+// downloadWithProxy 为 true 时优先使用 proxyLink 指定的代理，为空则自动挑选最佳节点；
+// 代理不可用时回落到直连。skipTLSVerify 控制是否跳过证书校验。
+func NewSubscriptionHTTPClient(downloadWithProxy bool, proxyLink string, skipTLSVerify bool) *http.Client {
+	// 创建 HTTP 客户端，配置 TLS
+	client := &http.Client{
+		Timeout: 30 * time.Second,
+		Transport: &http.Transport{
+			TLSClientConfig: &tls.Config{InsecureSkipVerify: skipTLSVerify},
+		},
+	}
+
+	if !downloadWithProxy {
+		return client
+	}
+
+	var proxyNodeLink string
+	if proxyLink != "" {
+		// 使用指定的代理链接
+		proxyNodeLink = proxyLink
+		utils.Info("使用指定代理下载订阅")
+	} else {
+		// 如果没有指定代理，尝试自动选择最佳代理
+		// 获取最近测速成功的节点（延迟最低且速度大于0）
+		if bestNode, err := models.GetBestProxyNode(); err == nil && bestNode != nil {
+			utils.Info("自动选择最佳代理节点: %s 节点延迟：%dms  节点速度：%2fMB/s", bestNode.Name, bestNode.DelayTime, bestNode.Speed)
+			proxyNodeLink = bestNode.Link
+		}
+	}
+
+	if proxyNodeLink == "" {
+		utils.Warn("未找到可用代理，将直接下载")
+		return client
+	}
+
+	// 使用 mihomo 内核创建代理适配器
+	proxyAdapter, err := mihomo.GetMihomoAdapter(proxyNodeLink)
+	if err != nil {
+		utils.Error("创建 mihomo 代理适配器失败: %v，将直接下载", err)
+		return client
+	}
+
+	utils.Info("使用 mihomo 内核代理下载订阅")
+	// 创建自定义 Transport，使用 mihomo adapter 进行代理连接
+	client.Transport = &http.Transport{
+		DialContext: func(ctx context.Context, network, addr string) (net.Conn, error) {
+			// 解析地址获取主机和端口
+			host, portStr, splitErr := net.SplitHostPort(addr)
+			if splitErr != nil {
+				return nil, fmt.Errorf("split host port error: %v", splitErr)
+			}
+
+			portUint, parseErr := strconv.ParseUint(portStr, 10, 16)
+			if parseErr != nil {
+				return nil, fmt.Errorf("invalid port: %v", parseErr)
+			}
+
+			// 创建 mihomo metadata
+			metadata := &constant.Metadata{
+				Host:    host,
+				DstPort: uint16(portUint),
+				Type:    constant.HTTP,
+			}
+
+			// 使用 mihomo adapter 建立连接
+			return proxyAdapter.DialContext(ctx, metadata)
+		},
+		TLSClientConfig: &tls.Config{InsecureSkipVerify: skipTLSVerify},
+	}
+	return client
+}
+
 // LoadClashConfigFromURLWithReporter 从指定 URL 加载 Clash 配置（带任务报告器）
 // reporter: 任务进度报告器，用于TaskManager集成
 // fetchUsageInfo: 是否获取用量信息
@@ -533,67 +605,7 @@ func LoadClashConfigFromURLWithReporter(ctx context.Context, id int, urlStr stri
 	}
 
 	// 创建 HTTP 客户端，配置 TLS
-	client := &http.Client{
-		Timeout: 30 * time.Second,
-		Transport: &http.Transport{
-			TLSClientConfig: &tls.Config{InsecureSkipVerify: skipTLSVerify},
-		},
-	}
-
-	if downloadWithProxy {
-		var proxyNodeLink string
-
-		if proxyLink != "" {
-			// 使用指定的代理链接
-			proxyNodeLink = proxyLink
-			utils.Info("使用指定代理下载订阅")
-		} else {
-			// 如果没有指定代理，尝试自动选择最佳代理
-			// 获取最近测速成功的节点（延迟最低且速度大于0）
-			if bestNode, err := models.GetBestProxyNode(); err == nil && bestNode != nil {
-				utils.Info("自动选择最佳代理节点: %s 节点延迟：%dms  节点速度：%2fMB/s", bestNode.Name, bestNode.DelayTime, bestNode.Speed)
-				proxyNodeLink = bestNode.Link
-			}
-		}
-
-		if proxyNodeLink != "" {
-			// 使用 mihomo 内核创建代理适配器
-			proxyAdapter, err := mihomo.GetMihomoAdapter(proxyNodeLink)
-			if err != nil {
-				utils.Error("创建 mihomo 代理适配器失败: %v，将直接下载", err)
-			} else {
-				utils.Info("使用 mihomo 内核代理下载订阅")
-				// 创建自定义 Transport，使用 mihomo adapter 进行代理连接
-				client.Transport = &http.Transport{
-					DialContext: func(ctx context.Context, network, addr string) (net.Conn, error) {
-						// 解析地址获取主机和端口
-						host, portStr, splitErr := net.SplitHostPort(addr)
-						if splitErr != nil {
-							return nil, fmt.Errorf("split host port error: %v", splitErr)
-						}
-
-						portUint, parseErr := strconv.ParseUint(portStr, 10, 16)
-						if parseErr != nil {
-							return nil, fmt.Errorf("invalid port: %v", parseErr)
-						}
-
-						// 创建 mihomo metadata
-						metadata := &constant.Metadata{
-							Host:    host,
-							DstPort: uint16(portUint),
-							Type:    constant.HTTP,
-						}
-
-						// 使用 mihomo adapter 建立连接
-						return proxyAdapter.DialContext(ctx, metadata)
-					},
-					TLSClientConfig: &tls.Config{InsecureSkipVerify: skipTLSVerify},
-				}
-			}
-		} else {
-			utils.Warn("未找到可用代理，将直接下载")
-		}
-	}
+	client := NewSubscriptionHTTPClient(downloadWithProxy, proxyLink, skipTLSVerify)
 
 	// 创建请求并设置 User-Agent（使用传入的 context）
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, urlStr, nil)

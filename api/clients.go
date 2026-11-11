@@ -33,6 +33,7 @@ type clientResponseMode int
 const (
 	clientResponseNormal clientResponseMode = iota
 	clientResponseSyntheticFallback
+	clientResponseProxyRelay
 )
 
 type fallbackIdentityPolicy int
@@ -141,6 +142,10 @@ func GetClient(c *gin.Context) {
 		testGetClientAfterResolveSubscriptionNameHook(c)
 	}
 	c.Set("shareID", prepared.ShareID)
+	if prepared.Mode == clientResponseProxyRelay {
+		serveProxySubscription(c, prepared.Subscription)
+		return
+	}
 	dispatchPreparedClientResponse(c, prepared)
 }
 
@@ -159,6 +164,10 @@ func prepareClientResponse(c *gin.Context, clientType, token string) (preparedCl
 			utils.Warn("过期分享关联订阅不存在: %d", share.SubscriptionID)
 			return buildSyntheticFallbackResponse(clientType, "订阅不存在"), true
 		}
+		if expiredSub.IsProxy() {
+			writeProxyRelayError(c, http.StatusGone, "订阅已过期")
+			return preparedClientResponse{}, false
+		}
 		return buildPreparedExpiredShareResponse(expiredSub, clientType, "订阅已过期", share.ID)
 	}
 
@@ -169,22 +178,36 @@ func prepareClientResponse(c *gin.Context, clientType, token string) (preparedCl
 		return buildSyntheticFallbackResponse(clientType, "订阅不存在"), true
 	}
 
-	// IP 黑白名单检查
-	if sub.IPBlacklist != "" && utils.IsIpInCidr(c.ClientIP(), sub.IPBlacklist) {
-		c.AbortWithStatusJSON(http.StatusForbidden, gin.H{
-			"msg": "IP受限(IP已被加入黑名单)",
-		})
-		return preparedClientResponse{}, false
-	}
-	if sub.IPWhitelist != "" && !utils.IsIpInCidr(c.ClientIP(), sub.IPWhitelist) {
-		c.AbortWithStatusJSON(http.StatusForbidden, gin.H{
-			"msg": "IP受限(您的IP不在允许访问列表)",
-		})
-		return preparedClientResponse{}, false
+	// IP 黑白名单检查；代理订阅只转发上游内容，不做 IP 限制（历史数据可能残留名单）。
+	if !sub.IsProxy() {
+		if sub.IPBlacklist != "" && utils.IsIpInCidr(c.ClientIP(), sub.IPBlacklist) {
+			c.AbortWithStatusJSON(http.StatusForbidden, gin.H{
+				"msg": "IP受限(IP已被加入黑名单)",
+			})
+			return preparedClientResponse{}, false
+		}
+		if sub.IPWhitelist != "" && !utils.IsIpInCidr(c.ClientIP(), sub.IPWhitelist) {
+			c.AbortWithStatusJSON(http.StatusForbidden, gin.H{
+				"msg": "IP受限(您的IP不在允许访问列表)",
+			})
+			return preparedClientResponse{}, false
+		}
 	}
 
 	// 异步更新访问统计，避免订阅生成热路径等待数据库写入。
 	share.RecordAccessAsync()
+
+	// 代理订阅不参与节点渲染，直接把上游内容原样转给客户端。
+	if sub.IsProxy() {
+		return preparedClientResponse{
+			ClientType:   clientType,
+			Mode:         clientResponseProxyRelay,
+			Subscription: sub,
+			SubName:      sub.Name,
+			ShareID:      share.ID,
+		}, true
+	}
+
 	prepared, ok := buildPreparedResponseFromSubscription(sub, clientType, share.ID)
 	if !ok {
 		return preparedClientResponse{}, false
