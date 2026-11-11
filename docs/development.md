@@ -390,6 +390,16 @@ Implementation notes:
 - Don't silently downgrade `xhttp` to `http`, `h2`, or `grpc`.
 - When users enable “skip certificate verification” in subscription settings, `OutputConfig.Cert` force overrides output configuration. For `xhttp`, this applies to both top level `skip-cert-verify` and `download-settings.skip-cert-verify`.
 
+### TLS extension mapping (Reality / ECH / finalmask)
+
+VLESS and Trojan share the same TLS extension mapping:
+
+- `pbk` / `sid` map to `reality-opts.public-key` / `reality-opts.short-id`.
+- `ech` maps to `ech-opts` with the ECH semantics described above.
+- `fm` (Xray finalmask) maps to `fragment`. Only a `tcp` entry of type `fragment` with `packets: tlshello` is mapped; other modes are dropped, and the whole option is omitted when `fm` is empty.
+- `reality-opts` is emitted only when `public-key` is non-empty. A short-id-only `reality-opts` makes mihomo reject the entire config (`'reality-opts' has unset fields: public-key`), so this guard is required.
+- Stock mihomo does not implement `fragment`; the option is kept for cores that support finalmask and silently ignored by the ones that do not.
+
 ### Field metadata
 
 `newProtocolSpec(...)` can take optional `FieldMeta` entries at the end to drive frontend field display:
