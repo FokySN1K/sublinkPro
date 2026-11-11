@@ -8,6 +8,7 @@ export { default as SubscriptionMobileCard } from './SubscriptionMobileCard';
 export { default as SubscriptionTable } from './SubscriptionTable';
 export { default as NodeTransferBox } from './NodeTransferBox';
 export { default as SubscriptionFormDialog } from './SubscriptionFormDialog';
+export { default as ProxySubscriptionFormDialog } from './ProxySubscriptionFormDialog';
 export { default as NodeNameFilter } from 'components/NodeNameFilter';
 export { default as NodeTagFilter } from './NodeTagFilter';
 export { default as NodeProtocolFilter } from 'components/NodeProtocolFilter';

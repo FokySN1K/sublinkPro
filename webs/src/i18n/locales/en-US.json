@@ -2533,6 +2533,18 @@
         "tagGroupDesc": "Tags in the specified tag group (click to select a tag group)"
       }
     },
+    "proxyDialog": {
+      "addTitle": "Add proxy subscription",
+      "editTitle": "Edit proxy subscription",
+      "description": "SublinkPro fetches the upstream subscription of the selected airport server-side and returns its content as-is: no parsing, filtering, or node renaming. The request uses the airport's URL, User-Agent, headers, device profile, proxy, and TLS settings, so updating the airport also updates the relay. Shares and access logs work as with regular subscriptions; IP allow/deny lists are not applied and each share exposes a single subscription link.",
+      "confirm": "Save",
+      "fields": {
+        "name": "Subscription name",
+        "airport": "Airport",
+        "airportHelp": "The upstream subscription and request settings are taken from this airport",
+        "airportMissing": "The selected airport no longer exists, choose another one"
+      }
+    },
     "mobileCard": {
       "sorting": "Sorting",
       "nodeCount": "{{count}} nodes",
@@ -2595,7 +2607,13 @@
       "title": "Subscription Management",
       "actions": {
         "groupSort": "Group sort",
-        "addSubscription": "Add subscription"
+        "addSubscription": "Add subscription",
+        "addProxySubscription": "Add proxy subscription"
+      },
+      "tabs": {
+        "aggregated": "Aggregated",
+        "proxy": "Proxy",
+        "proxyHint": "Proxy subscriptions relay the upstream subscription of the selected airport as-is, without parsing, filtering, or renaming nodes."
       },
       "search": {
         "label": "Search subscriptions",
@@ -2614,6 +2632,7 @@
         "copySuccess": "Copied successfully",
         "copyFailed": "Copy failed",
         "nameRequired": "Enter a subscription name",
+        "airportRequired": "Select an airport",
         "updateSuccess": "Updated successfully",
         "updateFailed": "Update failed",
         "addSuccess": "Added successfully",
@@ -2631,6 +2650,8 @@
     "table": {
       "name": "Subscription Name",
       "nodesAndGroups": "Nodes / Groups / Airports",
+      "airport": "Airport",
+      "airportMissing": "Airport deleted",
       "createdAt": "Created At",
       "actions": "Actions",
       "sorting": "Sorting",
@@ -2896,6 +2917,7 @@
       "cardMeta": "{{expire}} · {{count}} visits",
       "empty": "No share links yet. Click “Add” to create the first share.",
       "detailTitle": "Share link",
+      "proxyClientUrl": "Subscription link",
       "logsTitle": "Access Logs - {{name}}",
       "clients": {
         "auto": "Auto detect",

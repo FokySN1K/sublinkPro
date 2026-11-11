@@ -23,6 +23,7 @@ Welcome to SublinkPro documentation. This index helps you find the right documen
 - **[Template Version History](features/template-versioning.md)** - Automatic snapshots, diff, download, and restore
 - **[Airport Management](features/airport.md)** - Import, scheduled updates, traffic monitoring
 - **[Subscription Sharing](features/subscription-share.md)** - Multiple links, expiration, stats
+- **[Proxy Subscriptions](features/subscription-proxy.md)** - Relay an airport's upstream subscription as-is
 - **[happ Links](features/happ-link.md)** - Decode happ://crypt…crypt5 links, decryptor page, API
 - **[Host Management](features/host.md)** - Domain mappings, DNS, CDN preferred IPs
 - **[Cloudflare Tunnel](features/cloudflare-tunnel.md)** - Secure public access

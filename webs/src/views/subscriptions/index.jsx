@@ -11,6 +11,8 @@ import Alert from '@mui/material/Alert';
 import Snackbar from '@mui/material/Snackbar';
 import Tooltip from '@mui/material/Tooltip';
 import TextField from '@mui/material/TextField';
+import Tabs from '@mui/material/Tabs';
+import Tab from '@mui/material/Tab';
 import InputAdornment from '@mui/material/InputAdornment';
 import CircularProgress from '@mui/material/CircularProgress';
 
@@ -63,6 +65,7 @@ import {
   SubscriptionMobileCard,
   SubscriptionTable,
   SubscriptionFormDialog,
+  ProxySubscriptionFormDialog,
   NodePreviewDialog,
   ShareManageDialog,
   ChainProxyDialog,
@@ -70,6 +73,11 @@ import {
 } from './component';
 
 // ==============================|| 订阅管理 ||============================== //
+
+const createProxyFormData = () => ({
+  name: '',
+  AirportID: ''
+});
 
 export default function SubscriptionList() {
   const theme = useTheme();
@@ -109,6 +117,12 @@ export default function SubscriptionList() {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [isEdit, setIsEdit] = useState(false);
   const [currentSub, setCurrentSub] = useState(null);
+
+  // 订阅类型页签：聚合订阅 / 代理订阅
+  const [activeTab, setActiveTab] = useState('collection');
+  const [proxyDialogOpen, setProxyDialogOpen] = useState(false);
+  const [proxyEditTarget, setProxyEditTarget] = useState(null);
+  const [proxyFormData, setProxyFormData] = useState(createProxyFormData());
 
   // 表单数据
   const [formData, setFormData] = useState({
@@ -304,9 +318,9 @@ export default function SubscriptionList() {
 
   const fetchAllSubscriptionsForSearch = useCallback(async () => {
     if (totalItems <= subscriptions.length) return subscriptions;
-    const response = await getSubscriptions({ page: 1, pageSize: Math.max(totalItems, rowsPerPage) });
+    const response = await getSubscriptions({ page: 1, pageSize: Math.max(totalItems, rowsPerPage), type: activeTab });
     return normalizeSubscriptionResponse(response);
-  }, [normalizeSubscriptionResponse, rowsPerPage, subscriptions, totalItems]);
+  }, [activeTab, normalizeSubscriptionResponse, rowsPerPage, subscriptions, totalItems]);
 
   const refreshNodeSelector = useCallback(() => {
     if (!dialogOpen || formData.selectionMode === 'groups') return;
@@ -362,7 +376,7 @@ export default function SubscriptionList() {
   const fetchSubscriptions = async (currentPage, currentPageSize) => {
     setLoading(true);
     try {
-      const response = await getSubscriptions({ page: currentPage + 1, pageSize: currentPageSize });
+      const response = await getSubscriptions({ page: currentPage + 1, pageSize: currentPageSize, type: activeTab });
       // 处理分页响应
       if (response.data && response.data.items !== undefined) {
         setSubscriptions(response.data.items || []);
@@ -425,9 +439,14 @@ export default function SubscriptionList() {
 
   // 初始加载
   useEffect(() => {
-    fetchSubscriptions(0, rowsPerPage);
     fetchOtherData();
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // 页签切换或首次加载时拉取对应类型的订阅
+  useEffect(() => {
+    setPage(0);
+    fetchSubscriptions(0, rowsPerPage);
+  }, [activeTab]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     refreshNodeSelector();
@@ -587,7 +606,30 @@ export default function SubscriptionList() {
     refreshNodeSelector();
   };
 
+  const handleTabChange = (event, value) => {
+    if (value === activeTab) return;
+    setActiveTab(value);
+    setSubscriptionSearch('');
+    setExpandedRows({});
+    setSortingSubId(null);
+  };
+
+  const handleAddProxy = () => {
+    setProxyEditTarget(null);
+    setProxyFormData(createProxyFormData());
+    setProxyDialogOpen(true);
+  };
+
   const handleEdit = (sub) => {
+    if ((sub.Type || 'collection') === 'proxy') {
+      setProxyEditTarget(sub);
+      setProxyFormData({
+        name: sub.Name || '',
+        AirportID: sub.AirportID ? Number(sub.AirportID) : ''
+      });
+      setProxyDialogOpen(true);
+      return;
+    }
     setIsEdit(true);
     setCurrentSub(sub);
     const config = typeof sub.Config === 'string' ? JSON.parse(sub.Config) : sub.Config;
@@ -772,6 +814,44 @@ export default function SubscriptionList() {
       console.error(error);
       showMessage(
         error.message || (isEdit ? t('subscriptions.page.messages.updateFailed') : t('subscriptions.page.messages.addFailed')),
+        'error'
+      );
+    }
+  };
+
+  // 代理订阅提交：只保存名称与要转发的机场，地址与请求配置取自机场本身
+  const handleProxySubmit = async () => {
+    if (!proxyFormData.name.trim()) {
+      showMessage(t('subscriptions.page.messages.nameRequired'), 'warning');
+      return;
+    }
+    if (!proxyFormData.AirportID) {
+      showMessage(t('subscriptions.page.messages.airportRequired'), 'warning');
+      return;
+    }
+
+    try {
+      const requestData = {
+        type: 'proxy',
+        name: proxyFormData.name.trim(),
+        AirportID: Number(proxyFormData.AirportID),
+        RefreshUsageOnRequest: false
+      };
+
+      if (proxyEditTarget) {
+        requestData.oldname = proxyEditTarget.Name;
+        await updateSubscription(requestData);
+        showMessage(t('subscriptions.page.messages.updateSuccess'));
+      } else {
+        await addSubscription(requestData);
+        showMessage(t('subscriptions.page.messages.addSuccess'));
+      }
+      setProxyDialogOpen(false);
+      fetchSubscriptions(page, rowsPerPage);
+    } catch (error) {
+      console.error(error);
+      showMessage(
+        error.message || (proxyEditTarget ? t('subscriptions.page.messages.updateFailed') : t('subscriptions.page.messages.addFailed')),
         'error'
       );
     }
@@ -1141,22 +1221,28 @@ export default function SubscriptionList() {
       secondary={
         matchDownMd ? (
           <Stack direction="row" spacing={1}>
-            <Tooltip title={t('subscriptions.page.actions.groupSort')}>
-              <IconButton onClick={() => setGroupSortOpen(true)} size="small">
-                <CategoryIcon />
-              </IconButton>
-            </Tooltip>
-            <Button variant="contained" startIcon={<AddIcon />} onClick={handleAdd}>
+            {activeTab !== 'proxy' && (
+              <Tooltip title={t('subscriptions.page.actions.groupSort')}>
+                <IconButton onClick={() => setGroupSortOpen(true)} size="small">
+                  <CategoryIcon />
+                </IconButton>
+              </Tooltip>
+            )}
+            <Button variant="contained" startIcon={<AddIcon />} disableRipple onClick={activeTab === 'proxy' ? handleAddProxy : handleAdd}>
               {t('common.add')}
             </Button>
           </Stack>
         ) : (
           <Stack direction="row" spacing={1}>
-            <Button variant="outlined" startIcon={<CategoryIcon />} onClick={() => setGroupSortOpen(true)}>
-              {t('subscriptions.page.actions.groupSort')}
-            </Button>
-            <Button variant="contained" startIcon={<AddIcon />} onClick={handleAdd}>
-              {t('subscriptions.page.actions.addSubscription')}
+            {activeTab !== 'proxy' && (
+              <Button variant="outlined" startIcon={<CategoryIcon />} onClick={() => setGroupSortOpen(true)}>
+                {t('subscriptions.page.actions.groupSort')}
+              </Button>
+            )}
+            <Button variant="contained" startIcon={<AddIcon />} disableRipple onClick={activeTab === 'proxy' ? handleAddProxy : handleAdd}>
+              {activeTab === 'proxy'
+                ? t('subscriptions.page.actions.addProxySubscription')
+                : t('subscriptions.page.actions.addSubscription')}
             </Button>
             <IconButton onClick={() => fetchSubscriptions(page, rowsPerPage)} disabled={loading}>
               <RefreshIcon
@@ -1189,6 +1275,22 @@ export default function SubscriptionList() {
             />
           </IconButton>
         </Stack>
+      )}
+
+      <Tabs
+        value={activeTab}
+        onChange={handleTabChange}
+        variant={matchDownMd ? 'fullWidth' : 'standard'}
+        sx={{ mb: 2, borderBottom: 1, borderColor: 'divider' }}
+      >
+        <Tab value="collection" label={t('subscriptions.page.tabs.aggregated')} />
+        <Tab value="proxy" label={t('subscriptions.page.tabs.proxy')} />
+      </Tabs>
+
+      {activeTab === 'proxy' && (
+        <Alert severity="info" variant="outlined" sx={{ mb: 2 }}>
+          {t('subscriptions.page.tabs.proxyHint')}
+        </Alert>
       )}
 
       <Stack spacing={1} sx={{ mb: 2 }}>
@@ -1224,6 +1326,8 @@ export default function SubscriptionList() {
       {matchDownMd ? (
         <SubscriptionMobileCard
           subscriptions={displayedSubscriptions}
+          isProxyTab={activeTab === 'proxy'}
+          airportOptions={airportOptions}
           page={page}
           rowsPerPage={rowsPerPage}
           expandedRows={expandedRows}
@@ -1254,6 +1358,8 @@ export default function SubscriptionList() {
       ) : (
         <SubscriptionTable
           subscriptions={displayedSubscriptions}
+          isProxyTab={activeTab === 'proxy'}
+          airportOptions={airportOptions}
           page={page}
           rowsPerPage={rowsPerPage}
           expandedRows={expandedRows}
@@ -1351,6 +1457,17 @@ export default function SubscriptionList() {
         onToggleAllSelected={handleToggleAllSelected}
         onPreview={handlePreview}
         previewLoading={previewLoading}
+      />
+
+      {/* 代理订阅对话框 */}
+      <ProxySubscriptionFormDialog
+        open={proxyDialogOpen}
+        isEdit={Boolean(proxyEditTarget)}
+        formData={proxyFormData}
+        setFormData={setProxyFormData}
+        airportOptions={airportOptions}
+        onClose={() => setProxyDialogOpen(false)}
+        onSubmit={handleProxySubmit}
       />
 
       {/* 客户端对话框 */}

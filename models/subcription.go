@@ -24,9 +24,31 @@ func init() {
 	subcriptionCache.AddIndex("name", func(s Subcription) string { return s.Name })
 }
 
+// 订阅类型
+const (
+	SubcriptionTypeCollection = "collection" // 聚合订阅：由节点、分组、机场组装后按模板渲染
+	SubcriptionTypeProxy      = "proxy"      // 代理订阅：原样转发上游订阅 URL 的内容
+)
+
+// NormalizeSubcriptionType 归一化订阅类型，未知值（含历史数据的空值）回落到聚合订阅。
+func NormalizeSubcriptionType(value string) string {
+	switch strings.ToLower(strings.TrimSpace(value)) {
+	case SubcriptionTypeProxy:
+		return SubcriptionTypeProxy
+	default:
+		return SubcriptionTypeCollection
+	}
+}
+
+// IsProxy 判断当前订阅是否为代理订阅（原样转发上游订阅）。
+func (sub *Subcription) IsProxy() bool {
+	return NormalizeSubcriptionType(sub.Type) == SubcriptionTypeProxy
+}
+
 type Subcription struct {
 	ID                    int
 	Name                  string
+	Type                  string    `gorm:"default:collection" json:"Type"` // 订阅类型: collection/proxy
 	Config                string    `gorm:"embedded"`
 	Nodes                 []Node    `gorm:"-" json:"-"`
 	SubLogs               []SubLogs `gorm:"foreignKey:SubcriptionID;"` // 一对多关系 约束父表被删除子表记录跟着删除
@@ -65,6 +87,7 @@ type Subcription struct {
 	UnlockKeyword         string            `json:"UnlockKeyword"`
 	UnlockRules           string            `json:"UnlockRules"`
 	UnlockRuleMode        string            `json:"UnlockRuleMode"`
+	AirportID             int               `json:"AirportID"` // 代理订阅：原样转发的机场（地址与请求配置取自该机场）
 	CreatedAt             time.Time         `json:"CreatedAt"`
 	UpdatedAt             time.Time         `json:"UpdatedAt"`
 	DeletedAt             gorm.DeletedAt    `gorm:"index" json:"DeletedAt"`
@@ -289,6 +312,8 @@ func (sub *Subcription) Update() error {
 		"unlock_keyword":           sub.UnlockKeyword,
 		"unlock_rules":             sub.UnlockRules,
 		"unlock_rule_mode":         sub.UnlockRuleMode,
+		"type":                     sub.Type,
+		"airport_id":               sub.AirportID,
 	}
 	err := database.DB.Model(&Subcription{}).Where("id = ? or name = ?", sub.ID, sub.Name).Updates(updates).Error
 	if err != nil {
@@ -856,11 +881,17 @@ func resolveAirportNodesForSubscription(airportID int) ([]Node, error) {
 // 订阅列表（从缓存获取，批量加载关联数据解决 N+1）
 
 func (sub *Subcription) List() ([]Subcription, error) {
+	return sub.ListByType("")
+}
+
+// ListByType 按订阅类型获取列表，subType 为空时返回全部。
+func (sub *Subcription) ListByType(subType string) ([]Subcription, error) {
 	// 从缓存获取所有订阅
-	subs := subcriptionCache.GetAllSorted(func(a, b Subcription) bool {
+	allSubs := subcriptionCache.GetAllSorted(func(a, b Subcription) bool {
 		return a.ID < b.ID
 	})
 
+	subs := filterSubcriptionsByType(allSubs, subType)
 	if len(subs) == 0 {
 		return subs, nil
 	}
@@ -875,10 +906,15 @@ func (sub *Subcription) List() ([]Subcription, error) {
 
 // ListPaginated 分页获取订阅列表（从缓存分页，批量加载关联数据）
 func (sub *Subcription) ListPaginated(page, pageSize int) ([]Subcription, int64, error) {
+	return sub.ListPaginatedByType("", page, pageSize)
+}
+
+// ListPaginatedByType 按订阅类型分页获取订阅列表，subType 为空时返回全部。
+func (sub *Subcription) ListPaginatedByType(subType string, page, pageSize int) ([]Subcription, int64, error) {
 	// 从缓存获取所有订阅并排序
-	allSubs := subcriptionCache.GetAllSorted(func(a, b Subcription) bool {
+	allSubs := filterSubcriptionsByType(subcriptionCache.GetAllSorted(func(a, b Subcription) bool {
 		return a.ID < b.ID
-	})
+	}), subType)
 	total := int64(len(allSubs))
 
 	// 如果不需要分页，返回全部
@@ -908,6 +944,35 @@ func (sub *Subcription) ListPaginated(page, pageSize int) ([]Subcription, int64,
 	}
 
 	return subs, total, nil
+}
+
+// filterSubcriptionsByType 按订阅类型过滤；空类型视为聚合订阅，subType 为空时不过滤。
+func filterSubcriptionsByType(subs []Subcription, subType string) []Subcription {
+	target := strings.ToLower(strings.TrimSpace(subType))
+	if target == "" {
+		return subs
+	}
+	target = NormalizeSubcriptionType(target)
+	filtered := make([]Subcription, 0, len(subs))
+	for _, s := range subs {
+		if NormalizeSubcriptionType(s.Type) == target {
+			filtered = append(filtered, s)
+		}
+	}
+	return filtered
+}
+
+// CountProxySubcriptionsByAirport 统计原样转发指定机场的代理订阅数量，
+// 用于删除机场前拦截，避免代理订阅静默失效。
+func CountProxySubcriptionsByAirport(airportID int) (int64, error) {
+	if airportID <= 0 {
+		return 0, nil
+	}
+	var count int64
+	err := database.DB.Model(&Subcription{}).
+		Where("airport_id = ? AND type = ?", airportID, SubcriptionTypeProxy).
+		Count(&count).Error
+	return count, err
 }
 
 // batchLoadSubcriptionRelations 批量加载订阅的关联数据（解决 N+1 问题）
@@ -1151,6 +1216,7 @@ func (sub *Subcription) Copy() (*Subcription, error) {
 	// 创建新订阅对象，复制所有配置字段
 	newSub := &Subcription{
 		Name:                  sub.Name + "_复制",
+		Type:                  NormalizeSubcriptionType(sub.Type),
 		Config:                sub.Config,
 		CreateDate:            time.Now().Format("2006-01-02 15:04:05"),
 		IPWhitelist:           sub.IPWhitelist,
@@ -1170,6 +1236,7 @@ func (sub *Subcription) Copy() (*Subcription, error) {
 		DeduplicationRule:     sub.DeduplicationRule,
 		RefreshUsageOnRequest: sub.RefreshUsageOnRequest,
 		UpdateInterval:        sub.UpdateInterval,
+		AirportID:             sub.AirportID,
 	}
 
 	// 使用事务确保数据一致性

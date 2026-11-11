@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import Box from '@mui/material/Box';
 import Stack from '@mui/material/Stack';
@@ -38,6 +38,8 @@ import { withAlpha } from 'utils/colorUtils';
 
 export default function SubscriptionMobileCard({
   subscriptions,
+  isProxyTab = false,
+  airportOptions = [],
   expandedRows,
   sortingSubId,
   tempSortData,
@@ -73,6 +75,18 @@ export default function SubscriptionMobileCard({
 
   const [menuAnchor, setMenuAnchor] = useState(null);
   const [menuSubId, setMenuSubId] = useState(null);
+
+  // 代理订阅只保存机场 ID，卡片上按 ID 反查机场名称。
+  const airportNameById = useMemo(() => {
+    const map = new Map();
+    (airportOptions || []).forEach((airport) => {
+      const id = Number(airport?.id ?? airport?.ID);
+      if (Number.isFinite(id)) {
+        map.set(id, airport?.name || airport?.Name || '');
+      }
+    });
+    return map;
+  }, [airportOptions]);
 
   const shellInset = isDark ? `inset 0 1px 0 ${withAlpha(palette.common.white, 0.03)}` : 'none';
   const cardSurface = isDark ? withAlpha(palette.background.paper, 0.94) : palette.background.paper;
@@ -168,12 +182,16 @@ export default function SubscriptionMobileCard({
     action(sub);
   };
 
+  const menuSubscription = subscriptions.find((s) => s.ID === menuSubId);
+  const menuIsProxy = isProxyTab || (menuSubscription?.Type || 'collection') === 'proxy';
+
   return (
     <>
       <Stack spacing={2}>
         {subscriptions.map((sub) => {
-          const isSorting = sortingSubId === sub.ID;
-          const isExpanded = expandedRows[sub.ID] || isSorting;
+          const isProxyRow = isProxyTab || (sub.Type || 'collection') === 'proxy';
+          const isSorting = !isProxyRow && sortingSubId === sub.ID;
+          const isExpanded = !isProxyRow && (expandedRows[sub.ID] || isSorting);
 
           return (
             <MainCard
@@ -203,8 +221,10 @@ export default function SubscriptionMobileCard({
                     direction="row"
                     justifyContent="space-between"
                     alignItems="center"
-                    onClick={() => onToggleRow(sub.ID)}
-                    sx={{ cursor: 'pointer' }}
+                    onClick={() => {
+                      if (!isProxyRow) onToggleRow(sub.ID);
+                    }}
+                    sx={{ cursor: isProxyRow ? 'default' : 'pointer' }}
                   >
                     <Stack direction="row" spacing={1} alignItems="center" sx={{ flex: 1, minWidth: 0 }}>
                       <Chip label={sub.Name} sx={[...getSubscriptionNameChipSx(theme), { minWidth: 0, flexShrink: 1 }]} />
@@ -227,9 +247,11 @@ export default function SubscriptionMobileCard({
                         />
                       )}
                     </Stack>
-                    <IconButton size="small" sx={getActionIconSx(isExpanded ? palette.primary.main : null)}>
-                      {isExpanded ? <KeyboardArrowUpIcon /> : <KeyboardArrowDownIcon />}
-                    </IconButton>
+                    {!isProxyRow && (
+                      <IconButton size="small" sx={getActionIconSx(isExpanded ? palette.primary.main : null)}>
+                        {isExpanded ? <KeyboardArrowUpIcon /> : <KeyboardArrowDownIcon />}
+                      </IconButton>
+                    )}
                   </Stack>
 
                   <Box
@@ -243,28 +265,47 @@ export default function SubscriptionMobileCard({
                       boxShadow: shellInset
                     }}
                   >
-                    <Stack direction="row" spacing={0.75} flexWrap="wrap" useFlexGap alignItems="center" justifyContent="space-between">
-                      <Stack direction="row" spacing={0.75} flexWrap="wrap" useFlexGap>
-                        <Chip
-                          label={t('subscriptions.mobileCard.nodeCount', { count: sub.Nodes?.length || 0 })}
-                          size="small"
-                          sx={getInfoChipSx(palette.success.main)}
-                        />
-                        <Chip
-                          label={t('subscriptions.mobileCard.groupCount', { count: sub.Groups?.length || 0 })}
-                          size="small"
-                          sx={getInfoChipSx(palette.warning.main)}
-                        />
-                        <Chip
-                          label={t('subscriptions.mobileCard.airportCount', { count: sub.Airports?.length || 0 })}
-                          size="small"
-                          sx={getInfoChipSx(palette.info.main)}
-                        />
+                    {isProxyRow ? (
+                      <Stack direction="row" spacing={0.75} alignItems="center" sx={{ minWidth: 0 }}>
+                        <Chip label={t('subscriptions.page.tabs.proxy')} size="small" sx={getInfoChipSx(palette.secondary.main)} />
+                        <Typography
+                          variant="caption"
+                          title={airportNameById.get(Number(sub.AirportID)) || t('subscriptions.table.airportMissing')}
+                          sx={{
+                            color: secondaryText,
+                            whiteSpace: 'nowrap',
+                            overflow: 'hidden',
+                            textOverflow: 'ellipsis',
+                            minWidth: 0
+                          }}
+                        >
+                          {airportNameById.get(Number(sub.AirportID)) || t('subscriptions.table.airportMissing')}
+                        </Typography>
                       </Stack>
-                      <Typography variant="caption" sx={{ color: tertiaryText }}>
-                        {t('subscriptions.mobileCard.expandHint')}
-                      </Typography>
-                    </Stack>
+                    ) : (
+                      <Stack direction="row" spacing={0.75} flexWrap="wrap" useFlexGap alignItems="center" justifyContent="space-between">
+                        <Stack direction="row" spacing={0.75} flexWrap="wrap" useFlexGap>
+                          <Chip
+                            label={t('subscriptions.mobileCard.nodeCount', { count: sub.Nodes?.length || 0 })}
+                            size="small"
+                            sx={getInfoChipSx(palette.success.main)}
+                          />
+                          <Chip
+                            label={t('subscriptions.mobileCard.groupCount', { count: sub.Groups?.length || 0 })}
+                            size="small"
+                            sx={getInfoChipSx(palette.warning.main)}
+                          />
+                          <Chip
+                            label={t('subscriptions.mobileCard.airportCount', { count: sub.Airports?.length || 0 })}
+                            size="small"
+                            sx={getInfoChipSx(palette.info.main)}
+                          />
+                        </Stack>
+                        <Typography variant="caption" sx={{ color: tertiaryText }}>
+                          {t('subscriptions.mobileCard.expandHint')}
+                        </Typography>
+                      </Stack>
+                    )}
                   </Box>
 
                   <Divider sx={{ borderColor: withAlpha(palette.divider, isDark ? 0.7 : 1) }} />
@@ -331,16 +372,18 @@ export default function SubscriptionMobileCard({
                         </Typography>
 
                         <Stack direction="row" spacing={0.75} alignItems="center">
-                          <IconButton
-                            size="medium"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              onPreview(sub);
-                            }}
-                            sx={getActionIconSx(palette.info.main)}
-                          >
-                            <VisibilityIcon />
-                          </IconButton>
+                          {!isProxyRow && (
+                            <IconButton
+                              size="medium"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                onPreview(sub);
+                              }}
+                              sx={getActionIconSx(palette.info.main)}
+                            >
+                              <VisibilityIcon />
+                            </IconButton>
+                          )}
 
                           <IconButton
                             size="medium"
@@ -477,31 +520,35 @@ export default function SubscriptionMobileCard({
           <ListItemText>{t('subscriptions.table.tooltips.accessLogs')}</ListItemText>
         </MenuItem>
 
-        <MenuItem
-          sx={menuItemSx}
-          onClick={() => {
-            const sub = subscriptions.find((s) => s.ID === menuSubId);
-            if (sub) handleMenuAction(onChainProxy, sub);
-          }}
-        >
-          <ListItemIcon>
-            <AccountTreeIcon fontSize="small" color="warning" />
-          </ListItemIcon>
-          <ListItemText>{t('subscriptions.table.tooltips.chainProxy')}</ListItemText>
-        </MenuItem>
+        {!menuIsProxy && (
+          <MenuItem
+            sx={menuItemSx}
+            onClick={() => {
+              const sub = subscriptions.find((s) => s.ID === menuSubId);
+              if (sub) handleMenuAction(onChainProxy, sub);
+            }}
+          >
+            <ListItemIcon>
+              <AccountTreeIcon fontSize="small" color="warning" />
+            </ListItemIcon>
+            <ListItemText>{t('subscriptions.table.tooltips.chainProxy')}</ListItemText>
+          </MenuItem>
+        )}
 
-        <MenuItem
-          sx={menuItemSx}
-          onClick={() => {
-            const sub = subscriptions.find((s) => s.ID === menuSubId);
-            if (sub) handleMenuAction(onStartSort, sub);
-          }}
-        >
-          <ListItemIcon>
-            <SortIcon fontSize="small" />
-          </ListItemIcon>
-          <ListItemText>{t('subscriptions.mobileCard.sortNodes')}</ListItemText>
-        </MenuItem>
+        {!menuIsProxy && (
+          <MenuItem
+            sx={menuItemSx}
+            onClick={() => {
+              const sub = subscriptions.find((s) => s.ID === menuSubId);
+              if (sub) handleMenuAction(onStartSort, sub);
+            }}
+          >
+            <ListItemIcon>
+              <SortIcon fontSize="small" />
+            </ListItemIcon>
+            <ListItemText>{t('subscriptions.mobileCard.sortNodes')}</ListItemText>
+          </MenuItem>
+        )}
 
         <MenuItem
           sx={menuItemSx}

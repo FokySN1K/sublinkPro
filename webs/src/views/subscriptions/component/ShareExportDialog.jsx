@@ -41,7 +41,7 @@ const EXPANDED_CLIENT_LINKS = [
 /**
  * ShareExportDialog - Batch export share links to text file
  */
-export default function ShareExportDialog({ open, onClose, selectedShares, serverUrl, subStoreTargets }) {
+export default function ShareExportDialog({ open, onClose, selectedShares, serverUrl, subStoreTargets, isProxy = false }) {
   const theme = useTheme();
   const { t } = useTranslation();
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
@@ -98,18 +98,20 @@ export default function ShareExportDialog({ open, onClose, selectedShares, serve
     onClose();
   };
 
-  // Build available client type options
-  const allOptions = [
-    { value: 'auto', label: t('subscriptions.share.exportDialog.formatAuto') },
-    ...NATIVE_CLIENT_LINKS.map((client) => ({
-      value: client.client,
-      label: t(`subscriptions.share.exportDialog.format${client.key.charAt(0).toUpperCase() + client.key.slice(1)}`)
-    })),
-    ...EXPANDED_CLIENT_LINKS.filter((client) => subStoreTargets?.includes(client.client)).map((client) => ({
-      value: client.client,
-      label: client.key.charAt(0).toUpperCase() + client.key.slice(1)
-    }))
-  ];
+  // Build available client type options；代理订阅的链接与 client 参数无关，只提供默认格式。
+  const allOptions = isProxy
+    ? [{ value: 'auto', label: t('subscriptions.share.exportDialog.formatAuto') }]
+    : [
+        { value: 'auto', label: t('subscriptions.share.exportDialog.formatAuto') },
+        ...NATIVE_CLIENT_LINKS.map((client) => ({
+          value: client.client,
+          label: t(`subscriptions.share.exportDialog.format${client.key.charAt(0).toUpperCase() + client.key.slice(1)}`)
+        })),
+        ...EXPANDED_CLIENT_LINKS.filter((client) => subStoreTargets?.includes(client.client)).map((client) => ({
+          value: client.client,
+          label: client.key.charAt(0).toUpperCase() + client.key.slice(1)
+        }))
+      ];
 
   const getDialogPaperSx = (fullScreen) => ({
     borderRadius: fullScreen ? 0 : 3,

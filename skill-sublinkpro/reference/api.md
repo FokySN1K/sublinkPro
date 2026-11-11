@@ -217,17 +217,20 @@ Base: `/api/v1/subcription` (note the spelling — missing the second "s").
 
 ### Add Subscription
 **POST** `/subcription/add` — **form**
-- **Required:** `name` AND at least one of `nodeIds` (comma-separated node IDs), `groups` (comma-separated group names), or `airports` (comma-separated airport IDs).
-- Output template: `config` = a template **filename** (the `file` value from `GET /template/get`, e.g. `clash.yaml`); empty = raw node list.
+- `type` (optional): `collection` (default) builds output from nodes/groups/airports; `proxy` relays the upstream subscription of one airport as-is.
+- **Collection subscriptions — required:** `name` AND at least one of `nodeIds` (comma-separated node IDs), `groups` (comma-separated group names), or `airports` (comma-separated airport IDs).
+- **Proxy subscriptions — required:** `name` AND `AirportID`. The airport's URL, User-Agent, request headers, device profile, proxy, and TLS settings are used for the relay, so there are no per-subscription request fields. Node/group/airport-list fields are ignored.
+- Output template: `config` = a template **filename** (the `file` value from `GET /template/get`, e.g. `clash.yaml`); empty = raw node list. Ignored for proxy subscriptions.
 - Other optional form fields (UpperCamel unless noted): `airports` (comma-separated airport IDs), `scripts` (comma-separated script IDs), `IPWhitelist`, `IPBlacklist`, `DelayTime`, `MinSpeed`, `CountryWhitelist`, `CountryBlacklist`, `NodeNameRule`, `NodeNamePreprocess`, `NodeNameWhitelist`, `NodeNameBlacklist`, `TagWhitelist`, `TagBlacklist`, `ProtocolWhitelist`, `ProtocolBlacklist`, `DeduplicationRule`, `RefreshUsageOnRequest`, `UpdateInterval`, `MaxFraudScore`, `OnlyResidential`, `OnlyNative`, `ResidentialType`, `IPType`, `QualityStatus`, `UnlockProvider`, `UnlockStatus`, `UnlockKeyword`, `UnlockRules`, `UnlockRuleMode`.
-- Filter groups always combine with AND: a node must satisfy every configured group. Values inside one whitelist are alternatives, and a blacklist hit always excludes the node.
+- Proxy subscriptions store only `name` and `AirportID`; `IPWhitelist`/`IPBlacklist` and request settings are ignored, and any submitted IP lists are cleared on save.
+- Filter groups always combine with AND: a node must satisfy every configured group. Values inside one whitelist are alternatives, and a blacklist hit always excludes the node. (Collection only.)
 - Name must be unique (duplicate → `订阅名称不能重复`).
 
 ### Update Subscription
-**POST** `/subcription/update` — **form**, located by `oldname` (current name). Same field set as add, plus `oldname`.
+**POST** `/subcription/update` — **form**, located by `oldname` (current name). Same field set as add, plus `oldname`. Send `type` together with the source fields so a subscription keeps its kind.
 
 ### Get Subscriptions
-**GET** `/subcription/get` (query: `?page=1&pageSize=20`). Paginated → `{items, total, ...}`; without paging → array. Each subscription includes ordered `Nodes`, `Groups`, `Airports`, and `Scripts` relation arrays when present.
+**GET** `/subcription/get` (query: `?page=1&pageSize=20&type=proxy`). `type` is optional and filters by `collection` or `proxy`. Paginated → `{items, total, ...}`; without paging → array. Each subscription includes ordered `Nodes`, `Groups`, `Airports`, and `Scripts` relation arrays when present (empty for proxy subscriptions).
 
 ### Delete Subscription
 **DELETE** `/subcription/delete` (query: `?id=123`)
@@ -326,6 +329,7 @@ Base: `/api/v1/shares`
 - `token` is the **share token** (from `/shares/get` or `/shares/add`), NOT the API key.
 - Client type auto-detected from User-Agent, or force with `client`.
 - Clash-family names (`clash`, `mihomo`, `clashmeta`, `clash-meta`) are always rendered natively from the subscription template, so template comments and key order are preserved. Add `substore=<target>` (for example `substore=ClashMeta`, `substore=Stash`) to force the Sub-Store sidecar conversion instead; unsupported values are ignored. The sidecar must be configured, otherwise the request returns 503.
+- **Proxy subscriptions** (see [subscription-proxy](../../docs/features/subscription-proxy.md)) are not rendered: the server loads the subscription's airport, requests its upstream subscription with the airport's settings, and streams the upstream body verbatim with the upstream status code. Relayed response headers: `Content-Type`, `Content-Disposition`, `subscription-userinfo`, `profile-update-interval`, `profile-web-page-url`, `profile-title`. `client`, `substore`, and template selection are ignored, and IP allow/deny lists are not applied. An expired share returns 410; a missing/invalid airport or upstream failure returns 502 with a generic message. Each share of a proxy subscription exposes a single link (`?token=...`), because client-specific variants would return identical content.
 
 ---
 
@@ -564,7 +568,7 @@ Base: `/api/v1/airports` (all write bodies are JSON)
 - **POST** `/airports` — **JSON** create. Key fields (see `dto.AirportRequest`): `name`(required), `url`(required, valid URL; a `happ://crypt…crypt5` link is accepted and decrypted before saving), `cronExpr`(required), `enabled`, `group`, `downloadWithProxy`, `proxyLink`, `userAgent`, `hwid`, `disableHWID`, `deviceProfile`, `deviceOS`, `osVersion`, `deviceModel`, `appName`, `requestHeaders` (`[{key, value}]`), `fetchUsageInfo`, `skipTLSVerify`, plus filter/rename/dedup fields (`nodeNameWhitelist`, `nodeNameBlacklist`, `protocolWhitelist`, `protocolBlacklist`, `nodeNamePreprocess`, `deduplicationRule`, `nodeNameUniquify`, ...), and country-fill fields (`autoFillCountry`, `backfillExistingCountry`).
 - **PUT** `/airports/{id}` — **JSON** update (same schema)
 - **POST** `/airports/batch-update` — **JSON** `{ids:[...], applyGroup, group, applySchedule, cronExpr}`
-- **DELETE** `/airports/{id}` (query: `?deleteNodes=false`)
+- **DELETE** `/airports/{id}` (query: `?deleteNodes=false`) — rejected while proxy subscriptions reference the airport
 - **POST** `/airports/pull-all` — pull all enabled airports now
 - **POST** `/airports/{id}/pull` — pull one now
 - **POST** `/airports/{id}/refresh-usage`
