@@ -20,7 +20,7 @@ Client  --GET /c/?token=...-->  SublinkPro
                                   |  share lookup, expiry
                                   |  access log
                                   v
-                              Airport (URL, UA, headers,
+                              Airport (URL, client UA, headers,
                               device profile, proxy, TLS)
                                   |  HTTP(S)
                                   v
@@ -32,12 +32,12 @@ Client  <--upstream body + status--  SublinkPro
 
 1. The client requests a share link exactly as for an aggregated subscription (`/c/?token=...`).
 2. SublinkPro resolves the share, checks expiry, and records the access.
-3. SublinkPro loads the airport referenced by the subscription and requests its subscription URL with the airport's effective User-Agent and request headers (including device profile headers and the derived HWID unless disabled), optional proxy, and TLS-skip setting.
+3. SublinkPro loads the airport referenced by the subscription and requests its subscription URL with the client's `User-Agent` (the airport's effective User-Agent is used only when the client sends none) and the airport's request headers (including device profile headers and the derived HWID unless disabled), optional proxy, and TLS-skip setting. Panels such as Remnawave choose the response format from the User-Agent, so the relayed link returns the same format the airport serves to that client directly.
 4. The upstream status code and a whitelist of headers are copied to the response, and the body is streamed back unchanged.
 
-The relay uses exactly the same settings as the scheduled airport update, so editing the airport — its URL, User-Agent, headers, device profile, proxy, or TLS setting — immediately changes what the proxy subscription returns.
+Except for the User-Agent passthrough, the relay uses exactly the same settings as the scheduled airport update, so editing the airport — its URL, headers, device profile, proxy, or TLS setting — immediately changes what the proxy subscription returns. The airport's User-Agent is still used as the fallback for clients that send no User-Agent.
 
-Nothing is parsed, filtered, renamed, or re-rendered. The client receives byte-for-byte what the upstream returned, which means client-specific formats (Clash, Surge, sing-box, base64, plain URI list) work exactly as the upstream intends.
+Nothing is parsed, filtered, renamed, or re-rendered. The client receives byte-for-byte what the upstream returned; the upstream decides which client-specific format (Clash, Surge, sing-box, Xray JSON, base64, plain URI list) to serve based on the relayed User-Agent.
 
 ---
 
@@ -64,6 +64,9 @@ Only headers that carry subscription metadata are forwarded:
 - `profile-update-interval`
 - `profile-web-page-url`
 - `profile-title`
+- `encrypt-tag`
+
+`encrypt-tag` is relayed so that Happ can decrypt encrypted subscription content when the upstream returns it.
 
 `Content-Encoding` is intentionally not relayed: the HTTP client already decompresses the upstream body, so forwarding the original encoding header would break clients.
 
@@ -93,7 +96,7 @@ Upstream URLs, tokens, and header values are never echoed back to the client.
 - Proxy subscriptions have no nodes, groups, scripts, filters, or naming rules; the Aggregated tab UI for those is hidden on the Proxy tab.
 - Request settings cannot be overridden per subscription; edit the airport instead, and every proxy subscription that references it picks up the change.
 - Preview, node sorting, and chain-proxy rules do not apply to proxy subscriptions.
-- `client` and `substore` query parameters on `/c/` are ignored; the upstream decides the format.
+- `client` and `substore` query parameters on `/c/` are ignored; the upstream decides the format from the relayed `User-Agent`.
 - IP allow/deny lists are not available: `IPWhitelist` and `IPBlacklist` are ignored and cleared on save, even for legacy rows.
 - The upstream is fetched on every client request; there is no caching layer.
 

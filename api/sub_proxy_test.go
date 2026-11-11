@@ -158,6 +158,40 @@ func TestServeProxySubscriptionRelaysAirportResponse(t *testing.T) {
 	}
 }
 
+func TestServeProxySubscriptionForwardsClientUserAgent(t *testing.T) {
+	setupProxyRelayTestDB(t)
+
+	var gotUserAgent string
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotUserAgent = r.Header.Get("User-Agent")
+		_, _ = w.Write([]byte("ok"))
+	}))
+	defer upstream.Close()
+
+	airport := addRelayAirport(t, models.Airport{
+		Name:        "client-ua-airport",
+		URL:         upstream.URL,
+		UserAgent:   "clash.meta",
+		DisableHWID: true,
+	})
+	sub := models.Subcription{Name: "relay", Type: models.SubcriptionTypeProxy, AirportID: airport.ID}
+
+	gin.SetMode(gin.TestMode)
+	recorder := httptest.NewRecorder()
+	ginContext, _ := gin.CreateTestContext(recorder)
+	ginContext.Request = httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/c?token=test", nil)
+	ginContext.Request.Header.Set("User-Agent", "Happ/2.0 (Android 14; Pixel 8)")
+
+	serveProxySubscription(ginContext, sub)
+
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d", recorder.Code, http.StatusOK)
+	}
+	if gotUserAgent != "Happ/2.0 (Android 14; Pixel 8)" {
+		t.Fatalf("upstream user-agent = %q, want client UA", gotUserAgent)
+	}
+}
+
 func TestServeProxySubscriptionSendsDeviceHeadersFromAirport(t *testing.T) {
 	setupProxyRelayTestDB(t)
 

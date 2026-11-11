@@ -23,6 +23,7 @@ var relayedSubscriptionHeaders = []string{
 	"profile-update-interval",
 	"profile-web-page-url",
 	"profile-title",
+	"encrypt-tag",
 }
 
 // normalizeProxySourceURL 校验并归一化机场订阅地址，仅允许 http/https。
@@ -44,9 +45,23 @@ func normalizeProxySourceURL(raw string) (string, error) {
 	return parsed.String(), nil
 }
 
+// resolveProxyRelayUserAgent 选择请求上游时使用的 User-Agent。
+// 订阅面板通常按 User-Agent 决定返回格式（如 Remnawave 的 Response Rules：
+// Clash 客户端返回 YAML，Happ/v2ray 客户端返回 Xray JSON 或 Base64）。
+// 代理订阅要像直连一样工作，因此优先透传客户端自己的 UA；
+// 客户端未发送 UA 时才回落到机场配置，与定时更新机场订阅保持一致。
+func resolveProxyRelayUserAgent(c *gin.Context, airport *models.Airport) string {
+	if c != nil {
+		if userAgent := strings.TrimSpace(c.GetHeader("User-Agent")); userAgent != "" {
+			return userAgent
+		}
+	}
+	return airport.EffectiveUserAgent()
+}
+
 // serveProxySubscription 使用所选机场的订阅地址与请求配置拉取上游订阅，并原样写回客户端。
-// 地址、User-Agent、请求头（含设备伪装与 HWID）、代理与 TLS 设置都直接取自机场，
-// 与定时更新机场订阅时发送的请求保持一致。
+// 地址、请求头（含设备伪装与 HWID）、代理与 TLS 设置取自机场；User-Agent 透传请求它的客户端，
+// 这样面板才能按客户端返回正确格式（Clash YAML、Happ/v2ray JSON 或 Base64 等）。
 func serveProxySubscription(c *gin.Context, sub models.Subcription) {
 	if sub.AirportID <= 0 {
 		utils.Warn("代理订阅【%s】未关联机场", sub.Name)
@@ -73,7 +88,7 @@ func serveProxySubscription(c *gin.Context, sub models.Subcription) {
 		sourceURL,
 		airport.DownloadWithProxy,
 		airport.ProxyLink,
-		airport.EffectiveUserAgent(),
+		resolveProxyRelayUserAgent(c, airport),
 		airport.EffectiveRequestHeaders(),
 		airport.SkipTLSVerify,
 	)
