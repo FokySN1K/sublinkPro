@@ -40,6 +40,7 @@ import AddIcon from '@mui/icons-material/Add';
 import AutoAwesomeIcon from '@mui/icons-material/AutoAwesome';
 import EditIcon from '@mui/icons-material/Edit';
 import DeleteIcon from '@mui/icons-material/Delete';
+import HistoryIcon from '@mui/icons-material/History';
 import RefreshIcon from '@mui/icons-material/Refresh';
 import TransformIcon from '@mui/icons-material/Transform';
 import UnfoldMoreIcon from '@mui/icons-material/UnfoldMore';
@@ -69,6 +70,7 @@ import { getAISettings, getBaseTemplates, updateBaseTemplate } from 'api/setting
 import { getNodes } from 'api/nodes';
 import { withAlpha } from 'utils/colorUtils';
 import useResolvedColorScheme from 'hooks/useResolvedColorScheme';
+import TemplateVersionDialog from './component/TemplateVersionDialog';
 
 // Monaco Editor
 import Editor, { DiffEditor } from '@monaco-editor/react';
@@ -338,6 +340,7 @@ export default function TemplateList() {
   const [aiDisabledPromptOpen, setAIDisabledPromptOpen] = useState(false);
   const [errorDialog, setErrorDialog] = useState({ open: false, title: '', message: '' });
   const [usageDialog, setUsageDialog] = useState({ open: false, title: '', message: '', subscriptions: [], action: null });
+  const [versionDialog, setVersionDialog] = useState({ open: false, template: null });
   const [page, setPage] = useState(0);
   const [rowsPerPage, setRowsPerPage] = useState(() => {
     const saved = localStorage.getItem('templates_rowsPerPage');
@@ -1674,6 +1677,14 @@ export default function TemplateList() {
                 <Divider sx={{ my: 1 }} />
 
                 <Stack direction="row" justifyContent="flex-end" spacing={1}>
+                  <IconButton
+                    size="small"
+                    title={t('templates.versions.button')}
+                    aria-label={t('templates.versions.button')}
+                    onClick={() => setVersionDialog({ open: true, template })}
+                  >
+                    <HistoryIcon fontSize="small" />
+                  </IconButton>
                   <IconButton size="small" onClick={() => handleEdit(template)}>
                     <EditIcon fontSize="small" />
                   </IconButton>
@@ -1717,6 +1728,14 @@ export default function TemplateList() {
                   </TableCell>
                   <TableCell>{template.create_date || '-'}</TableCell>
                   <TableCell align="right">
+                    <IconButton
+                      size="small"
+                      title={t('templates.versions.button')}
+                      aria-label={t('templates.versions.button')}
+                      onClick={() => setVersionDialog({ open: true, template })}
+                    >
+                      <HistoryIcon fontSize="small" />
+                    </IconButton>
                     <IconButton size="small" onClick={() => handleEdit(template)}>
                       <EditIcon fontSize="small" />
                     </IconButton>
@@ -2180,6 +2199,16 @@ export default function TemplateList() {
           </Button>
         </DialogActions>
       </Dialog>
+
+      {versionDialog.open ? (
+        <TemplateVersionDialog
+          open
+          template={versionDialog.template}
+          onClose={() => setVersionDialog({ open: false, template: null })}
+          onRestored={() => fetchTemplates(page, rowsPerPage)}
+          onNotify={showMessage}
+        />
+      ) : null}
     </MainCard>
   );
 }

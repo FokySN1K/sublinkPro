@@ -11,6 +11,9 @@ static
 sublinkPro.exe
 /sublink
 
+# 模板历史版本快照（运行时数据）
+template/.versions/
+
 # AI agent runtime and temporary files (DO NOT COMMIT)
 .claude/projects/
 .claude/sessions/

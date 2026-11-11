@@ -3471,6 +3471,58 @@
       "title": "{{category}} base template configuration",
       "description": "The base template is the default configuration auto-filled during rule conversion when template content is empty. Changes affect all rule conversion operations that use the default template."
     },
+    "versions": {
+      "title": "Version history",
+      "subtitle": "{{name}} · {{count}} version(s)",
+      "button": "Version history",
+      "fields": {
+        "version": "Version",
+        "createdAt": "Saved at",
+        "source": "Source",
+        "author": "Author",
+        "size": "Size",
+        "status": "Status",
+        "actions": "Actions"
+      },
+      "sources": {
+        "baseline": "Baseline",
+        "add": "Created",
+        "save": "Save",
+        "rename": "Rename",
+        "restore": "Restore"
+      },
+      "status": {
+        "current": "Current"
+      },
+      "actions": {
+        "preview": "Preview content",
+        "download": "Download file",
+        "restore": "Restore this version",
+        "compare": "Compare selected",
+        "compareWithCurrent": "Compare with current",
+        "selectHint": "Select one version to compare it with the current template, or two versions to compare them with each other."
+      },
+      "preview": {
+        "title": "Version v{{version}}"
+      },
+      "diff": {
+        "title": "Compare versions",
+        "identical": "The selected versions have identical content."
+      },
+      "restore": {
+        "title": "Restore version",
+        "confirm": "Restore version v{{version}}? A new version is created, so the existing history is kept."
+      },
+      "messages": {
+        "loadFailed": "Failed to load version history",
+        "downloadFailed": "Failed to download version",
+        "previewFailed": "Failed to load version content",
+        "restoreSuccess": "Version v{{version}} restored",
+        "restoreFailed": "Failed to restore version",
+        "noVersions": "No versions yet. A new version is created every time the template is saved.",
+        "diffFailed": "Failed to compare versions"
+      }
+    },
     "messages": {
       "loadFailed": "Failed to load template list",
       "usageFailed": "Failed to load template usage",

@@ -337,13 +337,24 @@ Base: `/api/v1/template`
 **GET** `/template/get` (query: `?page=1&pageSize=20`) — returns each template's `file`, `text`, `category` (clash|surge), `ruleSource`, etc. The `file` value is what a subscription's `config` field references.
 
 ### Add Template
-**POST** `/template/add` — **form**: `filename`, `text`, `category`, `ruleSource`, `useProxy` (`true`/`false`), `proxyLink`, `enableIncludeAll` (`true`/`false`)
+**POST** `/template/add` — **form**: `filename`, `text`, `category`, `ruleSource`, `useProxy` (`true`/`false`), `proxyLink`, `enableIncludeAll` (`true`/`false`), optional `comment`
 
 ### Update Template
-**POST** `/template/update` — **form**: `filename`, `oldname`, `text`, `category`, `ruleSource`, `useProxy`, `proxyLink`, `enableIncludeAll`
+**POST** `/template/update` — **form**: `filename`, `oldname`, `text`, `category`, `ruleSource`, `useProxy`, `proxyLink`, `enableIncludeAll`, optional `comment`
 
 ### Delete Template
-**POST** `/template/delete` — **form**: `filename`
+**POST** `/template/delete` — **form**: `filename`. Also deletes the template's entire version history.
+
+### Template Versions
+Every add/update creates a content version automatically; identical content is deduplicated against the latest version.
+
+- **GET** `/template/versions` (query: `?filename=clash.yaml&page=1&pageSize=20`) — returns `items` (newest first) with `version`, `contentHash`, `size`, `source` (`baseline|add|save|rename|restore`), `comment`, `author`, `createdAt`, and `isCurrent`.
+- **GET** `/template/versions/:version` (query: `?filename=clash.yaml`) — returns `version` metadata and `content`.
+- **GET** `/template/versions/:version/download` (query: `?filename=clash.yaml`) — downloads the snapshot as `<name>.v<version><ext>`.
+- **GET** `/template/versions/diff` (query: `?filename=clash.yaml&from=1&to=3`) — returns `fromContent`, `toContent`, unified `diff`, `additions`, `deletions`, `identical`. Use `to=0` to compare against the current template file.
+- **POST** `/template/versions/restore` — **form**: `filename`, `version`, optional `comment`. Content-only restore; metadata is unchanged and a new `restore` version is appended.
+
+Version history is stored per template ID, so renaming keeps history. Snapshots live under `template/.versions/` and are included in system backups.
 
 ### Template Usage
 **GET** `/template/usage` (query: `?filename=...`)

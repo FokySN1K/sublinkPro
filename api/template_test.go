@@ -33,7 +33,7 @@ func setupTemplateAPITestDB(t *testing.T) {
 	oldSessionStore := templateEditSessions
 
 	db := testutil.OpenMemoryDB(t, "template_api_test")
-	if err := db.AutoMigrate(&models.Template{}, &models.User{}, &models.SystemSetting{}); err != nil {
+	if err := db.AutoMigrate(&models.Template{}, &models.TemplateVersion{}, &models.User{}, &models.SystemSetting{}); err != nil {
 		t.Fatalf("auto migrate templates: %v", err)
 	}
 

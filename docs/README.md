@@ -20,6 +20,7 @@ Welcome to SublinkPro documentation. This index helps you find the right documen
 - **[Unlock Checks](features/unlock-check.md)** - Streaming & AI availability testing
 - **[Chain Proxy](features/chain-proxy.md)** - Condition-based node selection
 - **[Template AI Editing](features/template-ai.md)** - AI-assisted template generation
+- **[Template Version History](features/template-versioning.md)** - Automatic snapshots, diff, download, and restore
 - **[Airport Management](features/airport.md)** - Import, scheduled updates, traffic monitoring
 - **[Subscription Sharing](features/subscription-share.md)** - Multiple links, expiration, stats
 - **[happ Links](features/happ-link.md)** - Decode happ://crypt…crypt5 links, decryptor page, API
