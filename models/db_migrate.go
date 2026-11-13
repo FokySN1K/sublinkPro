@@ -424,6 +424,21 @@ func RunMigrations() error {
 		utils.Error("执行迁移 0041_backfill_airport_device_preset_fields 失败: %v", err)
 	}
 
+	// 0042_enable_airport_usage_fetch - 默认开启所有机场的用量信息获取，
+	// 便于在机场列表中直接展示已用流量与订阅剩余时间。
+	if err := database.RunCustomMigration("0042_enable_airport_usage_fetch", func() error {
+		affected, err := enableAirportUsageFetch(db)
+		if err != nil {
+			return err
+		}
+		if affected > 0 {
+			utils.Info("已为 %d 个机场开启用量信息获取", affected)
+		}
+		return nil
+	}); err != nil {
+		utils.Error("执行迁移 0042_enable_airport_usage_fetch 失败: %v", err)
+	}
+
 	if err := database.RunCustomMigration("0024_migrate_legacy_webhook_settings", func() error {
 		legacyURL, _ := GetSetting("webhook_url")
 		legacyMethod, _ := GetSetting("webhook_method")

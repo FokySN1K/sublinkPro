@@ -90,7 +90,7 @@ type Airport struct {
 	AppName           string                `json:"appName"`                                // 自定义设备伪装：应用名称
 	NodeCount         int                   `gorm:"-" json:"nodeCount"`                     // 节点数量（非数据库字段）
 	// 用量信息相关字段
-	FetchUsageInfo               bool   `gorm:"default:false" json:"fetchUsageInfo"`               // 是否获取用量信息
+	FetchUsageInfo               bool   `gorm:"default:true" json:"fetchUsageInfo"`                // 是否获取用量信息
 	UsageUpload                  int64  `gorm:"default:0" json:"usageUpload"`                      // 已上传流量（字节）
 	UsageDownload                int64  `gorm:"default:0" json:"usageDownload"`                    // 已下载流量（字节）
 	UsageTotal                   int64  `gorm:"default:0" json:"usageTotal"`                       // 总流量配额（字节）
@@ -498,6 +498,14 @@ func (a *Airport) UpdateUsageInfo(upload, download, total, expire int64) error {
 // containsIgnoreCase 忽略大小写的字符串包含检查
 func containsIgnoreCase(s, substr string) bool {
 	return strings.Contains(strings.ToLower(s), strings.ToLower(substr))
+}
+
+// enableAirportUsageFetch 为所有机场开启用量信息获取（含历史 NULL 值）。
+func enableAirportUsageFetch(db *gorm.DB) (int64, error) {
+	result := db.Model(&Airport{}).
+		Where("fetch_usage_info IS NULL OR fetch_usage_info = ?", false).
+		Update("fetch_usage_info", true)
+	return result.RowsAffected, result.Error
 }
 
 // AirportNodeStats 机场节点测速统计

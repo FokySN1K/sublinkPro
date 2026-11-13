@@ -149,20 +149,61 @@ export const formatExpireTime = (timestamp) => {
   if (!timestamp || timestamp === 0) return '';
 
   const expireDate = new Date(timestamp * 1000);
-  const now = new Date();
   const year = expireDate.getFullYear();
   const month = String(expireDate.getMonth() + 1).padStart(2, '0');
   const day = String(expireDate.getDate()).padStart(2, '0');
   const hours = String(expireDate.getHours()).padStart(2, '0');
   const minutes = String(expireDate.getMinutes()).padStart(2, '0');
   const seconds = String(expireDate.getSeconds()).padStart(2, '0');
-  const dateStr = `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`;
+  return `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`;
+};
 
-  // 判断是否已过期
-  if (expireDate < now) {
-    return `${dateStr} (已过期)`;
+// 格式化过期日期（DD.MM.YYYY）
+export const formatExpireDate = (timestamp) => {
+  if (!timestamp || timestamp === 0) return '';
+
+  const expireDate = new Date(timestamp * 1000);
+  const day = String(expireDate.getDate()).padStart(2, '0');
+  const month = String(expireDate.getMonth() + 1).padStart(2, '0');
+  const year = expireDate.getFullYear();
+  return `${day}.${month}.${year}`;
+};
+
+// 解析机场用量状态：disabled / failed / pending / ok
+export const resolveAirportUsage = (airport) => {
+  if (!airport || !airport.fetchUsageInfo) return { status: 'disabled' };
+  if (airport.usageTotal === -1) return { status: 'failed' };
+
+  const upload = airport.usageUpload || 0;
+  const download = airport.usageDownload || 0;
+  const used = upload + download;
+  const total = airport.usageTotal || 0;
+  const unlimited = total <= 0;
+  const expire = airport.usageExpire || 0;
+
+  // 未获取到任何用量且没有到期时间，视为待获取
+  if (unlimited && used === 0 && expire === 0) return { status: 'pending' };
+
+  let daysLeft = null;
+  let expired = false;
+  if (expire > 0) {
+    const now = Math.floor(Date.now() / 1000);
+    daysLeft = (expire - now) / 86400;
+    expired = daysLeft <= 0;
   }
-  return dateStr;
+
+  return {
+    status: 'ok',
+    upload,
+    download,
+    used,
+    total,
+    unlimited,
+    expire,
+    daysLeft,
+    expired,
+    percent: unlimited ? 0 : Math.min((used / total) * 100, 100)
+  };
 };
 
 // 根据使用率百分比返回颜色

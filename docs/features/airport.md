@@ -186,6 +186,8 @@ The system automatically parses `Subscription-Userinfo` from subscription respon
 - `total`: total traffic quota
 - `expire`: expiration timestamp
 
+Usage fetching is enabled by default for all airports, including existing airports upgraded by the migration; it can still be disabled per airport. The airport list shows used traffic and the remaining subscription time. When `total` is `0` (no quota limit), only used traffic is displayed without a progress bar; expired subscriptions are highlighted.
+
 ---
 
 ## Telegram Bot Integration

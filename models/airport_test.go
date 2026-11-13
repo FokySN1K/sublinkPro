@@ -159,3 +159,58 @@ func TestAirportBackfillCountryImpliesAutoFillCountryOnSave(t *testing.T) {
 		t.Fatal("expected auto_fill_country to be true when backfill_existing_country is true after update")
 	}
 }
+
+func TestEnableAirportUsageFetchEnablesExistingAirports(t *testing.T) {
+	setupAirportTestDB(t)
+
+	disabled := &Airport{
+		Name:           "用量关闭机场",
+		URL:            "https://example.com/usage-disabled",
+		CronExpr:       "0 */12 * * *",
+		FetchUsageInfo: false,
+	}
+	enabled := &Airport{
+		Name:           "用量开启机场",
+		URL:            "https://example.com/usage-enabled",
+		CronExpr:       "0 */12 * * *",
+		FetchUsageInfo: true,
+	}
+	if err := disabled.Add(); err != nil {
+		t.Fatalf("add disabled airport: %v", err)
+	}
+	if err := enabled.Add(); err != nil {
+		t.Fatalf("add enabled airport: %v", err)
+	}
+
+	// 模拟历史数据中的 NULL 值
+	if err := database.DB.Model(&Airport{}).Where("id = ?", disabled.ID).Update("fetch_usage_info", nil).Error; err != nil {
+		t.Fatalf("set fetch_usage_info to null: %v", err)
+	}
+
+	affected, err := enableAirportUsageFetch(database.DB)
+	if err != nil {
+		t.Fatalf("enable airport usage fetch: %v", err)
+	}
+	if affected != 1 {
+		t.Fatalf("affected = %d, want 1", affected)
+	}
+
+	var airports []Airport
+	if err := database.DB.Order("id").Find(&airports).Error; err != nil {
+		t.Fatalf("list airports: %v", err)
+	}
+	for _, airport := range airports {
+		if !airport.FetchUsageInfo {
+			t.Fatalf("expected fetch_usage_info true for airport %q", airport.Name)
+		}
+	}
+
+	// 幂等：再次执行不应再更新任何行
+	affected, err = enableAirportUsageFetch(database.DB)
+	if err != nil {
+		t.Fatalf("re-run enable airport usage fetch: %v", err)
+	}
+	if affected != 0 {
+		t.Fatalf("affected on re-run = %d, want 0", affected)
+	}
+}

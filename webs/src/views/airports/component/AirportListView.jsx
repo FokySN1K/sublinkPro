@@ -32,9 +32,10 @@ import AccountBalanceWalletIcon from '@mui/icons-material/AccountBalanceWallet';
 import AccessTimeIcon from '@mui/icons-material/AccessTime';
 import SpeedIcon from '@mui/icons-material/Speed';
 import WarningAmberIcon from '@mui/icons-material/WarningAmber';
+import EventIcon from '@mui/icons-material/Event';
 
 // utils
-import { formatDateTime, formatBytes, formatExpireTime, getUsageColor } from '../utils';
+import { formatDateTime, formatBytes, formatExpireDate, getUsageColor, resolveAirportUsage } from '../utils';
 import { withAlpha } from 'utils/colorUtils';
 
 // local components
@@ -163,7 +164,9 @@ export default function AirportListView({
    * 渲染用量信息（紧凑版）
    */
   const renderUsageCompact = (airport) => {
-    if (!airport.fetchUsageInfo) {
+    const usage = resolveAirportUsage(airport);
+
+    if (usage.status === 'disabled') {
       return (
         <Typography variant="caption" color="text.disabled">
           {t('airports.list.usage.disabledShort')}
@@ -171,7 +174,7 @@ export default function AirportListView({
       );
     }
 
-    if (airport.usageTotal === -1) {
+    if (usage.status === 'failed') {
       return (
         <Typography variant="caption" color="error.main">
           {t('airports.list.usage.failedShort')}
@@ -179,7 +182,7 @@ export default function AirportListView({
       );
     }
 
-    if (!airport.usageTotal || airport.usageTotal === 0) {
+    if (usage.status === 'pending') {
       return (
         <Typography variant="caption" color="text.disabled">
           {t('airports.list.usage.pending')}
@@ -187,67 +190,79 @@ export default function AirportListView({
       );
     }
 
-    const upload = airport.usageUpload || 0;
-    const download = airport.usageDownload || 0;
-    const used = upload + download;
-    const total = airport.usageTotal;
-    const percent = Math.min((used / total) * 100, 100);
+    const { used, total, unlimited, percent, expire, daysLeft, expired } = usage;
     const color = getUsageColor(percent);
+    const isUrgent = !expired && daysLeft !== null && daysLeft <= 7;
+    const isWarning = !expired && !isUrgent && daysLeft !== null && daysLeft <= 30;
 
-    // 检查过期时间
-    let expireInfo = null;
-    if (airport.usageExpire > 0) {
-      const now = Math.floor(Date.now() / 1000);
-      const daysLeft = (airport.usageExpire - now) / (24 * 60 * 60);
-      const isUrgent = daysLeft <= 7;
-
-      expireInfo = (
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mt: 0.25 }}>
-          {isUrgent && <WarningAmberIcon sx={{ fontSize: 10, color: 'error.main' }} />}
-          <Typography
-            variant="caption"
-            sx={{
-              fontSize: '0.65rem',
-              color: isUrgent ? 'error.main' : 'text.secondary',
-              fontWeight: isUrgent ? 600 : 400
-            }}
-          >
-            {formatExpireTime(airport.usageExpire)}
-            {isUrgent && ` (${t('airports.list.usage.daysLeft', { count: Math.max(0, Math.ceil(daysLeft)) })})`}
-          </Typography>
-        </Box>
-      );
-    }
+    const expireLabel = expired
+      ? `${t('airports.list.usage.expired')} · ${formatExpireDate(expire)}`
+      : `${t('airports.list.usage.remaining', { count: Math.max(0, Math.ceil(daysLeft)) })} · ${t('airports.list.usage.expiresOn', {
+          time: formatExpireDate(expire)
+        })}`;
 
     return (
       <Box sx={{ minWidth: 120 }}>
-        {/* 进度条 + 百分比 */}
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-          <Box sx={{ flex: 1, minWidth: 60 }}>
-            <LinearProgress
-              variant="determinate"
-              value={percent}
-              sx={{
-                height: 4,
-                borderRadius: 2,
-                bgcolor: alpha(theme.palette.grey[500], 0.2),
-                '& .MuiLinearProgress-bar': {
-                  borderRadius: 2,
-                  bgcolor: color
-                }
-              }}
-            />
-          </Box>
-          <Typography variant="caption" sx={{ fontWeight: 600, color, minWidth: 35, textAlign: 'right' }}>
-            {percent.toFixed(0)}%
+        {unlimited ? (
+          <Typography variant="caption" sx={{ fontWeight: 600, color: 'text.primary' }}>
+            {formatBytes(used)} · {t('airports.list.usage.unlimited')}
           </Typography>
+        ) : (
+          <>
+            {/* 进度条 + 百分比 */}
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+              <Box sx={{ flex: 1, minWidth: 60 }}>
+                <LinearProgress
+                  variant="determinate"
+                  value={percent}
+                  sx={{
+                    height: 4,
+                    borderRadius: 2,
+                    bgcolor: alpha(theme.palette.grey[500], 0.2),
+                    '& .MuiLinearProgress-bar': {
+                      borderRadius: 2,
+                      bgcolor: color
+                    }
+                  }}
+                />
+              </Box>
+              <Typography variant="caption" sx={{ fontWeight: 600, color, minWidth: 35, textAlign: 'right' }}>
+                {percent.toFixed(0)}%
+              </Typography>
+            </Box>
+            {/* 已用/总量 */}
+            <Typography variant="caption" sx={{ color: 'text.secondary', fontSize: '0.65rem' }}>
+              {formatBytes(used)} / {formatBytes(total)}
+            </Typography>
+          </>
+        )}
+
+        {/* 到期时间 / 剩余天数 */}
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mt: 0.25 }}>
+          {expire > 0 ? (
+            <>
+              {(expired || isUrgent) && <WarningAmberIcon sx={{ fontSize: 10, color: 'error.main' }} />}
+              {isWarning && <EventIcon sx={{ fontSize: 10, color: 'info.main' }} />}
+              <Typography
+                variant="caption"
+                sx={{
+                  fontSize: '0.65rem',
+                  color: expired || isUrgent ? 'error.main' : isWarning ? 'info.main' : 'text.secondary',
+                  fontWeight: expired || isUrgent || isWarning ? 600 : 400
+                }}
+              >
+                {expireLabel}
+              </Typography>
+            </>
+          ) : (
+            <>
+              <EventIcon sx={{ fontSize: 10, color: 'text.disabled' }} />
+              <Typography variant="caption" sx={{ fontSize: '0.65rem', color: 'text.secondary' }}>
+                {t('airports.list.usage.noExpiry')}
+              </Typography>
+            </>
+          )}
         </Box>
-        {/* 已用/总量 */}
-        <Typography variant="caption" sx={{ color: 'text.secondary', fontSize: '0.65rem' }}>
-          {formatBytes(used)} / {formatBytes(total)}
-        </Typography>
-        {/* 过期时间 */}
-        {expireInfo}
       </Box>
     );
   };

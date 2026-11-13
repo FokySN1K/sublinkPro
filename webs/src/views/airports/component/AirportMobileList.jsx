@@ -34,7 +34,7 @@ import WarningAmberIcon from '@mui/icons-material/WarningAmber';
 import EventIcon from '@mui/icons-material/Event';
 
 // utils
-import { formatDateTime, formatBytes, formatExpireTime, getUsageColor } from '../utils';
+import { formatDateTime, formatBytes, formatExpireDate, getUsageColor, resolveAirportUsage } from '../utils';
 import useResolvedColorScheme from 'hooks/useResolvedColorScheme';
 import { withAlpha } from 'utils/colorUtils';
 import { getReadableTextTokens, getSurfaceTokens } from 'themes/surfaceTokens';
@@ -312,16 +312,49 @@ export default function AirportMobileList({
                   </Box>
                 </Box>
 
-                {airport.fetchUsageInfo && (
-                  <Box sx={{ mb: 2 }}>
-                    <Typography variant="caption" sx={{ display: 'block', mb: 1, fontWeight: 500, color: secondaryText }}>
-                      {t('airports.list.usage.title')}
-                    </Typography>
-                    {airport.usageTotal === -1 ? (
-                      <Typography variant="body2" sx={{ color: 'error.main', fontWeight: 500 }}>
-                        {t('airports.list.usage.failedMaybeUnsupported')}
-                      </Typography>
-                    ) : airport.usageTotal > 0 ? (
+                <Box sx={{ mb: 2 }}>
+                  <Typography variant="caption" sx={{ display: 'block', mb: 1, fontWeight: 500, color: secondaryText }}>
+                    {t('airports.list.usage.title')}
+                  </Typography>
+                  {(() => {
+                    const usage = resolveAirportUsage(airport);
+
+                    if (usage.status === 'disabled') {
+                      return (
+                        <Typography variant="body2" sx={{ color: secondaryText }}>
+                          {t('airports.list.usage.disabled')}
+                        </Typography>
+                      );
+                    }
+
+                    if (usage.status === 'failed') {
+                      return (
+                        <Typography variant="body2" sx={{ color: 'error.main', fontWeight: 500 }}>
+                          {t('airports.list.usage.failedMaybeUnsupported')}
+                        </Typography>
+                      );
+                    }
+
+                    if (usage.status === 'pending') {
+                      return (
+                        <Typography variant="body2" sx={{ color: secondaryText }}>
+                          {t('airports.list.usage.pending')}
+                        </Typography>
+                      );
+                    }
+
+                    const { upload, download, used, total, unlimited, percent, expire, daysLeft, expired } = usage;
+                    const color = getUsageColor(percent);
+                    const isUrgent = !expired && daysLeft !== null && daysLeft <= 7;
+                    const isWarning = !expired && !isUrgent && daysLeft !== null && daysLeft <= 30;
+
+                    const expireLabel = expired
+                      ? `${t('airports.list.usage.expired')} · ${formatExpireDate(expire)}`
+                      : `${t('airports.list.usage.remaining', {
+                          count: Math.max(0, Math.ceil(daysLeft))
+                        })} · ${t('airports.list.usage.expiresOn', { time: formatExpireDate(expire) })}`;
+
+                    return (
                       <Box
                         sx={{
                           p: 1.5,
@@ -330,99 +363,84 @@ export default function AirportMobileList({
                           border: `1px solid ${panelBorder}`
                         }}
                       >
-                        {(() => {
-                          const upload = airport.usageUpload || 0;
-                          const download = airport.usageDownload || 0;
-                          const used = upload + download;
-                          const total = airport.usageTotal;
-                          const percent = Math.min((used / total) * 100, 100);
-                          const color = getUsageColor(percent);
+                        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1, gap: 1 }}>
+                          <Typography variant="body2" sx={{ fontWeight: 600, color: primaryText, wordBreak: 'break-word' }}>
+                            {unlimited ? formatBytes(used) : `${formatBytes(used)} / ${formatBytes(total)}`}
+                          </Typography>
+                          <Typography variant="body1" sx={{ fontWeight: 700, color: unlimited ? secondaryText : color }}>
+                            {unlimited ? t('airports.list.usage.unlimited') : `${percent.toFixed(1)}%`}
+                          </Typography>
+                        </Box>
 
-                          return (
+                        {!unlimited && (
+                          <Box
+                            sx={{
+                              height: 8,
+                              borderRadius: 4,
+                              backgroundColor: getProgressTrackColor(percent),
+                              overflow: 'hidden',
+                              mb: 1.5
+                            }}
+                          >
+                            <Box
+                              sx={{
+                                width: `${percent}%`,
+                                height: '100%',
+                                borderRadius: 4,
+                                backgroundColor: color,
+                                transition: 'width 0.3s ease'
+                              }}
+                            />
+                          </Box>
+                        )}
+
+                        <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 2, mb: 1 }}>
+                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                            <Typography variant="body2" sx={{ color: 'success.main', fontWeight: 500 }}>
+                              ↑
+                            </Typography>
+                            <Typography variant="body2" sx={{ color: secondaryText }}>
+                              {formatBytes(upload)}
+                            </Typography>
+                          </Box>
+                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                            <Typography variant="body2" sx={{ color: 'info.main', fontWeight: 500 }}>
+                              ↓
+                            </Typography>
+                            <Typography variant="body2" sx={{ color: secondaryText }}>
+                              {formatBytes(download)}
+                            </Typography>
+                          </Box>
+                        </Box>
+
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, flexWrap: 'wrap' }}>
+                          {expire > 0 ? (
                             <>
-                              <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1, gap: 1 }}>
-                                <Typography variant="body2" sx={{ fontWeight: 600, color: primaryText, wordBreak: 'break-word' }}>
-                                  {formatBytes(used)} / {formatBytes(total)}
-                                </Typography>
-                                <Typography variant="body1" sx={{ fontWeight: 700, color }}>
-                                  {percent.toFixed(1)}%
-                                </Typography>
-                              </Box>
-
-                              <Box
+                              {(expired || isUrgent) && <WarningAmberIcon sx={{ fontSize: 14, color: 'error.main' }} />}
+                              {isWarning && <EventIcon sx={{ fontSize: 14, color: 'info.main' }} />}
+                              <Typography
+                                variant="body2"
                                 sx={{
-                                  height: 8,
-                                  borderRadius: 4,
-                                  backgroundColor: getProgressTrackColor(percent),
-                                  overflow: 'hidden',
-                                  mb: 1.5
+                                  color: expired || isUrgent ? 'error.main' : isWarning ? 'info.main' : secondaryText,
+                                  fontWeight: expired || isUrgent || isWarning ? 600 : 400
                                 }}
                               >
-                                <Box
-                                  sx={{
-                                    width: `${percent}%`,
-                                    height: '100%',
-                                    borderRadius: 4,
-                                    backgroundColor: color,
-                                    transition: 'width 0.3s ease'
-                                  }}
-                                />
-                              </Box>
-
-                              <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 2, mb: airport.usageExpire > 0 ? 1 : 0 }}>
-                                <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-                                  <Typography variant="body2" sx={{ color: 'success.main', fontWeight: 500 }}>
-                                    ↑
-                                  </Typography>
-                                  <Typography variant="body2" sx={{ color: secondaryText }}>
-                                    {formatBytes(upload)}
-                                  </Typography>
-                                </Box>
-                                <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-                                  <Typography variant="body2" sx={{ color: 'info.main', fontWeight: 500 }}>
-                                    ↓
-                                  </Typography>
-                                  <Typography variant="body2" sx={{ color: secondaryText }}>
-                                    {formatBytes(download)}
-                                  </Typography>
-                                </Box>
-                              </Box>
-
-                              {airport.usageExpire > 0 &&
-                                (() => {
-                                  const now = Math.floor(Date.now() / 1000);
-                                  const daysLeft = (airport.usageExpire - now) / (24 * 60 * 60);
-                                  const isUrgent = daysLeft <= 7;
-                                  const isWarning = daysLeft <= 30 && daysLeft > 7;
-
-                                  return (
-                                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, flexWrap: 'wrap' }}>
-                                      {isUrgent && <WarningAmberIcon sx={{ fontSize: 14, color: 'error.main' }} />}
-                                      {isWarning && <EventIcon sx={{ fontSize: 14, color: 'info.main' }} />}
-                                      <Typography
-                                        variant="body2"
-                                        sx={{
-                                          color: isUrgent ? 'error.main' : isWarning ? 'info.main' : 'text.secondary',
-                                          fontWeight: isUrgent || isWarning ? 600 : 400
-                                        }}
-                                      >
-                                        {t('airports.list.usage.expireAt', { time: formatExpireTime(airport.usageExpire) })}
-                                        {isUrgent && ` (${t('airports.list.usage.daysLeft', { count: Math.max(0, Math.ceil(daysLeft)) })})`}
-                                      </Typography>
-                                    </Box>
-                                  );
-                                })()}
+                                {expireLabel}
+                              </Typography>
                             </>
-                          );
-                        })()}
+                          ) : (
+                            <>
+                              <EventIcon sx={{ fontSize: 14, color: 'text.disabled' }} />
+                              <Typography variant="body2" sx={{ color: secondaryText }}>
+                                {t('airports.list.usage.noExpiry')}
+                              </Typography>
+                            </>
+                          )}
+                        </Box>
                       </Box>
-                    ) : (
-                      <Typography variant="body2" sx={{ color: secondaryText }}>
-                        {t('airports.list.usage.pending')}
-                      </Typography>
-                    )}
-                  </Box>
-                )}
+                    );
+                  })()}
+                </Box>
 
                 <Box sx={{ mb: 2 }}>
                   <Typography variant="caption" sx={{ display: 'block', mb: 1, fontWeight: 500, color: secondaryText }}>

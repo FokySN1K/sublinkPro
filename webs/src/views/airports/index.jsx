@@ -151,7 +151,7 @@ const createAirportFormState = (overrides = {}) => ({
   osVersion: '',
   deviceModel: '',
   appName: '',
-  fetchUsageInfo: false,
+  fetchUsageInfo: true,
   skipTLSVerify: false,
   updateAfterDetect: false,
   updateAfterDetectProfileId: 0,

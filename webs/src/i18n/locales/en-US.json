@@ -440,7 +440,12 @@
         "failedMaybeUnsupported": "Usage fetch failed (the airport may not support it)",
         "pending": "Pending fetch",
         "expireAt": "Expires: {{time}}",
-        "daysLeft": "{{count}}d"
+        "daysLeft": "{{count}}d",
+        "remaining": "{{count}} days left",
+        "expiresOn": "until {{time}}",
+        "expired": "Expired",
+        "noExpiry": "No expiry",
+        "unlimited": "Unlimited"
       },
       "speed": {
         "title": "Node test",
