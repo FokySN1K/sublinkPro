@@ -194,7 +194,7 @@ Every successful airport refresh records a traffic snapshot in the `airport_usag
 
 - **Inline sparkline**: airports with usage fetching enabled show a mini chart in the usage area of the airport table, list view, and mobile card.
 - **History dialog**: click the chart icon or the sparkline to open the full chart. Pick a range preset (1, 3, 7, 30, 90 days, or all retained data), switch between automatic (one point per refresh), hourly, and daily granularity, and zoom with the mouse wheel or the slider. The reset button returns to the full range. Hourly and daily views merge each clock hour or calendar day into a single point that keeps the last successful value of that period.
-- **Refresh markers**: successful refreshes are drawn as blue dots on the curve and failed ones as red dots, so the refresh cadence is visible at a glance. Ranges with more than 400 points skip the blue markers to keep the curve readable.
+- **Refresh markers**: every successful refresh is drawn as a blue dot on the curve and every failed one as a red dot, so the refresh cadence is visible at a glance. Dense ranges keep every marker and only shrink the dots.
 - **Windowed time axis**: the x-axis always spans the selected range, so sparse history only occupies the period it actually covers instead of being stretched across the full chart width. When recording started later than the range, the dialog shows the timestamp of the first snapshot.
 - **Failed refreshes in red**: when usage cannot be fetched, the refresh is still recorded as a failed point and marked in red on the chart. The failure keeps the last known values, so an outage never looks like traffic dropping to zero.
 - **Configurable retention**: history is kept for 180 days by default. Change it in `Settings → Usage history` within 1 to 3650 days. Lowering retention deletes older snapshots immediately.
@@ -204,10 +204,10 @@ Every successful airport refresh records a traffic snapshot in the `airport_usag
 
 Recording rules:
 
-- A snapshot is stored on every successful refresh.
-- If the values do not change, a heartbeat snapshot is written every 6 hours so the curve does not stop at an old timestamp.
-- A failed refresh writes a failure marker with the last known values; identical failures are recorded at most once every 30 minutes.
+- Every refresh attempt writes its own snapshot, successful or failed, even when the values are identical to the previous record, so each request leaves a point on the chart.
+- A failed refresh writes a failure marker with the last known values, so an outage never looks like traffic dropping to zero.
 - Hourly maintenance prunes snapshots older than the configured retention.
+- With a 30-minute schedule an airport produces about 48 snapshots per day, so lower the retention if you refresh very often.
 
 ---
 
