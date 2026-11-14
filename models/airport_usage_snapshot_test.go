@@ -80,9 +80,9 @@ func countUsageSnapshots(t *testing.T, airportID int) int64 {
 	return count
 }
 
-func TestUpdateUsageInfoRecordsSnapshotsAndDedupes(t *testing.T) {
+func TestUpdateUsageInfoRecordsEveryRefresh(t *testing.T) {
 	setupUsageSnapshotTestDB(t)
-	airport := newUsageTestAirport(t, "snapshot-dedup")
+	airport := newUsageTestAirport(t, "snapshot-every-refresh")
 
 	if err := airport.UpdateUsageInfo(100, 200, 1000, 0); err != nil {
 		t.Fatalf("update usage info: %v", err)
@@ -91,18 +91,36 @@ func TestUpdateUsageInfoRecordsSnapshotsAndDedupes(t *testing.T) {
 		t.Fatalf("snapshot count after first update = %d, want 1", got)
 	}
 
+	// 数值未变化也必须落库：每个请求都要在历史中留下一个点。
 	if err := airport.UpdateUsageInfo(100, 200, 1000, 0); err != nil {
 		t.Fatalf("repeat update usage info: %v", err)
 	}
-	if got := countUsageSnapshots(t, airport.ID); got != 1 {
-		t.Fatalf("snapshot count after identical update = %d, want 1", got)
+	if got := countUsageSnapshots(t, airport.ID); got != 2 {
+		t.Fatalf("snapshot count after identical update = %d, want 2", got)
 	}
 
 	if err := airport.UpdateUsageInfo(150, 250, 1000, 0); err != nil {
 		t.Fatalf("update changed usage info: %v", err)
 	}
-	if got := countUsageSnapshots(t, airport.ID); got != 2 {
-		t.Fatalf("snapshot count after changed update = %d, want 2", got)
+	if got := countUsageSnapshots(t, airport.ID); got != 3 {
+		t.Fatalf("snapshot count after changed update = %d, want 3", got)
+	}
+}
+
+func TestRecordUsageFailureWritesEveryAttempt(t *testing.T) {
+	setupUsageSnapshotTestDB(t)
+	airport := newUsageTestAirport(t, "snapshot-failure-every-attempt")
+
+	if err := airport.UpdateUsageInfo(10, 20, 100, 0); err != nil {
+		t.Fatalf("update usage info: %v", err)
+	}
+
+	// 相同原因的重复失败同样逐次记录，红色标记数量与真实请求次数一致。
+	airport.RecordUsageFailure("fetch failed")
+	airport.RecordUsageFailure("fetch failed")
+
+	if got := countUsageSnapshots(t, airport.ID); got != 3 {
+		t.Fatalf("snapshot count after repeated failures = %d, want 3", got)
 	}
 }
 

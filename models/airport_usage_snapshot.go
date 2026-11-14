@@ -45,10 +45,6 @@ const (
 )
 
 var (
-	// usageSnapshotHeartbeat 数值未变化时超过该间隔补一个心跳点，避免曲线长期停在旧时间
-	usageSnapshotHeartbeat = 6 * time.Hour
-	// usageFailureHeartbeat 相同原因失败在该间隔内只记录一次
-	usageFailureHeartbeat = 30 * time.Minute
 	// usageSnapshotPruneInterval 自动清理保留期外快照的最小间隔
 	usageSnapshotPruneInterval = time.Hour
 
@@ -176,6 +172,7 @@ func CountAirportUsageSnapshots() (int64, error) {
 }
 
 // RecordAirportUsageSnapshot 记录一次用量快照。
+// 每次刷新尝试都会写入一条记录，即使数值与上一条完全相同，保证每个请求都在历史中留痕。
 // failed=true 时写入失败标记；当 total<0（没有可用数值）时沿用上一条快照的数值，
 // 保证历史曲线在失败点处保持连续。
 func RecordAirportUsageSnapshot(airportID int, upload, download, total, expire int64, failed bool, reason string) {
@@ -198,20 +195,6 @@ func RecordAirportUsageSnapshot(airportID int, upload, download, total, expire i
 			upload, download, total, expire = last.Upload, last.Download, last.Total, last.Expire
 		} else {
 			upload, download, total, expire = 0, 0, 0, 0
-		}
-	}
-
-	// 重复结果不重复落库：失败按相同原因节流，成功按数值未变节流。
-	if hasLast {
-		elapsed := now.Sub(last.CapturedAt)
-		if failed && last.Failed && last.Error == reason && elapsed < usageFailureHeartbeat {
-			return
-		}
-		if !failed && !last.Failed &&
-			last.Upload == upload && last.Download == download &&
-			last.Total == total && last.Expire == expire &&
-			elapsed < usageSnapshotHeartbeat {
-			return
 		}
 	}
 

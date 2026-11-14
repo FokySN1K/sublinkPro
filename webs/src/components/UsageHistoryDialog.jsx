@@ -33,8 +33,6 @@ import { getAirportUsageHistory } from 'api/usageHistory';
 const RANGE_PRESETS = [1, 3, 7, 30, 90, 0];
 const DEFAULT_RANGE_DAYS = 30;
 const GRANULARITY_OPTIONS = ['auto', 'hour', 'day'];
-// 逐点标记成功刷新的点数上限，超过后曲线过密，不再绘制蓝点
-const REFRESH_DOT_LIMIT = 400;
 
 const formatBytes = (bytes, decimals = 2) => {
   const value = Number(bytes);
@@ -349,16 +347,17 @@ function UsageHistoryDialog({ open, targetId, title, onClose }) {
       }
     ];
 
-    // 蓝点标记成功刷新；点数过多时不逐点标记，避免曲线变成一条点带
+    // 蓝点标记成功刷新；范围越长点越密，用更小的点保持可读性
     const successfulPoints = points.filter((point) => !point.failed);
-    const showRefreshDots = !isSinglePoint && successfulPoints.length > 0 && points.length <= REFRESH_DOT_LIMIT;
+    const showRefreshDots = !isSinglePoint && successfulPoints.length > 0;
+    const refreshDotSize = points.length > 1200 ? 3 : points.length > 400 ? 4 : 5;
 
     if (showRefreshDots) {
       series.push({
         name: t('usageHistory.series.refresh'),
         type: 'scatter',
         symbol: 'circle',
-        symbolSize: 5,
+        symbolSize: refreshDotSize,
         z: 5,
         itemStyle: { color: primary, borderColor: paperColor, borderWidth: 1 },
         data: successfulPoints.map((point) => [point.timestamp, Number(point.used) || 0])
