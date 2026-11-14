@@ -32,6 +32,7 @@ import SpeedIcon from '@mui/icons-material/Speed';
 import AccountBalanceWalletIcon from '@mui/icons-material/AccountBalanceWallet';
 import WarningAmberIcon from '@mui/icons-material/WarningAmber';
 import EventIcon from '@mui/icons-material/Event';
+import InsightsIcon from '@mui/icons-material/Insights';
 
 // utils
 import { formatDateTime, formatBytes, formatExpireDate, getUsageColor, resolveAirportUsage } from '../utils';
@@ -42,6 +43,7 @@ import { getReadableTextTokens, getSurfaceTokens } from 'themes/surfaceTokens';
 // local components
 import AirportNodeStatsCard from './AirportNodeStatsCard';
 import AirportLogo from './AirportLogo';
+import UsageSparkline from './UsageSparkline';
 
 /**
  * 机场移动端列表组件
@@ -56,7 +58,9 @@ export default function AirportMobileList({
   onOpenNodes,
   onQuickCheck,
   onRefreshUsage,
-  nodeCheckProfiles
+  nodeCheckProfiles,
+  usageSparklines,
+  onOpenUsageHistory
 }) {
   const theme = useTheme();
   const { t } = useTranslation();
@@ -182,11 +186,10 @@ export default function AirportMobileList({
                   ? `0 4px 12px ${alpha(theme.palette.common.black, 0.24)}`
                   : `0 4px 12px ${alpha(theme.palette.primary.main, isSelected ? 0.14 : 0.08)}`,
                 bgcolor: isSelected ? selectedCardSurface : cardSurface,
-                transition: 'all 0.2s ease',
+                transition: 'box-shadow 0.2s ease',
                 overflow: 'hidden',
                 position: 'relative',
                 '&:hover': {
-                  transform: 'translateY(-1px)',
                   boxShadow: isDark
                     ? `0 8px 24px ${alpha(theme.palette.common.black, 0.3)}`
                     : `0 8px 24px ${alpha(theme.palette.primary.main, 0.15)}`
@@ -313,9 +316,21 @@ export default function AirportMobileList({
                 </Box>
 
                 <Box sx={{ mb: 2 }}>
-                  <Typography variant="caption" sx={{ display: 'block', mb: 1, fontWeight: 500, color: secondaryText }}>
-                    {t('airports.list.usage.title')}
-                  </Typography>
+                  <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 1, gap: 1 }}>
+                    <Typography variant="caption" sx={{ fontWeight: 500, color: secondaryText }}>
+                      {t('airports.list.usage.title')}
+                    </Typography>
+                    {airport.fetchUsageInfo && (
+                      <IconButton
+                        size="small"
+                        onClick={() => onOpenUsageHistory?.(airport)}
+                        aria-label={t('airports.list.actions.usageHistory')}
+                        sx={{ width: 26, height: 26, color: secondaryText }}
+                      >
+                        <InsightsIcon sx={{ fontSize: 16 }} />
+                      </IconButton>
+                    )}
+                  </Box>
                   {(() => {
                     const usage = resolveAirportUsage(airport);
 
@@ -437,6 +452,18 @@ export default function AirportMobileList({
                             </>
                           )}
                         </Box>
+
+                        {(usageSparklines?.[airport.id]?.points?.length || 0) > 0 && (
+                          <Box sx={{ mt: 1.25 }}>
+                            <UsageSparkline
+                              points={usageSparklines[airport.id].points}
+                              color={palette.primary.main}
+                              onClick={() => onOpenUsageHistory?.(airport)}
+                              ariaLabel={t('usageHistory.openChart')}
+                              emptyLabel={t('usageHistory.noDataShort')}
+                            />
+                          </Box>
+                        )}
                       </Box>
                     );
                   })()}
@@ -681,10 +708,13 @@ AirportMobileList.propTypes = {
   onOpenNodes: PropTypes.func.isRequired,
   onQuickCheck: PropTypes.func.isRequired,
   onRefreshUsage: PropTypes.func,
-  nodeCheckProfiles: PropTypes.array
+  nodeCheckProfiles: PropTypes.array,
+  usageSparklines: PropTypes.object,
+  onOpenUsageHistory: PropTypes.func
 };
 
 AirportMobileList.defaultProps = {
   selectedIds: [],
-  nodeCheckProfiles: []
+  nodeCheckProfiles: [],
+  usageSparklines: {}
 };

@@ -38,6 +38,10 @@ func Settings(r *gin.Engine) {
 		SettingsGroup.GET("/global-node-processing", api.GetGlobalNodeProcessingConfig)
 		SettingsGroup.POST("/global-node-processing", middlewares.DemoModeRestrict, api.UpdateGlobalNodeProcessingConfig)
 
+		// 用量历史保留配置
+		SettingsGroup.GET("/usage-history", api.GetUsageHistoryConfig)
+		SettingsGroup.POST("/usage-history", middlewares.DemoModeRestrict, api.UpdateUsageHistoryConfig)
+
 		// AI 助手设置
 		SettingsGroup.GET("/ai-assistant", api.UserGetAISettings)
 		SettingsGroup.POST("/ai-assistant/models", middlewares.DemoModeRestrict, api.UserListAIModels)

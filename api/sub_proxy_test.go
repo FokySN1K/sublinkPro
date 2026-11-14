@@ -334,8 +334,8 @@ func TestAirportDeleteBlockedByProxySubscription(t *testing.T) {
 	if response.Code == 200 {
 		t.Fatal("expected airport delete to be rejected while proxy subscriptions reference it")
 	}
-	if !strings.Contains(response.Msg, "代理订阅") {
-		t.Fatalf("unexpected delete error: %q", response.Msg)
+	if response.I18nKey != "backend.airports.inUseByProxySubscriptions" {
+		t.Fatalf("unexpected delete error key: %q (msg %q)", response.I18nKey, response.Msg)
 	}
 }
 

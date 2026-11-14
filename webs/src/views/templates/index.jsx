@@ -323,7 +323,14 @@ export default function TemplateList() {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [isEdit, setIsEdit] = useState(false);
   const [currentTemplate, setCurrentTemplate] = useState(null);
-  const [formData, setFormData] = useState({ filename: '', text: '', category: 'clash', ruleSource: '', enableIncludeAll: false });
+  const [formData, setFormData] = useState({
+    filename: '',
+    description: '',
+    text: '',
+    category: 'clash',
+    ruleSource: '',
+    enableIncludeAll: false
+  });
   const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' });
   const [aclPresets, setAclPresets] = useState([]);
   const [converting, setConverting] = useState(false);
@@ -445,7 +452,7 @@ export default function TemplateList() {
   const handleAdd = () => {
     setIsEdit(false);
     setCurrentTemplate(null);
-    setFormData({ filename: '', text: '', category: 'clash', ruleSource: '', enableIncludeAll: false });
+    setFormData({ filename: '', description: '', text: '', category: 'clash', ruleSource: '', enableIncludeAll: false });
     setUseProxy(false);
     setProxyLink('');
     setEditorFullscreen(false);
@@ -459,6 +466,7 @@ export default function TemplateList() {
     setEditorFullscreen(false);
     setFormData({
       filename: template.file,
+      description: template.description || '',
       text: template.text,
       category: template.category || 'clash',
       ruleSource: template.ruleSource || '',
@@ -857,6 +865,7 @@ export default function TemplateList() {
         await updateTemplate({
           oldname: currentTemplate.file,
           filename: formData.filename,
+          description: formData.description,
           text: formData.text,
           category: formData.category,
           ruleSource: formData.ruleSource,
@@ -868,6 +877,7 @@ export default function TemplateList() {
       } else {
         await addTemplate({
           filename: formData.filename,
+          description: formData.description,
           text: formData.text,
           category: formData.category,
           ruleSource: formData.ruleSource,
@@ -1190,7 +1200,6 @@ export default function TemplateList() {
                 : undefined
             }
             disabled={aiCommandOpen && aiPreviewBusy}
-            disableRipple={!aiCommandOpen}
             sx={{
               width: aiCommandOpen ? 32 : 36,
               height: aiCommandOpen ? 32 : 36,
@@ -1673,6 +1682,11 @@ export default function TemplateList() {
                     {template.create_date || '-'}
                   </Typography>
                 </Stack>
+                {template.description ? (
+                  <Typography variant="caption" color="textSecondary" sx={{ display: 'block' }}>
+                    {template.description}
+                  </Typography>
+                ) : null}
 
                 <Divider sx={{ my: 1 }} />
 
@@ -1713,6 +1727,16 @@ export default function TemplateList() {
                 <TableRow key={template.file} hover>
                   <TableCell>
                     <Chip label={template.file} color="success" variant="outlined" size="small" />
+                    {template.description ? (
+                      <Typography
+                        variant="caption"
+                        color="textSecondary"
+                        title={template.description}
+                        sx={{ display: 'block', maxWidth: 260, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
+                      >
+                        {template.description}
+                      </Typography>
+                    ) : null}
                   </TableCell>
                   <TableCell>
                     <Chip
@@ -1866,6 +1890,18 @@ export default function TemplateList() {
                     </Select>
                   </FormControl>
                 </Stack>
+                <TextField
+                  fullWidth
+                  label={t('templates.fields.description')}
+                  value={formData.description}
+                  onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+                  placeholder={t('templates.placeholders.description')}
+                  multiline
+                  minRows={1}
+                  maxRows={3}
+                  slotProps={{ htmlInput: { maxLength: 512 } }}
+                  sx={outlinedLabelFixSx}
+                />
                 <Autocomplete
                   freeSolo
                   options={aclPresets}

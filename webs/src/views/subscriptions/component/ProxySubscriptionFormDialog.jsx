@@ -51,6 +51,18 @@ export default function ProxySubscriptionFormDialog({ open, isEdit, formData, se
             error={nameInvalid && Boolean(formData.name)}
           />
 
+          <TextField
+            label={t('subscriptions.proxyDialog.fields.description')}
+            value={formData.description || ''}
+            onChange={updateField('description')}
+            fullWidth
+            size="small"
+            multiline
+            minRows={1}
+            maxRows={3}
+            slotProps={{ htmlInput: { maxLength: 512 } }}
+          />
+
           <Autocomplete
             options={airportOptions || []}
             value={selectedAirport}

@@ -48,6 +48,7 @@ func (sub *Subcription) IsProxy() bool {
 type Subcription struct {
 	ID                    int
 	Name                  string
+	Description           string    `gorm:"size:512" json:"Description"`    // 订阅描述
 	Type                  string    `gorm:"default:collection" json:"Type"` // 订阅类型: collection/proxy
 	Config                string    `gorm:"embedded"`
 	Nodes                 []Node    `gorm:"-" json:"-"`
@@ -282,6 +283,7 @@ func (sub *Subcription) AddScripts(scriptIDs []int) error {
 func (sub *Subcription) Update() error {
 	updates := map[string]any{
 		"name":                     sub.Name,
+		"description":              sub.Description,
 		"config":                   sub.Config,
 		"create_date":              sub.CreateDate,
 		"ip_whitelist":             sub.IPWhitelist,
@@ -1216,6 +1218,7 @@ func (sub *Subcription) Copy() (*Subcription, error) {
 	// 创建新订阅对象，复制所有配置字段
 	newSub := &Subcription{
 		Name:                  sub.Name + "_复制",
+		Description:           sub.Description,
 		Type:                  NormalizeSubcriptionType(sub.Type),
 		Config:                sub.Config,
 		CreateDate:            time.Now().Format("2006-01-02 15:04:05"),

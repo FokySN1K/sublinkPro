@@ -41,6 +41,7 @@ import { withAlpha } from 'utils/colorUtils';
 // local components
 import AirportNodeStatsCard from './AirportNodeStatsCard';
 import AirportLogo from './AirportLogo';
+import UsageSparkline from './UsageSparkline';
 
 /**
  * 机场列表视图组件（桌面端表格模式）
@@ -55,7 +56,9 @@ export default function AirportListView({
   onOpenNodes,
   onQuickCheck,
   onRefreshUsage,
-  nodeCheckProfiles
+  nodeCheckProfiles,
+  usageSparklines,
+  onOpenUsageHistory
 }) {
   const theme = useTheme();
   const { t } = useTranslation();
@@ -488,7 +491,28 @@ export default function AirportListView({
                   </TableCell>
 
                   {/* 用量 */}
-                  <TableCell>{renderUsageCompact(airport)}</TableCell>
+                  <TableCell>
+                    {airport.fetchUsageInfo ? (
+                      <Tooltip title={t('airports.list.actions.usageHistory')} arrow placement="top">
+                        <Box onClick={() => onOpenUsageHistory?.(airport)} sx={{ cursor: 'pointer' }}>
+                          {renderUsageCompact(airport)}
+                          {(usageSparklines?.[airport.id]?.points?.length || 0) > 0 && (
+                            <Box sx={{ mt: 0.5, width: 130 }}>
+                              <UsageSparkline
+                                points={usageSparklines[airport.id].points}
+                                color={theme.palette.primary.main}
+                                height={20}
+                                ariaLabel={t('usageHistory.openChart')}
+                                emptyLabel={t('usageHistory.noDataShort')}
+                              />
+                            </Box>
+                          )}
+                        </Box>
+                      </Tooltip>
+                    ) : (
+                      renderUsageCompact(airport)
+                    )}
+                  </TableCell>
 
                   {/* 测速 */}
                   <TableCell>{renderSpeedCompact(airport.nodeStats, airport.nodeCount || 0)}</TableCell>
@@ -700,10 +724,13 @@ AirportListView.propTypes = {
   onOpenNodes: PropTypes.func.isRequired,
   onQuickCheck: PropTypes.func.isRequired,
   onRefreshUsage: PropTypes.func,
-  nodeCheckProfiles: PropTypes.array
+  nodeCheckProfiles: PropTypes.array,
+  usageSparklines: PropTypes.object,
+  onOpenUsageHistory: PropTypes.func
 };
 
 AirportListView.defaultProps = {
   selectedIds: [],
-  nodeCheckProfiles: []
+  nodeCheckProfiles: [],
+  usageSparklines: {}
 };

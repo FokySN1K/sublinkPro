@@ -76,6 +76,11 @@ func executeSubscriptionTask(id int, url string, subName string, trigger models.
 	}
 
 	changedNodeIDs, usageInfo, err := node.LoadClashConfigFromURLWithReporter(ctx, id, url, subName, downloadWithProxy, proxyLink, userAgent, requestHeaders, reporter, fetchUsageInfo, skipTLSVerify)
+
+	// 用量与节点解析彼此独立：即使节点解析失败，也要把已获取到的用量落库并记录失败点，
+	// 便于历史图表保留数据和红色失败标记。
+	persistSubscriptionUsage(airport, fetchUsageInfo, usageInfo, err)
+
 	if err != nil {
 		// 仅在失败时发送通知，成功通知由 node/sub.go 中的 scheduleClashToNodeLinks 发送
 		// 这样可以避免重复通知，且成功通知包含更详细的节点统计信息
@@ -96,15 +101,6 @@ func executeSubscriptionTask(id int, url string, subName string, trigger models.
 
 	// 加载器已返回真实失败/取消错误；成功 ReportComplete 也会主动取消任务 context，
 	// 此处不能再据 ctx.Err() 否定成功，否则用量、标签及后续检测都会被跳过。
-
-	// 更新用量信息（如果开启了获取用量信息且成功获取到）
-	if fetchUsageInfo && usageInfo != nil && airport != nil {
-		if updateErr := airport.UpdateUsageInfo(usageInfo.Upload, usageInfo.Download, usageInfo.Total, usageInfo.Expire); updateErr != nil {
-			utils.Warn("更新机场用量信息失败 ID: %d: %v", id, updateErr)
-		} else {
-			utils.Info("成功更新机场 [%s] 用量信息", subName)
-		}
-	}
 
 	// 标签属于节点更新边界，完成后才解析按标签筛选的自动检测范围。
 	applySubscriptionUpdateTags(id)
@@ -143,6 +139,33 @@ func executeSubscriptionTask(id int, url string, subName string, trigger models.
 		}(id, subName, profileID, changedNodeIDs, changedOnly)
 	}
 	return nil
+}
+
+// persistSubscriptionUsage 将本次拉取到的用量落库，并记录刷新状态。
+// usageInfo 非空时保存数值；节点解析失败时标记为失败点但保留数值。
+func persistSubscriptionUsage(airport *models.Airport, fetchUsageInfo bool, usageInfo *node.UsageInfo, parseErr error) {
+	if !fetchUsageInfo || airport == nil {
+		return
+	}
+
+	if usageInfo == nil {
+		if parseErr != nil {
+			airport.RecordUsageFailure(parseErr.Error())
+		}
+		return
+	}
+
+	reason := ""
+	if parseErr != nil {
+		reason = parseErr.Error()
+	}
+	if updateErr := airport.UpdateUsageInfoWithStatus(
+		usageInfo.Upload, usageInfo.Download, usageInfo.Total, usageInfo.Expire, parseErr != nil, reason,
+	); updateErr != nil {
+		utils.Warn("更新机场用量信息失败 ID: %d: %v", airport.ID, updateErr)
+		return
+	}
+	utils.Info("成功更新机场 [%s] 用量信息", airport.Name)
 }
 
 // resolveUpdateAfterDetectNodeIDs 解析更新后检测的目标节点；仅检测变化节点时，空变更代表跳过检测而不是回退到全机场。

@@ -106,6 +106,24 @@ export default function SubscriptionTable({
                 <TableCell>
                   <Chip label={sub.Name} sx={getSubscriptionNameChipSx(theme)} />
                   {sortingSubId === sub.ID && <Chip label={t('subscriptions.table.sorting')} color="warning" size="small" sx={{ ml: 1 }} />}
+                  {sub.Description ? (
+                    <Tooltip title={sub.Description}>
+                      <Typography
+                        variant="caption"
+                        sx={(theme) => ({
+                          display: 'block',
+                          mt: 0.5,
+                          maxWidth: 320,
+                          overflow: 'hidden',
+                          textOverflow: 'ellipsis',
+                          whiteSpace: 'nowrap',
+                          color: theme.vars?.palette.text.secondary || theme.palette.text.secondary
+                        })}
+                      >
+                        {sub.Description}
+                      </Typography>
+                    </Tooltip>
+                  ) : null}
                 </TableCell>
                 <TableCell>
                   {isProxyTab ? (

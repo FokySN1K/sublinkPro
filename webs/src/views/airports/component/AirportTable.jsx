@@ -30,6 +30,7 @@ import UpdateIcon from '@mui/icons-material/Update';
 import SpeedIcon from '@mui/icons-material/Speed';
 import WarningAmberIcon from '@mui/icons-material/WarningAmber';
 import EventIcon from '@mui/icons-material/Event';
+import InsightsIcon from '@mui/icons-material/Insights';
 
 // utils
 import { formatDateTime, formatBytes, formatExpireDate, getUsageColor, resolveAirportUsage } from '../utils';
@@ -37,6 +38,7 @@ import { formatDateTime, formatBytes, formatExpireDate, getUsageColor, resolveAi
 // local components
 import AirportNodeStatsCard from './AirportNodeStatsCard';
 import AirportLogo from './AirportLogo';
+import UsageSparkline from './UsageSparkline';
 
 /**
  * 机场列表卡片网格组件（桌面端）
@@ -51,7 +53,9 @@ export default function AirportTable({
   onOpenNodes,
   onQuickCheck,
   onRefreshUsage,
-  nodeCheckProfiles
+  nodeCheckProfiles,
+  usageSparklines,
+  onOpenUsageHistory
 }) {
   const theme = useTheme();
   const { t } = useTranslation();
@@ -401,11 +405,10 @@ export default function AirportTable({
                   ? `0 2px 8px ${alpha(theme.palette.common.black, isSelected ? 0.28 : 0.22)}`
                   : `0 2px 8px ${alpha(theme.palette.primary.main, isSelected ? 0.16 : 0.06)}`,
                 backgroundColor: isSelected ? alpha(theme.palette.primary.main, 0.03) : 'background.paper',
-                transition: 'all 0.2s ease',
+                transition: 'box-shadow 0.2s ease',
                 overflow: 'hidden',
                 position: 'relative',
                 '&:hover': {
-                  transform: 'translateY(-1px)',
                   boxShadow: isDark
                     ? `0 6px 16px ${alpha(theme.palette.common.black, 0.28)}`
                     : `0 6px 16px ${alpha(theme.palette.primary.main, 0.12)}`
@@ -521,14 +524,40 @@ export default function AirportTable({
                     mb: 1.25
                   }}
                 >
-                  <Typography
-                    variant="caption"
-                    color="text.secondary"
-                    sx={{ display: 'block', mb: 0.5, fontWeight: 500, fontSize: '0.65rem' }}
-                  >
-                    {t('airports.list.usage.title')}
-                  </Typography>
+                  <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 0.5, gap: 0.5 }}>
+                    <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 500, fontSize: '0.65rem' }}>
+                      {t('airports.list.usage.title')}
+                    </Typography>
+                    {airport.fetchUsageInfo && (
+                      <Tooltip title={t('airports.list.actions.usageHistory')} arrow>
+                        <IconButton
+                          size="small"
+                          onClick={() => onOpenUsageHistory?.(airport)}
+                          aria-label={t('airports.list.actions.usageHistory')}
+                          sx={{
+                            width: 22,
+                            height: 22,
+                            color: theme.palette.text.secondary,
+                            '&:hover': { color: theme.palette.primary.main }
+                          }}
+                        >
+                          <InsightsIcon sx={{ fontSize: 15 }} />
+                        </IconButton>
+                      </Tooltip>
+                    )}
+                  </Box>
                   {renderUsageInfo(airport)}
+                  {(usageSparklines?.[airport.id]?.points?.length || 0) > 0 && (
+                    <Box sx={{ mt: 0.6 }}>
+                      <UsageSparkline
+                        points={usageSparklines[airport.id].points}
+                        color={theme.palette.primary.main}
+                        onClick={() => onOpenUsageHistory?.(airport)}
+                        ariaLabel={t('usageHistory.openChart')}
+                        emptyLabel={t('usageHistory.noDataShort')}
+                      />
+                    </Box>
+                  )}
                 </Box>
 
                 {/* 节点测试统计 */}
@@ -755,10 +784,13 @@ AirportTable.propTypes = {
   onOpenNodes: PropTypes.func.isRequired,
   onQuickCheck: PropTypes.func.isRequired,
   onRefreshUsage: PropTypes.func,
-  nodeCheckProfiles: PropTypes.array
+  nodeCheckProfiles: PropTypes.array,
+  usageSparklines: PropTypes.object,
+  onOpenUsageHistory: PropTypes.func
 };
 
 AirportTable.defaultProps = {
   selectedIds: [],
-  nodeCheckProfiles: []
+  nodeCheckProfiles: [],
+  usageSparklines: {}
 };

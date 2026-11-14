@@ -203,6 +203,7 @@ func RunMigrations() error {
 		{name: "SubscriptionShare", model: &SubscriptionShare{}},
 		{name: "SubscriptionChainRule", model: &SubscriptionChainRule{}},
 		{name: "Airport", model: &Airport{}},
+		{name: "AirportUsageSnapshot", model: &AirportUsageSnapshot{}},
 		{name: "GroupAirportSort", model: &GroupAirportSort{}},
 		{name: "NodeCheckProfile", model: &NodeCheckProfile{}},
 		{name: "NodeCheckJob", model: &NodeCheckJob{}},

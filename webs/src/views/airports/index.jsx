@@ -37,6 +37,7 @@ import ViewListIcon from '@mui/icons-material/ViewList';
 import MainCard from 'ui-component/cards/MainCard';
 import Pagination from 'components/Pagination';
 import ConfirmDialog from 'components/ConfirmDialog';
+import UsageHistoryDialog from 'components/UsageHistoryDialog';
 import TaskProgressPanel from 'components/TaskProgressPanel';
 import {
   getAirports,
@@ -49,6 +50,7 @@ import {
   refreshAirportUsage
 } from 'api/airports';
 import { getNodeCheckProfiles } from 'api/nodeCheck';
+import { getAirportUsageSparklines } from 'api/usageHistory';
 import { useTaskProgress } from 'contexts/TaskProgressContext';
 import { getNodeGroups, getNodeIds, getNodes, getProtocolUIMeta } from 'api/nodes';
 import ProfileSelectDialog from 'views/nodes/component/ProfileSelectDialog';
@@ -224,6 +226,10 @@ export default function AirportList() {
   });
   const [totalItems, setTotalItems] = useState(0);
 
+  // 用量迷你图与历史图表
+  const [usageSparklines, setUsageSparklines] = useState({});
+  const [usageDialogTarget, setUsageDialogTarget] = useState(null);
+
   // 视图模式状态（card: 卡片，list: 列表）
   const [viewMode, setViewMode] = useState(() => {
     const saved = localStorage.getItem('airports_viewMode');
@@ -384,6 +390,40 @@ export default function AirportList() {
     registerOnComplete(handleTaskComplete);
     return () => unregisterOnComplete(handleTaskComplete);
   }, [registerOnComplete, unregisterOnComplete, fetchAirports]);
+
+  // 批量拉取当前页机场的用量迷你图（仅启用了用量获取的机场）
+  useEffect(() => {
+    const ids = airports.filter((airport) => airport.fetchUsageInfo).map((airport) => airport.id);
+    if (ids.length === 0) {
+      setUsageSparklines({});
+      return undefined;
+    }
+
+    let cancelled = false;
+    getAirportUsageSparklines(ids)
+      .then((response) => {
+        if (cancelled) return;
+        const items = response?.data?.items || [];
+        const nextMap = {};
+        items.forEach((item) => {
+          nextMap[item.airportId] = item;
+        });
+        setUsageSparklines(nextMap);
+      })
+      .catch((error) => {
+        if (cancelled) return;
+        console.error('获取机场用量迷你图失败:', error);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [airports]);
+
+  // 打开用量历史图表
+  const handleOpenUsageHistory = useCallback((airport) => {
+    setUsageDialogTarget({ id: airport.id, name: airport.name });
+  }, []);
 
   // 刷新
   const handleRefresh = () => {
@@ -761,8 +801,11 @@ export default function AirportList() {
       showMessage(t('airports.page.messages.urlRequired'), 'warning');
       return;
     }
+    const urlValue = airportForm.url.trim();
     const urlPattern = /^(https?|ftp):\/\/[^\s/$.?#].[^\s]*$/i;
-    if (!urlPattern.test(airportForm.url.trim())) {
+    // happ:// 链接由后端在保存时解密为明文地址，这里直接放行
+    const happPattern = /^happ:\/\/[^\s]+$/i;
+    if (!urlPattern.test(urlValue) && !happPattern.test(urlValue)) {
       showMessage(t('airports.page.messages.urlInvalid'), 'warning');
       return;
     }
@@ -1231,6 +1274,8 @@ export default function AirportList() {
           onQuickCheck={handleQuickCheck}
           onRefreshUsage={handleRefreshUsage}
           nodeCheckProfiles={nodeCheckProfiles}
+          usageSparklines={usageSparklines}
+          onOpenUsageHistory={handleOpenUsageHistory}
         />
       ) : viewMode === 'list' ? (
         <AirportListView
@@ -1244,6 +1289,8 @@ export default function AirportList() {
           onQuickCheck={handleQuickCheck}
           onRefreshUsage={handleRefreshUsage}
           nodeCheckProfiles={nodeCheckProfiles}
+          usageSparklines={usageSparklines}
+          onOpenUsageHistory={handleOpenUsageHistory}
         />
       ) : (
         <AirportTable
@@ -1257,6 +1304,8 @@ export default function AirportList() {
           onQuickCheck={handleQuickCheck}
           onRefreshUsage={handleRefreshUsage}
           nodeCheckProfiles={nodeCheckProfiles}
+          usageSparklines={usageSparklines}
+          onOpenUsageHistory={handleOpenUsageHistory}
         />
       )}
 
@@ -1329,6 +1378,14 @@ export default function AirportList() {
         nodeIds={profileSelectNodeIds}
         onSuccess={showMessage}
         onOpenSettings={() => navigate('/subscription/node-check')}
+      />
+
+      {/* 用量历史图表 */}
+      <UsageHistoryDialog
+        open={Boolean(usageDialogTarget)}
+        targetId={usageDialogTarget?.id}
+        title={usageDialogTarget ? t('usageHistory.airportTitle', { name: usageDialogTarget.name }) : ''}
+        onClose={() => setUsageDialogTarget(null)}
       />
 
       {/* 提示消息 */}

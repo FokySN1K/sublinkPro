@@ -14,7 +14,10 @@ func Airport(r *gin.Engine) {
 	{
 		// 列表和详情
 		airportGroup.GET("", api.AirportList)
+		// 用量历史（静态路径需在 :id 之前注册）
+		airportGroup.GET("/usage-sparklines", api.GetAirportUsageSparklines)
 		airportGroup.GET("/:id", api.AirportGet)
+		airportGroup.GET("/:id/usage-history", api.GetAirportUsageHistory)
 		// 增删改（演示模式下限制）
 		airportGroup.POST("", middlewares.DemoModeRestrict, api.AirportAdd)
 		airportGroup.POST("/batch-update", middlewares.DemoModeRestrict, api.AirportBatchUpdate)

@@ -29,7 +29,7 @@ func setupAirportTestDB(t *testing.T) {
 	if err != nil {
 		t.Fatalf("open test db: %v", err)
 	}
-	if err := db.AutoMigrate(&Airport{}, &SubcriptionAirport{}, &GroupAirportSort{}); err != nil {
+	if err := db.AutoMigrate(&Airport{}, &AirportUsageSnapshot{}, &SubcriptionAirport{}, &GroupAirportSort{}); err != nil {
 		t.Fatalf("auto migrate airports: %v", err)
 	}
 

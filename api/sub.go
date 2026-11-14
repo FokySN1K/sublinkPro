@@ -152,6 +152,8 @@ func SubGet(c *gin.Context) {
 func SubAdd(c *gin.Context) {
 	var sub models.Subcription
 	name := c.PostForm("name")
+	description, _ := c.GetPostForm("description")
+	description = strings.TrimSpace(description)
 	subType := models.NormalizeSubcriptionType(c.PostForm("type"))
 	config := c.PostForm("config")
 	nodeIds := c.PostForm("nodeIds") // 改为接收节点ID列表
@@ -272,6 +274,7 @@ func SubAdd(c *gin.Context) {
 
 	sub.Config = config
 	sub.Name = name
+	sub.Description = description
 	sub.Type = subType
 	sub.AirportID = airportID
 	sub.IPWhitelist = ipWhitelist
@@ -376,6 +379,9 @@ func SubUpdate(c *gin.Context) {
 	var sub models.Subcription
 	name := c.PostForm("name")
 	oldname := c.PostForm("oldname")
+	// 未提交 description 字段时保留原描述（兼容旧版前端）
+	description, hasDescription := c.GetPostForm("description")
+	description = strings.TrimSpace(description)
 	subType := models.NormalizeSubcriptionType(c.PostForm("type"))
 	config := c.PostForm("config")
 	nodeIds := c.PostForm("nodeIds") // 改为接收节点ID列表
@@ -480,6 +486,9 @@ func SubUpdate(c *gin.Context) {
 	// 更新节点
 	sub.Config = config
 	sub.Name = name
+	if hasDescription {
+		sub.Description = description
+	}
 	sub.Type = subType
 	sub.AirportID = airportID
 	sub.CreateDate = time.Now().Format("2006-01-02 15:04:05")

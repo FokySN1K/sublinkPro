@@ -429,18 +429,22 @@ func AirportDelete(c *gin.Context) {
 	idStr := c.Param("id")
 	id, err := strconv.Atoi(idStr)
 	if err != nil {
-		utils.FailWithMsg(c, "参数错误")
+		utils.FailWithMsg(c, "invalid airport id")
 		return
 	}
 
 	// 代理订阅直接引用机场；被引用时阻止删除，避免订阅静默失效。
 	proxySubCount, err := models.CountProxySubcriptionsByAirport(id)
 	if err != nil {
-		utils.FailWithMsg(c, "检查代理订阅引用失败")
+		utils.FailWithMsg(c, "failed to check proxy subscription references")
 		return
 	}
 	if proxySubCount > 0 {
-		utils.FailWithMsg(c, "该机场正被 "+strconv.Itoa(int(proxySubCount))+" 个代理订阅使用，请先修改或删除这些代理订阅")
+		utils.FailWithI18n(c,
+			"This airport is used by "+strconv.Itoa(int(proxySubCount))+" proxy subscription(s). Update or delete those subscriptions first.",
+			"backend.airports.inUseByProxySubscriptions",
+			map[string]any{"n": proxySubCount},
+		)
 		return
 	}
 
@@ -448,7 +452,7 @@ func AirportDelete(c *gin.Context) {
 	deleteNodes := c.Query("deleteNodes") == "true"
 	if deleteNodes {
 		if err := models.DeleteAirportNodes(id); err != nil {
-			utils.FailWithMsg(c, "删除关联节点失败")
+			utils.FailWithMsg(c, "failed to delete linked nodes")
 			return
 		}
 	}
@@ -456,7 +460,7 @@ func AirportDelete(c *gin.Context) {
 	airport := &models.Airport{}
 	airport.ID = id
 	if err := airport.Del(); err != nil {
-		utils.FailWithMsg(c, "删除失败")
+		utils.FailWithMsg(c, "delete failed")
 		return
 	}
 
@@ -464,7 +468,7 @@ func AirportDelete(c *gin.Context) {
 	sch := scheduler.GetSchedulerManager()
 	sch.RemoveJob(id)
 
-	utils.OkWithMsg(c, "删除成功")
+	utils.OkWithMsg(c, "airport deleted")
 }
 
 // AirportPull 手动拉取机场订阅
@@ -553,30 +557,30 @@ func AirportRefreshUsage(c *gin.Context) {
 	idStr := c.Param("id")
 	id, err := strconv.Atoi(idStr)
 	if err != nil {
-		utils.FailWithMsg(c, "参数错误")
+		utils.FailWithMsg(c, "invalid airport id")
 		return
 	}
 
 	airport, err := models.GetAirportByID(id)
 	if err != nil {
-		utils.FailWithMsg(c, "机场不存在")
+		utils.FailWithMsg(c, "airport not found")
 		return
 	}
 
 	if !airport.FetchUsageInfo {
-		utils.FailWithMsg(c, "该机场未开启用量信息获取")
+		utils.FailWithMsg(c, "usage info fetching is disabled for this airport")
 		return
 	}
 
 	// 同步获取用量信息
 	usageInfo, err := node.UpdateAirportUsageInfo(id)
 	if err != nil {
-		utils.FailWithMsg(c, "获取用量信息失败: "+err.Error())
+		utils.FailWithMsg(c, "failed to fetch usage info: "+err.Error())
 		return
 	}
 
 	// 返回用量信息
-	utils.OkDetailed(c, "用量信息已更新", map[string]any{
+	utils.OkDetailed(c, "usage info refreshed", map[string]any{
 		"upload":   usageInfo.Upload,
 		"download": usageInfo.Download,
 		"total":    usageInfo.Total,

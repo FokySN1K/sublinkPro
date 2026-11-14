@@ -1,0 +1,39 @@
+import request from './request';
+
+// 批量获取机场用量迷你图（列表卡片内联展示）
+// @param {number[]} ids - 机场ID列表
+// @param {object} params - { days, granularity }
+export function getAirportUsageSparklines(ids, params = {}) {
+  const normalizedIds = (Array.isArray(ids) ? ids : [ids]).filter((id) => Number(id) > 0);
+  return request({
+    url: '/v1/airports/usage-sparklines',
+    method: 'get',
+    params: { ids: normalizedIds.join(','), ...params }
+  });
+}
+
+// 获取单个机场的用量历史（图表数据）
+export function getAirportUsageHistory(id, params = {}) {
+  return request({
+    url: `/v1/airports/${id}/usage-history`,
+    method: 'get',
+    params
+  });
+}
+
+// 获取用量历史保留配置
+export function getUsageHistoryConfig() {
+  return request({
+    url: '/v1/settings/usage-history',
+    method: 'get'
+  });
+}
+
+// 更新用量历史保留配置
+export function updateUsageHistoryConfig(data) {
+  return request({
+    url: '/v1/settings/usage-history',
+    method: 'post',
+    data
+  });
+}

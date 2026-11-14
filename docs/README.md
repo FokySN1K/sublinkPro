@@ -21,7 +21,7 @@ Welcome to SublinkPro documentation. This index helps you find the right documen
 - **[Chain Proxy](features/chain-proxy.md)** - Condition-based node selection
 - **[Template AI Editing](features/template-ai.md)** - AI-assisted template generation
 - **[Template Version History](features/template-versioning.md)** - Automatic snapshots, diff, download, and restore
-- **[Airport Management](features/airport.md)** - Import, scheduled updates, traffic monitoring
+- **[Airport Management](features/airport.md)** - Import, scheduled updates, traffic monitoring, usage history charts
 - **[Subscription Sharing](features/subscription-share.md)** - Multiple links, expiration, stats
 - **[Proxy Subscriptions](features/subscription-proxy.md)** - Relay an airport's upstream subscription as-is
 - **[happ Links](features/happ-link.md)** - Decode happ://crypt…crypt5 links, decryptor page, API
