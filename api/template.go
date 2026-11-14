@@ -24,6 +24,7 @@ import (
 type Temp struct {
 	File             string `json:"file"`
 	Text             string `json:"text"`
+	Description      string `json:"description"`
 	Category         string `json:"category"`
 	RuleSource       string `json:"ruleSource"`
 	UseProxy         bool   `json:"useProxy"`
@@ -163,6 +164,7 @@ func GetTempS(c *gin.Context) {
 		// 从数据库获取模板元数据
 		var tmplMeta models.Template
 		category := models.InferTemplateCategory(file.Name())
+		description := ""
 		ruleSource := ""
 		useProxy := false
 		proxyLink := ""
@@ -171,6 +173,7 @@ func GetTempS(c *gin.Context) {
 			if tmplMeta.Category == "clash" || tmplMeta.Category == "surge" {
 				category = tmplMeta.Category
 			}
+			description = tmplMeta.Description
 			ruleSource = tmplMeta.RuleSource
 			useProxy = tmplMeta.UseProxy
 			proxyLink = tmplMeta.ProxyLink
@@ -180,6 +183,7 @@ func GetTempS(c *gin.Context) {
 		temp := Temp{
 			File:             file.Name(),
 			Text:             textContent,
+			Description:      description,
 			Category:         category,
 			RuleSource:       ruleSource,
 			UseProxy:         useProxy,
@@ -245,6 +249,9 @@ func UpdateTemp(c *gin.Context) {
 	filename := c.PostForm("filename")
 	oldname := c.PostForm("oldname")
 	text := c.PostForm("text")
+	// 未提交 description 字段时保留原描述（兼容旧版前端）
+	description, hasDescription := c.GetPostForm("description")
+	description = strings.TrimSpace(description)
 	category := c.PostForm("category")
 	ruleSource := c.PostForm("ruleSource")
 	useProxy := c.PostForm("useProxy") == "true"
@@ -336,6 +343,7 @@ func UpdateTemp(c *gin.Context) {
 		// 如果数据库中不存在，创建新记录
 		tmpl = models.Template{
 			Name:             filename,
+			Description:      description,
 			Category:         category,
 			RuleSource:       ruleSource,
 			UseProxy:         useProxy,
@@ -348,6 +356,9 @@ func UpdateTemp(c *gin.Context) {
 	} else {
 		// 更新现有记录
 		tmpl.Name = filename
+		if hasDescription {
+			tmpl.Description = description
+		}
 		tmpl.Category = category
 		tmpl.RuleSource = ruleSource
 		tmpl.UseProxy = useProxy
@@ -375,7 +386,7 @@ func UpdateTemp(c *gin.Context) {
 	utils.OkWithMsg(c, "修改成功")
 }
 
-func writeTemplateFileAndMeta(filename, oldname, text, category, ruleSource string, useProxy bool, proxyLink string, enableIncludeAll bool) error {
+func writeTemplateFileAndMeta(filename, oldname, text, description, category, ruleSource string, useProxy bool, proxyLink string, enableIncludeAll bool) error {
 	if category == "" {
 		category = "clash"
 	}
@@ -425,6 +436,7 @@ func writeTemplateFileAndMeta(filename, oldname, text, category, ruleSource stri
 	if lookupName := oldResolvedName; lookupName != "" {
 		if err := tmpl.FindByName(lookupName); err == nil {
 			tmpl.Name = filename
+			tmpl.Description = description
 			tmpl.Category = category
 			tmpl.RuleSource = ruleSource
 			tmpl.UseProxy = useProxy
@@ -435,6 +447,7 @@ func writeTemplateFileAndMeta(filename, oldname, text, category, ruleSource stri
 	}
 	tmpl = models.Template{
 		Name:             filename,
+		Description:      description,
 		Category:         category,
 		RuleSource:       ruleSource,
 		UseProxy:         useProxy,
@@ -446,6 +459,7 @@ func writeTemplateFileAndMeta(filename, oldname, text, category, ruleSource stri
 func AddTemp(c *gin.Context) {
 	filename := c.PostForm("filename")
 	text := c.PostForm("text")
+	description := strings.TrimSpace(c.PostForm("description"))
 	category := c.PostForm("category")
 	ruleSource := c.PostForm("ruleSource")
 	useProxy := c.PostForm("useProxy") == "true"
@@ -463,7 +477,7 @@ func AddTemp(c *gin.Context) {
 		category = "clash"
 	}
 
-	if err := writeTemplateFileAndMeta(filename, "", text, category, ruleSource, useProxy, proxyLink, enableIncludeAll); err != nil {
+	if err := writeTemplateFileAndMeta(filename, "", text, description, category, ruleSource, useProxy, proxyLink, enableIncludeAll); err != nil {
 		utils.Error("创建模板失败: %v", err)
 		utils.FailWithMsg(c, err.Error())
 		return

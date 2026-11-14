@@ -436,6 +436,18 @@ export default function SubscriptionFormDialog({
                   onChange={(e) => setFormData({ ...formData, name: e.target.value })}
                 />
 
+                <TextField
+                  fullWidth
+                  label={t('subscriptions.form.basic.description')}
+                  value={formData.description || ''}
+                  onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+                  placeholder={t('subscriptions.form.basic.descriptionPlaceholder')}
+                  multiline
+                  minRows={1}
+                  maxRows={3}
+                  slotProps={{ htmlInput: { maxLength: 512 } }}
+                />
+
                 <Grid container spacing={2}>
                   <Grid item xs={12} sm={6}>
                     <FormControl fullWidth>

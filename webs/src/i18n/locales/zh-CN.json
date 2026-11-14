@@ -440,7 +440,12 @@
         "failedMaybeUnsupported": "用量获取失败（机场可能不支持）",
         "pending": "待获取",
         "expireAt": "到期: {{time}}",
-        "daysLeft": "{{count}}天"
+        "daysLeft": "{{count}}天",
+        "remaining": "剩余 {{count}} 天",
+        "expiresOn": "至 {{time}}",
+        "expired": "已过期",
+        "noExpiry": "永久有效",
+        "unlimited": "无限制"
       },
       "speed": {
         "title": "节点测试",
@@ -458,6 +463,7 @@
         "quickCheck": "快速检测",
         "pullNow": "立即拉取",
         "refreshUsage": "刷新用量",
+        "usageHistory": "用量历史图表",
         "copySubscriptionUrl": "复制订阅地址",
         "copySubscription": "复制订阅",
         "more": "更多操作"
@@ -616,6 +622,72 @@
       "saveFailed": "保存全局节点处理配置失败"
     }
   },
+  "usageHistory": {
+    "title": "用量历史",
+    "airportTitle": "用量历史 · {{name}}",
+    "subtitle": {
+      "airport": "每次刷新订阅时记录的流量"
+    },
+    "loadFailed": "加载用量历史失败",
+    "loading": "正在加载用量历史...",
+    "empty": "暂无用量历史，下次刷新订阅后即可查看数据。",
+    "chartUnavailable": "图表渲染失败，请重新打开弹窗；如果持续失败，请查看浏览器控制台。",
+    "openChart": "打开用量历史图表",
+    "noDataShort": "暂无数据",
+    "resetZoom": "重置缩放",
+    "failureNotice": "{{count}} 次刷新失败已在图中标记为红色",
+    "singleSample": "当前范围内只有一条采样，后续刷新会产生新的数据点。",
+    "historyStarts": "历史记录自 {{time}} 开始，更早的刷新未记录。",
+    "range": {
+      "days": "{{count}} 天",
+      "all": "全部"
+    },
+    "granularity": {
+      "auto": "自动",
+      "hour": "按小时",
+      "day": "按天"
+    },
+    "granularityHelp": {
+      "label": "图表粒度说明",
+      "auto": "自动：每次刷新记录绘制一个点；数据过于密集时会均匀降采样。",
+      "hour": "按小时：每小时合并为一个点，取该小时最后一次成功刷新的数值。",
+      "day": "按天：每个自然日合并为一个点，取当天最后一次成功刷新的数值。"
+    },
+    "series": {
+      "used": "已用流量",
+      "refresh": "刷新成功",
+      "failed": "刷新失败"
+    },
+    "tooltip": {
+      "used": "已用",
+      "upload": "上传",
+      "download": "下载",
+      "quota": "总额度",
+      "expire": "到期时间",
+      "failed": "刷新失败"
+    },
+    "summary": {
+      "used": "已用 / 总额度",
+      "percent": "已使用",
+      "expire": "到期时间",
+      "retention": "保留时长",
+      "retentionValue": "{{count}} 天"
+    },
+    "settings": {
+      "title": "用量历史",
+      "subheader": "机场流量快照的保留时长，用于生成图表",
+      "retentionDays": "保留天数",
+      "retentionHint": "范围 {{min}} - {{max}} 天",
+      "snapshotCount": "已存储 {{count}} 条快照",
+      "info": "图表基于每次刷新订阅时记录的快照生成。调小保留天数会立即删除更早的历史数据。",
+      "messages": {
+        "loadFailed": "加载用量历史设置失败",
+        "saveSuccess": "用量历史设置已保存",
+        "saveFailed": "保存用量历史设置失败",
+        "invalidRange": "保留天数必须在 {{min}} - {{max}} 天之间"
+      }
+    }
+  },
   "settings": {
     "title": "用户中心",
     "tabs": {
@@ -628,6 +700,7 @@
       "subStore": "Sub-Store",
       "backup": "系统备份",
       "dataMigration": "数据迁移",
+      "usageHistory": "用量历史",
       "countryRules": "国家规则"
     },
     "socks5": {
@@ -2540,6 +2613,7 @@
       "confirm": "保存",
       "fields": {
         "name": "订阅名称",
+        "description": "描述",
         "airport": "机场",
         "airportHelp": "上游订阅地址与请求配置均取自该机场",
         "airportMissing": "所选机场已不存在，请重新选择"
@@ -3063,6 +3137,8 @@
       },
       "basic": {
         "name": "订阅名称",
+        "description": "订阅描述",
+        "descriptionPlaceholder": "可选，简单说明这个订阅的用途",
         "clashTemplate": "Clash 模板",
         "clashTemplateNone": "未选择",
         "clashTemplateHelper": "未检测到可用模板，请检查 Clash 模板是否存在",
@@ -3451,6 +3527,7 @@
     },
     "fields": {
       "filename": "文件名",
+      "description": "描述",
       "category": "类别",
       "ruleSource": "规则源",
       "remoteRuleSource": "远程规则地址",
@@ -3462,6 +3539,7 @@
     },
     "placeholders": {
       "filename": "例如: clash.yaml",
+      "description": "可选，简单说明这个模板的用途",
       "ruleSource": "输入 URL 或选择 ACL4SSR 预设",
       "proxyNode": "留空则自动选择最佳节点"
     },
@@ -4560,6 +4638,9 @@
       "queryFailed": "获取 API 密钥失败",
       "missingAccessKeyID": "缺少访问密钥 ID",
       "notFound": "API 密钥不存在"
+    },
+    "airports": {
+      "inUseByProxySubscriptions": "该机场正被 {{n}} 个代理订阅使用，请先修改或删除这些代理订阅"
     },
     "happ": {
       "linkRequired": "请输入 happ 链接",

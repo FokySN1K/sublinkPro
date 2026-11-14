@@ -20,6 +20,7 @@ import PsychologyIcon from '@mui/icons-material/Psychology';
 import CloudQueueIcon from '@mui/icons-material/CloudQueue';
 import ExtensionIcon from '@mui/icons-material/Extension';
 import BackupIcon from '@mui/icons-material/Backup';
+import InsightsIcon from '@mui/icons-material/Insights';
 
 // project imports
 import MainCard from 'ui-component/cards/MainCard';
@@ -33,6 +34,7 @@ import AIAssistantSettings from './components/AIAssistantSettings';
 import CloudflareTunnelSettings from './components/CloudflareTunnelSettings';
 import SubStoreSettings from './components/SubStoreSettings';
 import BackupSettings from './components/BackupSettings';
+import UsageHistorySettings from './components/UsageHistorySettings';
 import { useAuth } from 'contexts/AuthContext';
 
 // ==============================|| Tab Panel ||============================== //
@@ -107,7 +109,8 @@ export default function UserSettings() {
       'Cloudflare Tunnel',
       t('settings.tabs.subStore'),
       t('settings.tabs.backup'),
-      t('settings.tabs.dataMigration')
+      t('settings.tabs.dataMigration'),
+      t('settings.tabs.usageHistory')
     ];
     return tabTitles[tabValue] || t('settings.title');
   };
@@ -162,6 +165,7 @@ export default function UserSettings() {
             {...a11yProps(8)}
           />
           <Tab icon={<StorageIcon sx={{ mr: 1 }} />} iconPosition="start" label={t('settings.tabs.dataMigration')} {...a11yProps(9)} />
+          <Tab icon={<InsightsIcon sx={{ mr: 1 }} />} iconPosition="start" label={t('settings.tabs.usageHistory')} {...a11yProps(10)} />
         </Tabs>
       </Box>
 
@@ -203,6 +207,10 @@ export default function UserSettings() {
 
       <TabPanel value={tabValue} index={9}>
         <DatabaseMigrationSettings showMessage={showMessage} />
+      </TabPanel>
+
+      <TabPanel value={tabValue} index={10}>
+        <UsageHistorySettings showMessage={showMessage} />
       </TabPanel>
 
       {/* 提示消息 */}

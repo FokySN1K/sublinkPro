@@ -254,6 +254,15 @@ export default function SubscriptionMobileCard({
                     )}
                   </Stack>
 
+                  {sub.Description ? (
+                    <Typography
+                      variant="caption"
+                      sx={{ color: secondaryText, display: 'block', mt: -0.5, whiteSpace: 'normal', wordBreak: 'break-word' }}
+                    >
+                      {sub.Description}
+                    </Typography>
+                  ) : null}
+
                   <Box
                     sx={{
                       px: 1.25,

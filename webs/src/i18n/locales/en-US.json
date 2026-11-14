@@ -440,7 +440,12 @@
         "failedMaybeUnsupported": "Usage fetch failed (the airport may not support it)",
         "pending": "Pending fetch",
         "expireAt": "Expires: {{time}}",
-        "daysLeft": "{{count}}d"
+        "daysLeft": "{{count}}d",
+        "remaining": "{{count}} days left",
+        "expiresOn": "until {{time}}",
+        "expired": "Expired",
+        "noExpiry": "No expiry",
+        "unlimited": "Unlimited"
       },
       "speed": {
         "title": "Node test",
@@ -458,6 +463,7 @@
         "quickCheck": "Quick check",
         "pullNow": "Pull now",
         "refreshUsage": "Refresh usage",
+        "usageHistory": "Usage history chart",
         "copySubscriptionUrl": "Copy subscription URL",
         "copySubscription": "Copy subscription",
         "more": "More actions"
@@ -616,6 +622,72 @@
       "saveFailed": "Failed to save global node processing config"
     }
   },
+  "usageHistory": {
+    "title": "Usage history",
+    "airportTitle": "Usage history · {{name}}",
+    "subtitle": {
+      "airport": "Traffic recorded on each subscription refresh"
+    },
+    "loadFailed": "Failed to load usage history",
+    "loading": "Loading usage history...",
+    "empty": "No usage history yet. Data appears after the next subscription refresh.",
+    "chartUnavailable": "The chart could not be rendered. Reopen the dialog; if it keeps failing, check the browser console.",
+    "openChart": "Open usage history chart",
+    "noDataShort": "No data",
+    "resetZoom": "Reset zoom",
+    "failureNotice": "{{count}} failed refresh(es) marked in red",
+    "singleSample": "Only one sample in this range yet. New points appear after the next subscription refresh.",
+    "historyStarts": "History collected since {{time}}. Earlier refreshes were not recorded.",
+    "range": {
+      "days": "{{count}}d",
+      "all": "All"
+    },
+    "granularity": {
+      "auto": "Auto",
+      "hour": "Hour",
+      "day": "Day"
+    },
+    "granularityHelp": {
+      "label": "Chart granularity explained",
+      "auto": "Auto: one point per recorded refresh; very dense ranges are evenly downsampled.",
+      "hour": "Hour: one point per clock hour, keeping the last successful value of that hour.",
+      "day": "Day: one point per calendar day, keeping the last successful value of that day."
+    },
+    "series": {
+      "used": "Used",
+      "refresh": "Successful refresh",
+      "failed": "Failed refresh"
+    },
+    "tooltip": {
+      "used": "Used",
+      "upload": "Upload",
+      "download": "Download",
+      "quota": "Quota",
+      "expire": "Expires",
+      "failed": "Refresh failed"
+    },
+    "summary": {
+      "used": "Used / quota",
+      "percent": "Consumed",
+      "expire": "Expires",
+      "retention": "Retention",
+      "retentionValue": "{{count}} days"
+    },
+    "settings": {
+      "title": "Usage history",
+      "subheader": "How long airport traffic snapshots are kept for the charts",
+      "retentionDays": "Retention (days)",
+      "retentionHint": "Between {{min}} and {{max}} days",
+      "snapshotCount": "{{count}} snapshots stored",
+      "info": "Charts are built from snapshots recorded on every subscription refresh. Lowering retention deletes older history immediately.",
+      "messages": {
+        "loadFailed": "Failed to load usage history settings",
+        "saveSuccess": "Usage history settings saved",
+        "saveFailed": "Failed to save usage history settings",
+        "invalidRange": "Retention must be between {{min}} and {{max}} days"
+      }
+    }
+  },
   "settings": {
     "title": "User Center",
     "tabs": {
@@ -628,6 +700,7 @@
       "subStore": "Sub-Store",
       "backup": "Backup",
       "dataMigration": "Data migration",
+      "usageHistory": "Usage history",
       "countryRules": "Country Rules"
     },
     "socks5": {
@@ -2540,6 +2613,7 @@
       "confirm": "Save",
       "fields": {
         "name": "Subscription name",
+        "description": "Description",
         "airport": "Airport",
         "airportHelp": "The upstream subscription and request settings are taken from this airport",
         "airportMissing": "The selected airport no longer exists, choose another one"
@@ -3063,6 +3137,8 @@
       },
       "basic": {
         "name": "Subscription Name",
+        "description": "Description",
+        "descriptionPlaceholder": "Optional. Briefly describe what this subscription is for",
         "clashTemplate": "Clash Template",
         "clashTemplateNone": "Not selected",
         "clashTemplateHelper": "No available template detected. Please check if the Clash template exists.",
@@ -3451,6 +3527,7 @@
     },
     "fields": {
       "filename": "Filename",
+      "description": "Description",
       "category": "Category",
       "ruleSource": "Rule source",
       "remoteRuleSource": "Remote rule URL",
@@ -3462,6 +3539,7 @@
     },
     "placeholders": {
       "filename": "For example: clash.yaml",
+      "description": "Optional. Briefly describe what this template is for",
       "ruleSource": "Enter a URL or choose an ACL4SSR preset",
       "proxyNode": "Leave blank to automatically choose the best node"
     },
@@ -4560,6 +4638,9 @@
       "queryFailed": "Failed to load API keys",
       "missingAccessKeyID": "Missing access key ID",
       "notFound": "API key not found"
+    },
+    "airports": {
+      "inUseByProxySubscriptions": "This airport is used by {{n}} proxy subscription(s). Update or delete those subscriptions first."
     },
     "happ": {
       "linkRequired": "Enter a happ link",

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"sort"
 	"strconv"
 	"strings"
 	"sublink/cache"
@@ -90,7 +91,7 @@ type Airport struct {
 	AppName           string                `json:"appName"`                                // 自定义设备伪装：应用名称
 	NodeCount         int                   `gorm:"-" json:"nodeCount"`                     // 节点数量（非数据库字段）
 	// 用量信息相关字段
-	FetchUsageInfo               bool   `gorm:"default:false" json:"fetchUsageInfo"`               // 是否获取用量信息
+	FetchUsageInfo               bool   `gorm:"default:true" json:"fetchUsageInfo"`                // 是否获取用量信息
 	UsageUpload                  int64  `gorm:"default:0" json:"usageUpload"`                      // 已上传流量（字节）
 	UsageDownload                int64  `gorm:"default:0" json:"usageDownload"`                    // 已下载流量（字节）
 	UsageTotal                   int64  `gorm:"default:0" json:"usageTotal"`                       // 总流量配额（字节）
@@ -311,6 +312,10 @@ func (a *Airport) Del() error {
 	if err := database.DB.Where("airport_id = ?", a.ID).Delete(&SubcriptionAirport{}).Error; err != nil {
 		return err
 	}
+	// 级联清理该机场的用量历史快照
+	if err := database.DB.Where("airport_id = ?", a.ID).Delete(&AirportUsageSnapshot{}).Error; err != nil {
+		return err
+	}
 	airportCache.Delete(a.ID)
 	// 级联清理该机场在分组排序表中的记录
 	CleanupAirportSortRecords(a.ID)
@@ -355,6 +360,37 @@ func GetAirportByID(id int) (*Airport, error) {
 	}
 	airportCache.Set(airport.ID, airport)
 	return &airport, nil
+}
+
+// ListAirportsByIDs 按 ID 批量获取机场，优先使用缓存。
+func ListAirportsByIDs(ids []int) ([]Airport, error) {
+	uniqueIDs := uniquePositiveIDs(ids)
+	if len(uniqueIDs) == 0 {
+		return []Airport{}, nil
+	}
+
+	airports := make([]Airport, 0, len(uniqueIDs))
+	missingIDs := make([]int, 0)
+	for _, id := range uniqueIDs {
+		if cached, ok := airportCache.Get(id); ok {
+			airports = append(airports, cached)
+			continue
+		}
+		missingIDs = append(missingIDs, id)
+	}
+	if len(missingIDs) > 0 {
+		var loaded []Airport
+		if err := database.DB.Where("id IN ?", missingIDs).Order("id ASC").Find(&loaded).Error; err != nil {
+			return nil, err
+		}
+		for _, airport := range loaded {
+			airportCache.Set(airport.ID, airport)
+			airports = append(airports, airport)
+		}
+	}
+
+	sort.Slice(airports, func(i, j int) bool { return airports[i].ID < airports[j].ID })
+	return airports, nil
 }
 
 // IncrementSuccessCount 增加成功次数
@@ -473,8 +509,29 @@ func BatchUpdateAirports(ids []int, params AirportBatchUpdateParams) ([]Airport,
 	return updatedAirports, nil
 }
 
-// UpdateUsageInfo 更新用量信息 (Write-Through)
+// UpdateUsageInfo 更新用量信息 (Write-Through)，并记录历史快照。
+// total < 0 视为一次未取到用量的失败刷新。
 func (a *Airport) UpdateUsageInfo(upload, download, total, expire int64) error {
+	if total < 0 {
+		return a.UpdateUsageInfoWithStatus(upload, download, total, expire, true, "Usage info unavailable")
+	}
+	return a.UpdateUsageInfoWithStatus(upload, download, total, expire, false, "")
+}
+
+// UpdateUsageInfoWithStatus 更新用量信息并写入带状态的历史快照。
+// failed=true 表示本次刷新失败（例如节点解析失败或机场未返回用量），
+// 此时仍会尽量保留已解析到的用量数值，供图表标记红色失败点。
+func (a *Airport) UpdateUsageInfoWithStatus(upload, download, total, expire int64, failed bool, reason string) error {
+	if a == nil || a.ID <= 0 {
+		return fmt.Errorf("机场对象无效")
+	}
+	if total < 0 {
+		failed = true
+		if strings.TrimSpace(reason) == "" {
+			reason = "Usage info unavailable"
+		}
+	}
+
 	err := database.DB.Model(a).Select("UsageUpload", "UsageDownload", "UsageTotal", "UsageExpire").Updates(map[string]any{
 		"UsageUpload":   upload,
 		"UsageDownload": download,
@@ -492,12 +549,30 @@ func (a *Airport) UpdateUsageInfo(upload, download, total, expire int64) error {
 		cached.UsageExpire = expire
 		airportCache.Set(a.ID, cached)
 	}
+
+	RecordAirportUsageSnapshot(a.ID, upload, download, total, expire, failed, reason)
 	return nil
+}
+
+// RecordUsageFailure 记录一次刷新失败（无可用数值），用于历史图表的红色标记。
+func (a *Airport) RecordUsageFailure(reason string) {
+	if a == nil {
+		return
+	}
+	RecordAirportUsageFailure(a.ID, reason)
 }
 
 // containsIgnoreCase 忽略大小写的字符串包含检查
 func containsIgnoreCase(s, substr string) bool {
 	return strings.Contains(strings.ToLower(s), strings.ToLower(substr))
+}
+
+// enableAirportUsageFetch 为所有机场开启用量信息获取（含历史 NULL 值）。
+func enableAirportUsageFetch(db *gorm.DB) (int64, error) {
+	result := db.Model(&Airport{}).
+		Where("fetch_usage_info IS NULL OR fetch_usage_info = ?", false).
+		Update("fetch_usage_info", true)
+	return result.RowsAffected, result.Error
 }
 
 // AirportNodeStats 机场节点测速统计

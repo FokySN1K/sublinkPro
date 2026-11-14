@@ -84,7 +84,6 @@ export default function NavItem({ item, level, isParents = false, setSelectedID 
         to={item.url}
         target={itemTarget}
         disabled={item.disabled}
-        disableRipple={!drawerOpen}
         sx={{
           zIndex: 1201,
           borderRadius: `${borderRadius}px`,
@@ -120,7 +119,7 @@ export default function NavItem({ item, level, isParents = false, setSelectedID 
         selected={isSelected}
         onClick={() => itemHandler()}
       >
-        <ButtonBase aria-label="theme-icon" sx={{ borderRadius: `${borderRadius}px` }} disableRipple={drawerOpen}>
+        <ButtonBase aria-label="theme-icon" sx={{ borderRadius: `${borderRadius}px` }}>
           <ListItemIcon
             sx={{
               minWidth: level === 1 ? 36 : 18,

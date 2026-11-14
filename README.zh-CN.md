@@ -62,7 +62,7 @@
 | ⚡ **专业测速系统** | 双阶段测试、智能延迟测量、支持 IP 质量检测与解锁检测 | [📖](docs/features/speedtest.zh-CN.md) |
 | 🔗 **链式代理** | Dialer-Proxy 原生支持、可视化配置、支持按 IP 质量选节点 | [📖](docs/features/chain-proxy.zh-CN.md) |
 | 🤖 **AI 模板编辑** | 用自然语言生成操作式预览，审阅只读对比，接受到编辑器后再正常保存 | [📖](docs/features/template-ai.zh-CN.md) |
-| ✈️ **机场管理** | 多格式导入、定时更新、流量监控、一键全量拉取 | [📖](docs/features/airport.zh-CN.md) |
+| ✈️ **机场管理** | 多格式导入、定时更新、流量监控与用量历史图表、一键全量拉取 | [📖](docs/features/airport.zh-CN.md) |
 | 🗂️ **分组排序** | 分组内机场优先级拖拽排序，控制订阅输出中的节点顺序 | [📖](docs/development.zh-CN.md) |
 | 📋 **订阅分享** | 多链接管理、过期策略、访问统计 | [📖](docs/features/subscription-share.zh-CN.md) |
 | 🔀 **代理订阅** | 选择机场并通过单个分享链接原样转发其上游订阅，支持过期策略与访问记录 | [📖](docs/features/subscription-proxy.zh-CN.md) |
@@ -164,7 +164,7 @@ docker-compose up -d
 | [🌍 解锁检测](docs/features/unlock-check.zh-CN.md) | 流媒体 / AI 可用区检测、Provider 架构、扩展方式 |
 | [🔗 链式代理](docs/features/chain-proxy.zh-CN.md) | Dialer-Proxy、条件选节点、配置流程 |
 | [🤖 AI 模板编辑](docs/features/template-ai.zh-CN.md) | 操作式预览、只读对比审阅、接受到编辑器、正常保存 |
-| [✈️ 机场管理](docs/features/airport.zh-CN.md) | 订阅导入、定时更新、流量监控 |
+| [✈️ 机场管理](docs/features/airport.zh-CN.md) | 订阅导入、定时更新、流量监控、用量历史图表 |
 | [📋 订阅分享](docs/features/subscription-share.zh-CN.md) | 多链接管理、过期策略、访问统计 |
 | [🔀 代理订阅](docs/features/subscription-proxy.zh-CN.md) | 原样转发机场的上游订阅、响应头透传、错误码与限制 |
 | [🌐 Host 管理](docs/features/host.zh-CN.md) | 域名映射、DNS 配置、测速持久化 |

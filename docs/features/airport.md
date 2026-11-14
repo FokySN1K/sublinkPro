@@ -12,7 +12,7 @@ SublinkPro provides complete airport subscription management. It can convert sub
 |:---|:---|
 | **📥 Multi format import** | Automatically parses and imports Clash/mihomo and V2Ray subscription formats. Mieru and Snell support Clash/mihomo YAML only |
 | **⏱️ Smart scheduled updates** | Built in Crontab level scheduler, with interval or Cron expression updates, keeping nodes fresh |
-| **📊 Traffic usage monitoring** | Parses the `Subscription-Userinfo` response header and shows **used upload**, **used download**, **total traffic**, and **expiration time** |
+| **📊 Traffic usage monitoring** | Parses the `Subscription-Userinfo` response header and shows **used upload**, **used download**, **total traffic**, and **expiration time**, with a traffic history chart per airport |
 | **🚀 Update now** | One click “fetch now” plus real time callbacks, so latest traffic data and node lists appear without refreshing the page |
 | **⚡ Post update check** | Airports can bind node check profiles. After a subscription update succeeds, the airport's nodes can be checked immediately |
 | **🤖 Bot integration** | Telegram Bot can query remaining traffic, expiration time, and trigger update tasks remotely |
@@ -185,6 +185,29 @@ The system automatically parses `Subscription-Userinfo` from subscription respon
 - `download`: used download traffic
 - `total`: total traffic quota
 - `expire`: expiration timestamp
+
+Usage fetching is enabled by default for all airports, including existing airports upgraded by the migration; it can still be disabled per airport. The airport list shows used traffic and the remaining subscription time. When `total` is `0` (no quota limit), only used traffic is displayed without a progress bar; expired subscriptions are highlighted.
+
+### Usage history charts
+
+Every successful airport refresh records a traffic snapshot in the `airport_usage_snapshots` table. Snapshots power the inline sparkline in the airport list and the zoomable history dialog.
+
+- **Inline sparkline**: airports with usage fetching enabled show a mini chart in the usage area of the airport table, list view, and mobile card.
+- **History dialog**: click the chart icon or the sparkline to open the full chart. Pick a range preset (1, 3, 7, 30, 90 days, or all retained data), switch between automatic (one point per refresh), hourly, and daily granularity, and zoom with the mouse wheel or the slider. The reset button returns to the full range. Hourly and daily views merge each clock hour or calendar day into a single point that keeps the last successful value of that period.
+- **Refresh markers**: successful refreshes are drawn as blue dots on the curve and failed ones as red dots, so the refresh cadence is visible at a glance. Ranges with more than 400 points skip the blue markers to keep the curve readable.
+- **Windowed time axis**: the x-axis always spans the selected range, so sparse history only occupies the period it actually covers instead of being stretched across the full chart width. When recording started later than the range, the dialog shows the timestamp of the first snapshot.
+- **Failed refreshes in red**: when usage cannot be fetched, the refresh is still recorded as a failed point and marked in red on the chart. The failure keeps the last known values, so an outage never looks like traffic dropping to zero.
+- **Configurable retention**: history is kept for 180 days by default. Change it in `Settings → Usage history` within 1 to 3650 days. Lowering retention deletes older snapshots immediately.
+- **Per-refresh points**: by default every stored snapshot is drawn as its own point, so the curve follows the real refresh times instead of being rounded to the hour. Very dense ranges are evenly sampled down to at most 3000 points (the newest point is always kept), and the sparkline keeps at most 60 points.
+- **Single sample**: when only one sample exists in the range, the chart marks it as a dot and tells you that the range contains a single sample.
+- **Per airport only**: usage counters come from the airport's `Subscription-Userinfo`, so the history belongs to the airport. Because airports are reused across subscriptions, there is no separate per-subscription chart.
+
+Recording rules:
+
+- A snapshot is stored on every successful refresh.
+- If the values do not change, a heartbeat snapshot is written every 6 hours so the curve does not stop at an old timestamp.
+- A failed refresh writes a failure marker with the last known values; identical failures are recorded at most once every 30 minutes.
+- Hourly maintenance prunes snapshots older than the configured retention.
 
 ---
 

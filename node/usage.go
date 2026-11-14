@@ -162,11 +162,21 @@ func UpdateAirportUsageInfo(airportID int) (*UsageInfo, error) {
 
 	usageInfo, err := FetchAirportUsageInfo(airport)
 	if err != nil {
+		// 记录失败点，供用量历史图表标记红色失败
+		airport.RecordUsageFailure(err.Error())
 		return nil, err
 	}
 
 	// 保存到数据库
 	if usageInfo != nil {
+		if usageInfo.Total < 0 {
+			if saveErr := airport.UpdateUsageInfoWithStatus(usageInfo.Upload, usageInfo.Download, usageInfo.Total, usageInfo.Expire, true, "Usage info unavailable"); saveErr != nil {
+				utils.Error("保存机场【%s】用量失败状态失败: %v", airport.Name, saveErr)
+				return usageInfo, fmt.Errorf("保存用量信息失败: %v", saveErr)
+			}
+			utils.Warn("机场【%s】未获取到用量信息，已记录失败点", airport.Name)
+			return usageInfo, nil
+		}
 		if err := airport.UpdateUsageInfo(usageInfo.Upload, usageInfo.Download, usageInfo.Total, usageInfo.Expire); err != nil {
 			utils.Error("保存机场【%s】用量信息失败: %v", airport.Name, err)
 			return usageInfo, fmt.Errorf("保存用量信息失败: %v", err)

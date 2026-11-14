@@ -76,6 +76,7 @@ import {
 
 const createProxyFormData = () => ({
   name: '',
+  description: '',
   AirportID: ''
 });
 
@@ -127,6 +128,7 @@ export default function SubscriptionList() {
   // 表单数据
   const [formData, setFormData] = useState({
     name: '',
+    description: '',
     clash: './template/clash.yaml',
     surge: './template/surge.conf',
     udp: false,
@@ -555,6 +557,7 @@ export default function SubscriptionList() {
     setCurrentSub(null);
     setFormData({
       name: '',
+      description: '',
       clash: './template/clash.yaml',
       surge: './template/surge.conf',
       udp: false,
@@ -625,6 +628,7 @@ export default function SubscriptionList() {
       setProxyEditTarget(sub);
       setProxyFormData({
         name: sub.Name || '',
+        description: sub.Description || '',
         AirportID: sub.AirportID ? Number(sub.AirportID) : ''
       });
       setProxyDialogOpen(true);
@@ -656,6 +660,7 @@ export default function SubscriptionList() {
 
     setFormData({
       name: sub.Name,
+      description: sub.Description || '',
       clash: config?.clash || './template/clash.yaml',
       surge: config?.surge || './template/surge.conf',
       udp: config?.udp || false,
@@ -754,6 +759,7 @@ export default function SubscriptionList() {
 
       const requestData = {
         name: formData.name.trim(),
+        description: formData.description || '',
         config,
         IPWhitelist: formData.IPWhitelist,
         IPBlacklist: formData.IPBlacklist,
@@ -834,6 +840,7 @@ export default function SubscriptionList() {
       const requestData = {
         type: 'proxy',
         name: proxyFormData.name.trim(),
+        description: proxyFormData.description || '',
         AirportID: Number(proxyFormData.AirportID),
         RefreshUsageOnRequest: false
       };

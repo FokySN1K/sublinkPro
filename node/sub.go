@@ -683,7 +683,8 @@ func LoadClashConfigFromURLWithReporter(ctx context.Context, id int, urlStr stri
 				"error":  err.Error(),
 			},
 		})
-		return nil, nil, err
+		// 已解析到的用量信息仍返回给调用方落库，避免白白丢弃
+		return nil, usageInfo, err
 	}
 
 	// 检查任务是否在解析前被取消
@@ -715,7 +716,8 @@ func LoadClashConfigFromURLWithReporter(ctx context.Context, id int, urlStr stri
 				"error":  errorMessage,
 			},
 		})
-		return nil, nil, parseErr
+		// 节点解析失败不影响已获取的用量信息，返回给调用方落库并标记失败点
+		return nil, usageInfo, parseErr
 	}
 
 	changedNodeIDs, err := scheduleClashToNodeLinks(ctx, id, config.Proxies, subName, reporter, usageInfo)

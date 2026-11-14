@@ -221,13 +221,13 @@ Base: `/api/v1/subcription` (note the spelling — missing the second "s").
 - **Collection subscriptions — required:** `name` AND at least one of `nodeIds` (comma-separated node IDs), `groups` (comma-separated group names), or `airports` (comma-separated airport IDs).
 - **Proxy subscriptions — required:** `name` AND `AirportID`. The airport's URL, User-Agent, request headers, device profile, proxy, and TLS settings are used for the relay, so there are no per-subscription request fields. Node/group/airport-list fields are ignored.
 - Output template: `config` = a template **filename** (the `file` value from `GET /template/get`, e.g. `clash.yaml`); empty = raw node list. Ignored for proxy subscriptions.
-- Other optional form fields (UpperCamel unless noted): `airports` (comma-separated airport IDs), `scripts` (comma-separated script IDs), `IPWhitelist`, `IPBlacklist`, `DelayTime`, `MinSpeed`, `CountryWhitelist`, `CountryBlacklist`, `NodeNameRule`, `NodeNamePreprocess`, `NodeNameWhitelist`, `NodeNameBlacklist`, `TagWhitelist`, `TagBlacklist`, `ProtocolWhitelist`, `ProtocolBlacklist`, `DeduplicationRule`, `RefreshUsageOnRequest`, `UpdateInterval`, `MaxFraudScore`, `OnlyResidential`, `OnlyNative`, `ResidentialType`, `IPType`, `QualityStatus`, `UnlockProvider`, `UnlockStatus`, `UnlockKeyword`, `UnlockRules`, `UnlockRuleMode`.
+- Other optional form fields (UpperCamel unless noted): `airports` (comma-separated airport IDs), `scripts` (comma-separated script IDs), `IPWhitelist`, `IPBlacklist`, `DelayTime`, `MinSpeed`, `CountryWhitelist`, `CountryBlacklist`, `NodeNameRule`, `NodeNamePreprocess`, `NodeNameWhitelist`, `NodeNameBlacklist`, `TagWhitelist`, `TagBlacklist`, `ProtocolWhitelist`, `ProtocolBlacklist`, `DeduplicationRule`, `RefreshUsageOnRequest`, `UpdateInterval`, `MaxFraudScore`, `OnlyResidential`, `OnlyNative`, `ResidentialType`, `IPType`, `QualityStatus`, `UnlockProvider`, `UnlockStatus`, `UnlockKeyword`, `UnlockRules`, `UnlockRuleMode`, plus `description` (free-form note, up to 512 characters).
 - Proxy subscriptions store only `name` and `AirportID`; `IPWhitelist`/`IPBlacklist` and request settings are ignored, and any submitted IP lists are cleared on save.
 - Filter groups always combine with AND: a node must satisfy every configured group. Values inside one whitelist are alternatives, and a blacklist hit always excludes the node. (Collection only.)
 - Name must be unique (duplicate → `订阅名称不能重复`).
 
 ### Update Subscription
-**POST** `/subcription/update` — **form**, located by `oldname` (current name). Same field set as add, plus `oldname`. Send `type` together with the source fields so a subscription keeps its kind.
+**POST** `/subcription/update` — **form**, located by `oldname` (current name). Same field set as add, plus `oldname`. Send `type` together with the source fields so a subscription keeps its kind. Omitting `description` keeps the stored value; sending an empty string clears it.
 
 ### Get Subscriptions
 **GET** `/subcription/get` (query: `?page=1&pageSize=20&type=proxy`). `type` is optional and filters by `collection` or `proxy`. Paginated → `{items, total, ...}`; without paging → array. Each subscription includes ordered `Nodes`, `Groups`, `Airports`, and `Scripts` relation arrays when present (empty for proxy subscriptions).
@@ -268,6 +268,15 @@ Base: `/api/v1/subcription` (note the spelling — missing the second "s").
 ### Metadata helpers
 - **GET** `/subcription/protocol-meta`
 - **GET** `/subcription/node-fields-meta`
+
+### Usage history
+Usage history is available per airport. Airports reused by several subscriptions keep a single counter (it comes from the airport's `Subscription-Userinfo`), so there is no separate per-subscription chart.
+
+- **GET** `/airports/usage-sparklines` (query: `?ids=1,2,3&days=14`, up to 500 IDs) returns `data.items[]` with `airportId`, `points[]`, `failed`, `updatedAt`.
+- **GET** `/airports/{id}/usage-history` (query: `?days=30&granularity=auto`) returns a single airport history with `currentUpload`, `currentDownload`, `currentUsed`, `currentTotal`, and `currentExpire`.
+- `days` is clamped to the configured retention; `0` or a negative value means all retained data. `granularity` is `auto`, `refresh`, `hour`, or `day`. `auto` and `refresh` draw one point per stored snapshot so points follow the real refresh times; ranges holding more than 3000 snapshots are evenly downsampled (the newest point is always kept). `hour` and `day` aggregate explicitly.
+- Points are `{timestamp, capturedAt, upload, download, used, total, expire, failed, error}`. `timestamp` is milliseconds. `used` is `upload + download`. A failed refresh keeps the last known values and sets `failed: true`. The resolved granularity is returned in `granularity`, so clients can format `refresh` points with minutes. Sparklines are sampled down to 60 points per airport.
+- Retention is configured with **GET/POST** `/settings/usage-history` (`{retentionDays}`, 1–3650, default 180). Lowering it prunes older snapshots immediately.
 
 ### NodeNameRule variables
 `NodeNameRule` is evaluated when subscription output names are rendered. Country-related variables are based on the node's stored country code:
@@ -338,13 +347,13 @@ Base: `/api/v1/shares`
 Base: `/api/v1/template`
 
 ### Get Templates
-**GET** `/template/get` (query: `?page=1&pageSize=20`) — returns each template's `file`, `text`, `category` (clash|surge), `ruleSource`, etc. The `file` value is what a subscription's `config` field references.
+**GET** `/template/get` (query: `?page=1&pageSize=20`) — returns each template's `file`, `text`, `description`, `category` (clash|surge), `ruleSource`, etc. The `file` value is what a subscription's `config` field references.
 
 ### Add Template
-**POST** `/template/add` — **form**: `filename`, `text`, `category`, `ruleSource`, `useProxy` (`true`/`false`), `proxyLink`, `enableIncludeAll` (`true`/`false`), optional `comment`
+**POST** `/template/add` — **form**: `filename`, `text`, `description`, `category`, `ruleSource`, `useProxy` (`true`/`false`), `proxyLink`, `enableIncludeAll` (`true`/`false`), optional `comment`. `description` is a free-form note up to 512 characters.
 
 ### Update Template
-**POST** `/template/update` — **form**: `filename`, `oldname`, `text`, `category`, `ruleSource`, `useProxy`, `proxyLink`, `enableIncludeAll`, optional `comment`
+**POST** `/template/update` — **form**: `filename`, `oldname`, `text`, `description`, `category`, `ruleSource`, `useProxy`, `proxyLink`, `enableIncludeAll`, optional `comment`. Omitting `description` keeps the stored value; sending an empty string clears it.
 
 ### Delete Template
 **POST** `/template/delete` — **form**: `filename`. Also deletes the template's entire version history.
@@ -572,6 +581,8 @@ Base: `/api/v1/airports` (all write bodies are JSON)
 - **POST** `/airports/pull-all` — pull all enabled airports now
 - **POST** `/airports/{id}/pull` — pull one now
 - **POST** `/airports/{id}/refresh-usage`
+- **GET** `/airports/usage-sparklines` (query: `?ids=1,2,3&days=14`) — batch sparkline data for up to 500 airports
+- **GET** `/airports/{id}/usage-history` (query: `?days=30&granularity=auto`) — per-airport traffic history, including failed refreshes
 
 Country-fill fields apply during airport pulls and use Country Rules against upstream node names:
 
@@ -793,6 +804,8 @@ Base: `/api/v1/settings` (write bodies are JSON unless noted; most writes are de
 **System domain:** **GET** `/settings/system-domain` · **POST** `/settings/system-domain`
 
 **Node dedup:** **GET** `/settings/node-dedup` · **POST** `/settings/node-dedup`
+
+**Usage history:** **GET** `/settings/usage-history` · **POST** `/settings/usage-history` (`{retentionDays}`, 1–3650, default 180)
 
 **Global node processing:** **GET** `/settings/global-node-processing` · **POST** `/settings/global-node-processing` (`{nodeNameWhitelist, nodeNameBlacklist, protocolWhitelist, protocolBlacklist, nodeNamePreprocess}`)
 

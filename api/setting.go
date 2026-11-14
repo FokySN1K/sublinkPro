@@ -153,3 +153,39 @@ func UpdateGlobalNodeProcessingConfig(c *gin.Context) {
 
 	utils.OkWithMsg(c, "保存成功")
 }
+
+// GetUsageHistoryConfig 获取用量历史配置
+func GetUsageHistoryConfig(c *gin.Context) {
+	retentionDays := models.GetAirportUsageRetentionDays()
+	snapshotCount, _ := models.CountAirportUsageSnapshots()
+
+	utils.OkDetailed(c, "success", gin.H{
+		"retentionDays":    retentionDays,
+		"minRetentionDays": models.MinAirportUsageRetentionDays,
+		"maxRetentionDays": models.MaxAirportUsageRetentionDays,
+		"snapshotCount":    snapshotCount,
+	})
+}
+
+// UpdateUsageHistoryConfig 更新用量历史配置，保存后立即清理超出保留期的历史
+func UpdateUsageHistoryConfig(c *gin.Context) {
+	var req struct {
+		RetentionDays *int `json:"retentionDays"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		utils.FailWithMsg(c, "invalid payload")
+		return
+	}
+	if req.RetentionDays == nil {
+		utils.FailWithMsg(c, "missing required field retentionDays")
+		return
+	}
+	if err := models.SetAirportUsageRetentionDays(*req.RetentionDays); err != nil {
+		utils.FailWithMsg(c, "failed to save: "+err.Error())
+		return
+	}
+
+	utils.OkDetailed(c, "success", gin.H{
+		"retentionDays": *req.RetentionDays,
+	})
+}

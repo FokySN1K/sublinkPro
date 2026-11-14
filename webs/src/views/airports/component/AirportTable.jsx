@@ -30,13 +30,15 @@ import UpdateIcon from '@mui/icons-material/Update';
 import SpeedIcon from '@mui/icons-material/Speed';
 import WarningAmberIcon from '@mui/icons-material/WarningAmber';
 import EventIcon from '@mui/icons-material/Event';
+import InsightsIcon from '@mui/icons-material/Insights';
 
 // utils
-import { formatDateTime, formatBytes, formatExpireTime, getUsageColor } from '../utils';
+import { formatDateTime, formatBytes, formatExpireDate, getUsageColor, resolveAirportUsage } from '../utils';
 
 // local components
 import AirportNodeStatsCard from './AirportNodeStatsCard';
 import AirportLogo from './AirportLogo';
+import UsageSparkline from './UsageSparkline';
 
 /**
  * 机场列表卡片网格组件（桌面端）
@@ -51,7 +53,9 @@ export default function AirportTable({
   onOpenNodes,
   onQuickCheck,
   onRefreshUsage,
-  nodeCheckProfiles
+  nodeCheckProfiles,
+  usageSparklines,
+  onOpenUsageHistory
 }) {
   const theme = useTheme();
   const { t } = useTranslation();
@@ -157,8 +161,9 @@ export default function AirportTable({
 
   // 渲染用量信息
   const renderUsageInfo = (airport) => {
-    // 未开启获取用量信息
-    if (!airport.fetchUsageInfo) {
+    const usage = resolveAirportUsage(airport);
+
+    if (usage.status === 'disabled') {
       return (
         <Typography variant="caption" color="text.secondary">
           {t('airports.list.usage.disabled')}
@@ -166,8 +171,7 @@ export default function AirportTable({
       );
     }
 
-    // usageTotal 为 -1 表示获取失败
-    if (airport.usageTotal === -1) {
+    if (usage.status === 'failed') {
       return (
         <Typography variant="body2" sx={{ color: 'error.main', fontWeight: 500 }}>
           {t('airports.list.usage.failed')}
@@ -175,8 +179,7 @@ export default function AirportTable({
       );
     }
 
-    // usageTotal 为 0 或未设置，表示尚未获取
-    if (!airport.usageTotal || airport.usageTotal === 0) {
+    if (usage.status === 'pending') {
       return (
         <Typography variant="body2" color="text.secondary">
           {t('airports.list.usage.pending')}
@@ -184,48 +187,54 @@ export default function AirportTable({
       );
     }
 
-    const upload = airport.usageUpload || 0;
-    const download = airport.usageDownload || 0;
-    const used = upload + download;
-    const total = airport.usageTotal;
-    const percent = Math.min((used / total) * 100, 100);
+    const { upload, download, used, total, unlimited, percent, expire, daysLeft, expired } = usage;
     const color = getUsageColor(percent);
+    const isUrgent = !expired && daysLeft !== null && daysLeft <= 7;
+    const isWarning = !expired && !isUrgent && daysLeft !== null && daysLeft <= 30;
+
+    const expireLabel = expired
+      ? `${t('airports.list.usage.expired')} · ${formatExpireDate(expire)}`
+      : `${t('airports.list.usage.remaining', { count: Math.max(0, Math.ceil(daysLeft)) })} · ${t('airports.list.usage.expiresOn', {
+          time: formatExpireDate(expire)
+        })}`;
 
     return (
       <Box>
         {/* 已用/总量 + 百分比 */}
-        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 0.5 }}>
+        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 0.5, gap: 1 }}>
           <Typography variant="body2" sx={{ fontWeight: 600, color: 'text.primary' }}>
-            {formatBytes(used)} / {formatBytes(total)}
+            {unlimited ? formatBytes(used) : `${formatBytes(used)} / ${formatBytes(total)}`}
           </Typography>
-          <Typography variant="body2" sx={{ fontWeight: 700, color: color }}>
-            {percent.toFixed(1)}%
+          <Typography variant="body2" sx={{ fontWeight: 700, color: unlimited ? 'text.secondary' : color }}>
+            {unlimited ? t('airports.list.usage.unlimited') : `${percent.toFixed(1)}%`}
           </Typography>
         </Box>
 
-        {/* 进度条 */}
-        <Box
-          sx={{
-            height: 6,
-            borderRadius: 3,
-            backgroundColor: getProgressTrackColor(percent),
-            overflow: 'hidden',
-            mb: 0.5
-          }}
-        >
+        {/* 进度条（不限流量时不显示） */}
+        {!unlimited && (
           <Box
             sx={{
-              width: `${percent}%`,
-              height: '100%',
+              height: 6,
               borderRadius: 3,
-              backgroundColor: color,
-              transition: 'width 0.3s ease'
+              backgroundColor: getProgressTrackColor(percent),
+              overflow: 'hidden',
+              mb: 0.5
             }}
-          />
-        </Box>
+          >
+            <Box
+              sx={{
+                width: `${percent}%`,
+                height: '100%',
+                borderRadius: 3,
+                backgroundColor: color,
+                transition: 'width 0.3s ease'
+              }}
+            />
+          </Box>
+        )}
 
         {/* 上传/下载 */}
-        <Box sx={{ display: 'flex', gap: 2, fontSize: '0.75rem' }}>
+        <Box sx={{ display: 'flex', gap: 2, fontSize: '0.75rem', mt: unlimited ? 0.5 : 0 }}>
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
             <Typography variant="caption" sx={{ color: 'success.main', fontWeight: 500 }}>
               ↑
@@ -244,31 +253,31 @@ export default function AirportTable({
           </Box>
         </Box>
 
-        {/* 过期时间 */}
-        {airport.usageExpire > 0 &&
-          (() => {
-            const now = Math.floor(Date.now() / 1000);
-            const daysLeft = (airport.usageExpire - now) / (24 * 60 * 60);
-            const isUrgent = daysLeft <= 7;
-            const isWarning = daysLeft <= 30 && daysLeft > 7;
-
-            return (
-              <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mt: 0.5 }}>
-                {isUrgent && <WarningAmberIcon sx={{ fontSize: 12, color: 'error.main' }} />}
-                {isWarning && <EventIcon sx={{ fontSize: 12, color: 'info.main' }} />}
-                <Typography
-                  variant="caption"
-                  sx={{
-                    color: isUrgent ? 'error.main' : isWarning ? 'info.main' : 'text.secondary',
-                    fontWeight: isUrgent || isWarning ? 600 : 400
-                  }}
-                >
-                  {t('airports.list.usage.expireAt', { time: formatExpireTime(airport.usageExpire) })}
-                  {isUrgent && ` (${t('airports.list.usage.daysLeft', { count: Math.max(0, Math.ceil(daysLeft)) })})`}
-                </Typography>
-              </Box>
-            );
-          })()}
+        {/* 到期时间 / 剩余天数 */}
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mt: 0.5 }}>
+          {expire > 0 ? (
+            <>
+              {(expired || isUrgent) && <WarningAmberIcon sx={{ fontSize: 12, color: 'error.main' }} />}
+              {isWarning && <EventIcon sx={{ fontSize: 12, color: 'info.main' }} />}
+              <Typography
+                variant="caption"
+                sx={{
+                  color: expired || isUrgent ? 'error.main' : isWarning ? 'info.main' : 'text.secondary',
+                  fontWeight: expired || isUrgent || isWarning ? 600 : 400
+                }}
+              >
+                {expireLabel}
+              </Typography>
+            </>
+          ) : (
+            <>
+              <EventIcon sx={{ fontSize: 12, color: 'text.disabled' }} />
+              <Typography variant="caption" sx={{ color: 'text.secondary' }}>
+                {t('airports.list.usage.noExpiry')}
+              </Typography>
+            </>
+          )}
+        </Box>
       </Box>
     );
   };
@@ -396,11 +405,10 @@ export default function AirportTable({
                   ? `0 2px 8px ${alpha(theme.palette.common.black, isSelected ? 0.28 : 0.22)}`
                   : `0 2px 8px ${alpha(theme.palette.primary.main, isSelected ? 0.16 : 0.06)}`,
                 backgroundColor: isSelected ? alpha(theme.palette.primary.main, 0.03) : 'background.paper',
-                transition: 'all 0.2s ease',
+                transition: 'box-shadow 0.2s ease',
                 overflow: 'hidden',
                 position: 'relative',
                 '&:hover': {
-                  transform: 'translateY(-1px)',
                   boxShadow: isDark
                     ? `0 6px 16px ${alpha(theme.palette.common.black, 0.28)}`
                     : `0 6px 16px ${alpha(theme.palette.primary.main, 0.12)}`
@@ -516,14 +524,40 @@ export default function AirportTable({
                     mb: 1.25
                   }}
                 >
-                  <Typography
-                    variant="caption"
-                    color="text.secondary"
-                    sx={{ display: 'block', mb: 0.5, fontWeight: 500, fontSize: '0.65rem' }}
-                  >
-                    {t('airports.list.usage.title')}
-                  </Typography>
+                  <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 0.5, gap: 0.5 }}>
+                    <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 500, fontSize: '0.65rem' }}>
+                      {t('airports.list.usage.title')}
+                    </Typography>
+                    {airport.fetchUsageInfo && (
+                      <Tooltip title={t('airports.list.actions.usageHistory')} arrow>
+                        <IconButton
+                          size="small"
+                          onClick={() => onOpenUsageHistory?.(airport)}
+                          aria-label={t('airports.list.actions.usageHistory')}
+                          sx={{
+                            width: 22,
+                            height: 22,
+                            color: theme.palette.text.secondary,
+                            '&:hover': { color: theme.palette.primary.main }
+                          }}
+                        >
+                          <InsightsIcon sx={{ fontSize: 15 }} />
+                        </IconButton>
+                      </Tooltip>
+                    )}
+                  </Box>
                   {renderUsageInfo(airport)}
+                  {(usageSparklines?.[airport.id]?.points?.length || 0) > 0 && (
+                    <Box sx={{ mt: 0.6 }}>
+                      <UsageSparkline
+                        points={usageSparklines[airport.id].points}
+                        color={theme.palette.primary.main}
+                        onClick={() => onOpenUsageHistory?.(airport)}
+                        ariaLabel={t('usageHistory.openChart')}
+                        emptyLabel={t('usageHistory.noDataShort')}
+                      />
+                    </Box>
+                  )}
                 </Box>
 
                 {/* 节点测试统计 */}
@@ -750,10 +784,13 @@ AirportTable.propTypes = {
   onOpenNodes: PropTypes.func.isRequired,
   onQuickCheck: PropTypes.func.isRequired,
   onRefreshUsage: PropTypes.func,
-  nodeCheckProfiles: PropTypes.array
+  nodeCheckProfiles: PropTypes.array,
+  usageSparklines: PropTypes.object,
+  onOpenUsageHistory: PropTypes.func
 };
 
 AirportTable.defaultProps = {
   selectedIds: [],
-  nodeCheckProfiles: []
+  nodeCheckProfiles: [],
+  usageSparklines: {}
 };
