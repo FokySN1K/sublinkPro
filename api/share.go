@@ -16,6 +16,7 @@ import (
 // ShareListReq 获取分享列表请求
 type ShareListReq struct {
 	SubID     int    `form:"subId" binding:"required"`
+	GroupID   int    `form:"groupId"`   // 可选，仅返回该分享分组下的链接
 	Page      int    `form:"page"`      // 可选，分页页码
 	PageSize  int    `form:"pageSize"`  // 可选，每页数量
 	Keyword   string `form:"keyword"`   // 可选，搜索关键词
@@ -29,6 +30,7 @@ type ShareBatchCreateReq struct {
 	SubscriptionID int    `json:"subscription_id" binding:"required"`
 	BaseName       string `json:"base_name" binding:"required"`
 	Count          int    `json:"count" binding:"required,min=1,max=100"`
+	GroupID        *int   `json:"group_id"`
 	ExpireType     int    `json:"expire_type"`
 	ExpireDays     int    `json:"expire_days"`
 	ExpireAt       string `json:"expire_at"`
@@ -54,9 +56,20 @@ type ShareCreateReq struct {
 	SubscriptionID int    `json:"subscription_id" binding:"required"`
 	Name           string `json:"name"`
 	Token          string `json:"token"` // 可选，为空则自动生成
-	ExpireType     int    `json:"expire_type"`
-	ExpireDays     int    `json:"expire_days"`
-	ExpireAt       string `json:"expire_at"` // ISO格式日期时间字符串
+	GroupID        *int   `json:"group_id"`
+
+	// Expiry is optional: when a group is selected and no expiry is sent the
+	// link inherits the group snapshot.
+	ExpireType *int   `json:"expire_type"`
+	ExpireDays *int   `json:"expire_days"`
+	ExpireAt   string `json:"expire_at"` // ISO格式日期时间字符串
+
+	TrafficLimitBytes *int64 `json:"traffic_limit_bytes"`
+	MaxDevices        *int   `json:"max_devices"`
+
+	ReportIntervalSessions    *int `json:"report_interval_sessions"`
+	ReportIntervalNodes       *int `json:"report_interval_nodes"`
+	ReportIntervalReliability *int `json:"report_interval_reliability"`
 }
 
 // ShareUpdateReq 更新分享请求
@@ -68,6 +81,33 @@ type ShareUpdateReq struct {
 	ExpireDays int    `json:"expire_days"`
 	ExpireAt   string `json:"expire_at"`
 	Enabled    bool   `json:"enabled"`
+
+	// GroupID is nil when unchanged and 0 when the link must be detached.
+	GroupID *int `json:"group_id"`
+
+	TrafficLimitBytes *int64 `json:"traffic_limit_bytes"`
+	MaxDevices        *int   `json:"max_devices"`
+
+	ReportIntervalSessions    *int `json:"report_interval_sessions"`
+	ReportIntervalNodes       *int `json:"report_interval_nodes"`
+	ReportIntervalReliability *int `json:"report_interval_reliability"`
+}
+
+// applyShareGroupSnapshot copies group policy into a new link. It rejects
+// groups that serve a different node pool.
+func applyShareGroupSnapshot(share *models.SubscriptionShare, groupID *int, subscriptionID int) error {
+	if groupID == nil || *groupID <= 0 {
+		return nil
+	}
+	group, err := models.GetShareGroupByID(*groupID)
+	if err != nil {
+		return fmt.Errorf("share group not found")
+	}
+	if group.SubscriptionID != subscriptionID {
+		return fmt.Errorf("the selected group serves another node pool")
+	}
+	share.ApplyGroupSnapshot(group)
+	return nil
 }
 
 func parseShareExpireAt(expireType int, raw string) (*time.Time, error) {
@@ -112,8 +152,18 @@ func ShareGet(c *gin.Context) {
 
 	// 如果提供了分页参数，返回分页数据
 	if req.Page > 0 && req.PageSize > 0 {
-		shares, total, err := models.GetSharesBySubscriptionIDPaginated(
-			req.SubID, req.Page, req.PageSize, req.Keyword, req.IPFilter, req.SortBy, req.SortOrder)
+		var (
+			shares []models.SubscriptionShare
+			total  int
+			err    error
+		)
+		if req.GroupID > 0 {
+			shares, total, err = models.GetSharesByGroupIDPaginated(
+				req.GroupID, req.Page, req.PageSize, req.Keyword, req.IPFilter, req.SortBy, req.SortOrder)
+		} else {
+			shares, total, err = models.GetSharesBySubscriptionIDPaginated(
+				req.SubID, req.Page, req.PageSize, req.Keyword, req.IPFilter, req.SortBy, req.SortOrder)
+		}
 		if err != nil {
 			utils.Error("Failed to load share list: %v", err)
 			c.JSON(http.StatusInternalServerError, gin.H{"code": 500, "msg": "Failed to fetch share list"})
@@ -138,8 +188,22 @@ func ShareGet(c *gin.Context) {
 	}
 
 	// 不分页，返回所有分享（向后兼容，也支持搜索）
+	if req.GroupID > 0 {
+		shares := models.GetSharesByGroupID(req.GroupID)
+		c.JSON(http.StatusOK, gin.H{"code": 200, "data": shares})
+		return
+	}
 	shares := models.GetSharesBySubscriptionID(req.SubID, req.Keyword)
 	c.JSON(http.StatusOK, gin.H{"code": 200, "data": shares})
+}
+
+// randomShareName builds a short random default link name.
+func randomShareName() string {
+	token, err := models.GenerateToken()
+	if err != nil || len(token) < 6 {
+		return "link"
+	}
+	return "link-" + token[:6]
 }
 
 // ShareAdd 创建新分享
@@ -150,20 +214,65 @@ func ShareAdd(c *gin.Context) {
 		return
 	}
 
-	expireAt, err := parseShareExpireAt(req.ExpireType, req.ExpireAt)
-	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"code": 400, "msg": err.Error()})
+	var pool models.Subcription
+	pool.ID = req.SubscriptionID
+	if err := pool.Find(); err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"code": 404, "msg": "Node pool not found"})
 		return
 	}
 
 	share := &models.SubscriptionShare{
 		SubscriptionID: req.SubscriptionID,
-		Name:           req.Name,
-		Token:          req.Token,
-		ExpireType:     req.ExpireType,
-		ExpireDays:     req.ExpireDays,
-		ExpireAt:       expireAt,
+		Name:           strings.TrimSpace(req.Name),
+		Token:          strings.TrimSpace(req.Token),
 		Enabled:        true,
+	}
+	if err := applyShareGroupSnapshot(share, req.GroupID, req.SubscriptionID); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"code": 400, "msg": err.Error()})
+		return
+	}
+
+	// Explicit request values override the inherited snapshot.
+	if req.ExpireType != nil {
+		expireAt, err := parseShareExpireAt(*req.ExpireType, req.ExpireAt)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"code": 400, "msg": err.Error()})
+			return
+		}
+		share.ExpireType = *req.ExpireType
+		share.ExpireDays = 0
+		if req.ExpireDays != nil {
+			share.ExpireDays = *req.ExpireDays
+		}
+		share.ExpireAt = expireAt
+	}
+	if req.TrafficLimitBytes != nil {
+		share.TrafficLimitBytes = *req.TrafficLimitBytes
+	}
+	if req.MaxDevices != nil {
+		share.MaxDevices = *req.MaxDevices
+	}
+	if req.ReportIntervalSessions != nil {
+		share.ReportIntervalSessions = models.NormalizeReportInterval(*req.ReportIntervalSessions)
+	}
+	if req.ReportIntervalNodes != nil {
+		share.ReportIntervalNodes = models.NormalizeReportInterval(*req.ReportIntervalNodes)
+	}
+	if req.ReportIntervalReliability != nil {
+		share.ReportIntervalReliability = models.NormalizeReportInterval(*req.ReportIntervalReliability)
+	}
+
+	// Random defaults for name and token; both stay editable later.
+	if share.Token == "" {
+		token, err := models.GenerateToken()
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"code": 500, "msg": "Failed to generate token"})
+			return
+		}
+		share.Token = token
+	}
+	if share.Name == "" {
+		share.Name = randomShareName()
 	}
 
 	if err := share.Add(); err != nil {
@@ -190,6 +299,31 @@ func ShareUpdate(c *gin.Context) {
 		return
 	}
 
+	// Group move: nil keeps the current group, 0 detaches, >0 switches and
+	// re-applies the group snapshot before explicit overrides. Re-sending the
+	// current group is a no-op so per-link overrides survive a normal edit.
+	if req.GroupID != nil {
+		groupID := *req.GroupID
+		currentGroupID := 0
+		if share.GroupID != nil {
+			currentGroupID = *share.GroupID
+		}
+		if groupID > 0 && groupID != currentGroupID {
+			group, err := models.GetShareGroupByID(groupID)
+			if err != nil {
+				c.JSON(http.StatusNotFound, gin.H{"code": 404, "msg": "Group not found"})
+				return
+			}
+			if group.SubscriptionID != share.SubscriptionID {
+				c.JSON(http.StatusBadRequest, gin.H{"code": 400, "msg": "The selected group serves another node pool"})
+				return
+			}
+			share.ApplyGroupSnapshot(group)
+		} else if groupID <= 0 {
+			share.GroupID = nil
+		}
+	}
+
 	expireAt, err := parseShareExpireAt(req.ExpireType, req.ExpireAt)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"code": 400, "msg": err.Error()})
@@ -197,12 +331,27 @@ func ShareUpdate(c *gin.Context) {
 	}
 
 	// 更新字段
-	share.Name = req.Name
-	share.Token = req.Token
+	share.Name = strings.TrimSpace(req.Name)
+	share.Token = strings.TrimSpace(req.Token)
 	share.ExpireType = req.ExpireType
 	share.ExpireDays = req.ExpireDays
 	share.ExpireAt = expireAt
 	share.Enabled = req.Enabled
+	if req.TrafficLimitBytes != nil {
+		share.TrafficLimitBytes = *req.TrafficLimitBytes
+	}
+	if req.MaxDevices != nil {
+		share.MaxDevices = *req.MaxDevices
+	}
+	if req.ReportIntervalSessions != nil {
+		share.ReportIntervalSessions = models.NormalizeReportInterval(*req.ReportIntervalSessions)
+	}
+	if req.ReportIntervalNodes != nil {
+		share.ReportIntervalNodes = models.NormalizeReportInterval(*req.ReportIntervalNodes)
+	}
+	if req.ReportIntervalReliability != nil {
+		share.ReportIntervalReliability = models.NormalizeReportInterval(*req.ReportIntervalReliability)
+	}
 
 	if err := share.Update(); err != nil {
 		utils.Error("Failed to update share: %v", err)
@@ -211,6 +360,19 @@ func ShareUpdate(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{"code": 200, "msg": "Updated successfully"})
+}
+
+// cleanupShareRelations removes data that belongs to a deleted link.
+func cleanupShareRelations(shareID int) {
+	if err := models.DeleteShareDevices(shareID); err != nil {
+		utils.Warn("Failed to delete devices of share %d: %v", shareID, err)
+	}
+	if err := models.DeleteShareAccessLogs(shareID); err != nil {
+		utils.Warn("Failed to delete access logs of share %d: %v", shareID, err)
+	}
+	if err := models.SetShareSubscriptionStubs(shareID, nil); err != nil {
+		utils.Warn("Failed to delete stub overrides of share %d: %v", shareID, err)
+	}
 }
 
 // ShareDelete 删除分享
@@ -239,6 +401,7 @@ func ShareDelete(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"code": 500, "msg": "Delete failed"})
 		return
 	}
+	cleanupShareRelations(share.ID)
 
 	c.JSON(http.StatusOK, gin.H{"code": 200, "msg": "Deleted successfully"})
 }
@@ -336,6 +499,7 @@ func ShareBatchAdd(c *gin.Context) {
 
 	// 开始批量创建
 	createdShares := make([]models.SubscriptionShare, 0, req.Count)
+	hasExplicitExpiry := req.ExpireType != 0 || strings.TrimSpace(req.ExpireAt) != ""
 	for i := 1; i <= req.Count; i++ {
 		name := fmt.Sprintf("%s-%d", req.BaseName, i)
 
@@ -362,11 +526,17 @@ func ShareBatchAdd(c *gin.Context) {
 			SubscriptionID: req.SubscriptionID,
 			Name:           name,
 			Token:          token,
-			ExpireType:     req.ExpireType,
-			ExpireDays:     req.ExpireDays,
-			ExpireAt:       expireAt,
 			Enabled:        req.Enabled,
 			IsLegacy:       false,
+		}
+		if err := applyShareGroupSnapshot(share, req.GroupID, req.SubscriptionID); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"code": 400, "msg": err.Error()})
+			return
+		}
+		if req.GroupID == nil || hasExplicitExpiry {
+			share.ExpireType = req.ExpireType
+			share.ExpireDays = req.ExpireDays
+			share.ExpireAt = expireAt
 		}
 
 		if err := share.Add(); err != nil {
@@ -426,6 +596,7 @@ func ShareBatchDelete(c *gin.Context) {
 			if err := share.Delete(); err != nil {
 				errors = append(errors, fmt.Sprintf("ID %d: %s", id, err.Error()))
 			} else {
+				cleanupShareRelations(id)
 				successCount++
 			}
 		}

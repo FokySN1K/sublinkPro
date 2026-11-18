@@ -225,9 +225,10 @@ Base: `/api/v1/subcription` (note the spelling — missing the second "s").
 - Proxy subscriptions store only `name` and `AirportID`; `IPWhitelist`/`IPBlacklist` and request settings are ignored, and any submitted IP lists are cleared on save.
 - Filter groups always combine with AND: a node must satisfy every configured group. Values inside one whitelist are alternatives, and a blacklist hit always excludes the node. (Collection only.)
 - Name must be unique (duplicate → `Subscription name must be unique`).
+- Every subscription stores a stable `unique_key` (auto-generated `<slug>-<8 hex>`, shown in `/subcription/get` as `UniqueKey`). It never changes when the subscription is renamed, so automation should store it instead of the name.
 
 ### Update Subscription
-**POST** `/subcription/update` — **form**, located by `oldname` (current name). Same field set as add, plus `oldname`. Send `type` together with the source fields so a subscription keeps its kind. Omitting `description` keeps the stored value; sending an empty string clears it.
+**POST** `/subcription/update` — **form**. Locate the subscription with `unique_key` (preferred, stable across renames) or fall back to `oldname` (current name, for legacy clients). Same field set as add. Send `type` together with the source fields so a subscription keeps its kind. Renaming only changes `name`; the stored `unique_key` is never rewritten. Omitting `description` keeps the stored value; sending an empty string clears it.
 
 ### Get Subscriptions
 **GET** `/subcription/get` (query: `?page=1&pageSize=20&type=proxy`). `type` is optional and filters by `collection` or `proxy`. Paginated → `{items, total, ...}`; without paging → array. Each subscription includes ordered `Nodes`, `Groups`, `Airports`, and `Scripts` relation arrays when present (empty for proxy subscriptions).
@@ -307,7 +308,7 @@ Other supported variables include `$Name`, `$LinkName`, `$Group`, `$Source`, `$P
 Base: `/api/v1/shares`
 
 ### Get Shares (for a subscription)
-**GET** `/shares/get` (query: `?subId=123`) — `subId` is **required**. Optional paginated filters: `page`, `pageSize`, `keyword`, `ipFilter`, `sortBy`, `sortOrder`. `sortBy` accepts `access_count` or natural numeric-aware `name`; `sortOrder` accepts `asc` or `desc`.
+**GET** `/shares/get` (query: `?subId=123`) — `subId` is **required**. Optional paginated filters: `page`, `pageSize`, `keyword`, `ipFilter`, `sortBy`, `sortOrder`. Pass `groupId=7` to return only the links that belong to that share group (used by the group page); `subId` is still required. `sortBy` accepts `access_count` or natural numeric-aware `name`; `sortOrder` accepts `asc` or `desc`.
 
 ### Add Share
 **POST** `/shares/add` — **JSON**
@@ -325,8 +326,29 @@ Base: `/api/v1/shares`
 ### Update Share
 **POST** `/shares/update` — **JSON** (same fields as add + `id` + `enabled`)
 
+### Managed Links (inside a share group)
+Add `group_id` to `/shares/add`, or send it to `/shares/update`, to put the link under a share group (see [share-groups](../../docs/features/share-groups.md)). The link then snapshots the group's traffic limit, device limit, expiry and telemetry intervals, and accepts these optional overrides (omit a field to keep the snapshot, send `0` to clear a limit):
+
+```json
+{
+  "group_id": 7,
+  "traffic_limit_bytes": 107374182400,
+  "max_devices": 3,
+  "expire_type": 1,
+  "expire_days": 30,
+  "report_interval_sessions": 3600,
+  "report_interval_nodes": 3600,
+  "report_interval_reliability": 3600
+}
+```
+
+`group_id: 0` detaches the link from its group. Telemetry intervals are clamped to 300–86400 seconds.
+
 ### Delete Share
 **DELETE** `/shares/delete` (query: `?id=123`)
+
+### Token Format
+Auto-generated tokens are **32 lowercase hex characters** (16 random bytes). Custom tokens are accepted through `/shares/add` or `/shares/update` and may be up to **64 characters** long.
 
 ### Refresh Share Token
 **POST** `/shares/refresh` (query: `?id=123`)
@@ -334,13 +356,168 @@ Base: `/api/v1/shares`
 ### Get Share Logs
 **GET** `/shares/logs` (query: `?shareId=123`)
 
+### Device List
+**GET** `/shares/devices` (query: `?shareId=123`) — returns `active`/`pending`/`blocked` devices with `hwid`, `device_id`, `name`, `platform`, `app_version`, `status`, `reported_traffic_bytes`, `last_report_at`, `report_baseline_bytes`, `report_baseline_epoch`, `first_seen_at`, `last_seen_at`.
+
+### Update Device
+**POST** `/shares/devices/update` — **JSON**: `id`, optional `name`, `description`, `status` (`active` | `pending` | `blocked`).
+
+### Delete Device
+**DELETE** `/shares/devices/delete` (query: `?id=123`)
+
+### Device Telemetry Overview
+**GET** `/shares/devices/overview` — devices aggregated **per installation** (`hwid` + `device_id`) across every share they use. Query: optional `subId`, `groupId`, `status` (`active` | `pending` | `blocked`), `keyword`, `page`, `pageSize` (max 200).
+
+Each item carries `hwid`, `device_id`, `name`, `platform`, `app_version`, `status`, `active_count` / `pending_count` / `blocked_count`, `first_seen_at`, `last_seen_at`, `last_report_at`, `reported_traffic_bytes` (lifetime), `window_traffic_bytes`, `share_count` and `shares` (per-link rows with `share_id`, `share_name`, `token`, `status`, `group_id`, `group_name`, `subscription_id`, `subscription_name`, `reported_traffic_bytes`, `last_seen_at`, `last_report_at`). The response also returns `total`, `page`, `page_size`, `summary` (`total`, `active`, `pending`, `blocked`, `reported_traffic_bytes`, `window_traffic_bytes`) and `window_days` (7).
+
+### Device Telemetry Detail
+**GET** `/shares/devices/detail` (query: `?hwid=...&deviceId=...`) — one installation. Returns `device` (same shape as an overview item), `hourly` (`window_start`, `up_bytes`, `down_bytes`, `bytes` per UTC hour bucket, 7-day retention), `activity` (up to 100 access-log rows) and `window_days`. Unknown identities answer 404.
+
+### Share Activity
+**GET** `/shares/activity` (query: `?shareId=123&limit=200`) — recent access rows (`action` is `fetch`, `status`, `stub`, `bind`, `admin` or `telemetry`).
+
 ### Consume Subscription (the actual output a client fetches)
 **GET** `/c/` (query: `?token=<shareToken>&client=<idx>&substore=<target>`)
 - Use `--raw` (this is NOT a JSON envelope — it's the rendered clash/v2ray/surge output).
 - `token` is the **share token** (from `/shares/get` or `/shares/add`), NOT the API key.
 - Client type auto-detected from User-Agent, or force with `client`.
 - Clash-family names (`clash`, `mihomo`, `clashmeta`, `clash-meta`) are always rendered natively from the subscription template, so template comments and key order are preserved. Add `substore=<target>` (for example `substore=ClashMeta`, `substore=Stash`) to force the Sub-Store sidecar conversion instead; unsupported values are ignored. The sidecar must be configured, otherwise the request returns 503.
+- For links inside a share group, `?client=auto` (or no `client`) with an unknown or empty `User-Agent` is served the `mihomo_snkp` profile. A disabled group, an expired or over-quota link, `hide_config` for non-SNKP apps, a renderer that is not in the group's `templates` list (`template_disabled`) and a reached device limit all return an editable placeholder instead of a config; the case is reported in `X-Sublink-Reason` / `X-Sublink-Stub`.
+- Device identity comes from `X-HWID` (owner) plus `X-Device-ID` (installation); `X-Device-Name`, `X-Device-Platform`, `X-App-Version` and `X-Sublink-Client` are optional. Serving headers: `X-Sublink-Template`, `X-Sublink-Features`, `X-Sublink-Device-Status`, `X-Sublink-Device-Secret`, `X-Sublink-Device-Name`, `X-Sublink-Report-Interval-Sessions/Nodes/Reliability`. Placeholder responses keep `X-Sublink-Reason` and, when the request resolves to a bound device, `X-Sublink-Device-Secret`, so a client never overwrites a working profile with a stub.
+- Managed links answer `subscription-userinfo` from their own quota: `upload=<reported>; download=0; total=<limit>; expire=<effective>`. Stores that read `upload + download` (SNKP does) see the full reported usage. `expire` is the computed expiry (`0` when the link never expires); links without a limit and without an expiry keep the legacy airport aggregate, and placeholder responses keep the share quota.
+- Every rendered node carries a stable `sublinkpro_unique_key` value (from the node content hash, falling back to the link hash) so clients can attribute telemetry even when name processing renames all nodes to the same value. Clash/Mihomo get it as an extra proxy key, URI nodes as a query parameter, `vmess://` as a field in the base64 JSON payload; `ssr://` and Surge have no extension point. Unknown fields/params are ignored by standard clients, and the value is excluded from the content hash.
 - **Proxy subscriptions** (see [subscription-proxy](../../docs/features/subscription-proxy.md)) are not rendered: the server loads the subscription's airport, requests its upstream subscription with the client's `User-Agent` and the airport's settings, and streams the upstream body verbatim with the upstream status code. Relayed response headers: `Content-Type`, `Content-Disposition`, `subscription-userinfo`, `profile-update-interval`, `profile-web-page-url`, `profile-title`, `encrypt-tag`. `client`, `substore`, and template selection are ignored, and IP allow/deny lists are not applied. An expired share returns 410; a missing/invalid airport or upstream failure returns 502 with a generic message. Each share of a proxy subscription exposes a single link (`?token=...`); the upstream picks the format from the relayed `User-Agent`, so Clash clients receive YAML while Happ and v2ray clients receive their own format.
+
+### Share Status Snapshot
+**GET** `/c/status` (query: `?token=<shareToken>`) — JSON envelope with `valid`, `reason`, `template`, `share`, `subscription`, `group`, `device`, `devices` and `telemetry`. It never binds a device, so clients can poll it safely before fetching the profile.
+
+- `share` — `id`, `name`, `enabled`, `expire_type`, `expire_days`, `expire_at`, `expire_at_unix` (computed expiry, `0` when unset), `created_at`, `traffic_limit_bytes`, `reported_traffic_bytes`, `remaining_bytes` (`limit - reported`, floored at `0`, `0` for unlimited), `quota_exhausted`, `max_devices`.
+- `telemetry` — `enabled`, `sessions`, `nodes`, `reliability` and `report_interval_seconds` (preferred interval, mirrors `sessions`; present when set). Clients should clamp it to 30–600 seconds.
+
+Example (trimmed):
+
+```json
+{
+  "valid": true,
+  "reason": "",
+  "template": "mihomo_snkp",
+  "share": {
+    "traffic_limit_bytes": 107374182400,
+    "reported_traffic_bytes": 701245,
+    "remaining_bytes": 106672936955,
+    "quota_exhausted": false,
+    "expire_at_unix": 1797613975
+  },
+  "device": {"status": "unbound"},
+  "devices": {"total": 2, "active": 1, "pending": 1, "blocked": 0},
+  "telemetry": {"enabled": true, "sessions": 600, "nodes": 3600, "reliability": 3600, "report_interval_seconds": 600}
+}
+```
+
+`valid`, `reason` and `template` are top-level envelope fields — there is no `share.valid`.
+
+### Traffic Telemetry
+**POST** `/c/telemetry` (query: `?token=<shareToken>`) — ingest a client traffic report. Requires a link that belongs to a group with `telemetry_enabled`; otherwise answers 403.
+
+Delta report (bytes since the previous report):
+
+```json
+{"up": 12345, "down": 678900, "report_id": "r-1"}
+```
+
+Absolute report (installation lifetime counter):
+
+```json
+{"reported_total_bytes": 987654, "install_id": "install-abc", "up": 1234, "down": 0}
+```
+
+- At least one of `up`, `down`, `reported_total_bytes` is required. Negative values, non-numeric values, values above 1 PiB per direction and absolute totals above 1 EiB are rejected with 400 and never touch the counter.
+- Optional identity: `X-Sublink-Device-Secret` (must belong to a device bound to this link), or the `X-HWID` + `X-Device-ID` pair. Reports without identity are counted per link; blocked/pending devices are rejected with 403.
+- `report_id` applies to delta mode only: a retry with the same id inside a 30-minute in-memory window is answered as a duplicate and writes nothing. Duplicates are not written to the access log.
+- `reported_total_bytes` switches to absolute mode and requires a resolved device (without one it falls back to delta semantics). `install_id` is the installation epoch (trimmed, max 64 characters): a value different from the stored epoch restarts the baseline from zero, so reinstalls are not counted twice. `delta <= 0` means a replay: `accepted_bytes` is 0, `duplicate` is `true` and the baseline stays untouched. The accepted delta is written with one conditional `UPDATE ... WHERE id = ? AND report_baseline_bytes = ? AND report_baseline_epoch = ?` and retried up to three times on a lost race.
+- Success returns `reported_traffic_bytes` (link lifetime), `traffic_limit_bytes`, `remaining_bytes`, `quota_exhausted`, `last_usage_at`, `device_status`, `device_reported_traffic_bytes` (device lifetime counter), `accepted_bytes` and `duplicate`. Accepting reports continues after the quota is exhausted so final usage stays accurate.
+
+---
+
+## Share Groups
+
+Base: `/api/v1/share-groups`
+
+### List Groups
+**GET** `/share-groups/list` — each item is the group plus `template_list`, `pool_name`, `share_count`, `device_count`, `pending_device_count` and `stubs` (case → stub id). Telemetry aggregates across the group's links are included as `reported_traffic_bytes` (sum of client reports), `last_usage_at` (most recent report time, `null` when none) and `exhausted_share_count` (links whose per-link limit is reached).
+
+### Get Group
+**GET** `/share-groups/get` (query: `?id=7`) — returns `group`, `template_list`, `stubs` and `shares`.
+
+### Add / Update Group
+**POST** `/share-groups/add` — **JSON**
+```json
+{
+  "name": "SNKP users",
+  "description": "",
+  "subscription_id": 12,
+  "enabled": true,
+  "hide_config": false,
+  "templates": ["auto", "mihomo", "mihomo_snkp", "surge", "v2ray"],
+  "mihomo_snkp": true,
+  "clash_template": "clash.yaml",
+  "surge_template": "surge.conf",
+  "allow_legacy_clients": true,
+  "device_mode": "auto_bind",
+  "max_devices": 3,
+  "traffic_limit_bytes": 0,
+  "expire_type": 0,
+  "expire_days": 0,
+  "expire_at": "",
+  "telemetry_enabled": true,
+  "report_interval_sessions": 3600,
+  "report_interval_nodes": 3600,
+  "report_interval_reliability": 3600
+}
+```
+**POST** `/share-groups/update` — same fields plus `id`. Omitted boolean pointers keep their stored value; an empty `templates` array keeps the stored list.
+
+`device_mode` is `open`, `auto_bind` or `approve`. Telemetry intervals are clamped to 300–86400 and default to 3600.
+
+`clash_template` / `surge_template` select the template **file name** (the `file` value from `GET /template/get`) used to render Clash-family and Surge profiles for every link in the group. Empty inherits the node pool's template. Sending a file that does not exist, or that belongs to the other category, is rejected. Changing these values affects links that already exist in the group.
+
+`templates` is the delivery allowlist: after `auto` detection or an explicit `?client=` value is resolved, the renderer must be listed, otherwise the link serves the `template_disabled` placeholder. `hide_config` restricts the effective list to `mihomo_snkp`. Sub-Store export targets are exempt because the sidecar converts the profile itself.
+
+### Delete Group
+**DELETE** `/share-groups/delete` (query: `?id=7`) — the group is removed and its links are detached (`group_id = NULL`).
+
+### Group Placeholder Mapping
+**GET** `/share-groups/stubs` (query: `?groupId=7`) — returns `case_key → stub_id`.
+**POST** `/share-groups/stubs` — **JSON**: `{"group_id": 7, "stubs": {"expired": 3, "device_limit": 5}}`. Sending `{}` clears the mapping.
+
+### Group Activity
+**GET** `/share-groups/activity` (query: `?groupId=7&limit=200`) — recent access rows across the group's links.
+
+---
+
+## Share Placeholders (Заглушка)
+
+Base: `/api/v1/share-stubs`
+
+### List Placeholders
+**GET** `/share-stubs/list` — returns `items` (the shared library: `id`, `name`, `case_key`, `title`, `content`, `enabled`) and `cases` (the nine known case keys with labels).
+
+### Add Placeholder
+**POST** `/share-stubs/add` — **JSON**: `name`, `case_key`, `title`, `content`, optional `enabled`. `case_key` is unique across the library: `device_limit`, `device_pending`, `device_blocked`, `quota_exhausted`, `expired`, `group_disabled`, `template_disabled`, `unsupported_app`, `invalid_token`.
+
+`content` supports single-brace variables: `{case}`, `{share_name}`, `{group_name}`, `{device_name}`, `{limit}`, `{used}`, `{expires_at}`.
+
+### Update Placeholder
+**POST** `/share-stubs/update` — **JSON**: `id` plus any of `name`, `case_key`, `title`, `content`, `enabled`.
+
+### Delete Placeholder
+**DELETE** `/share-stubs/delete` (query: `?id=3`) — the case falls back to the built-in default text.
+
+### Per-Link Overrides
+**GET** `/share-stubs/overrides` (query: `?shareId=123`) — returns `case_key → stub_id`.
+**POST** `/share-stubs/overrides` — **JSON**: `{"share_id": 123, "stubs": {"expired": 4}}`.
+
+Placeholder resolution: link override → group mapping → default library entry for that case.
 
 ---
 

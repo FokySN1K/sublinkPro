@@ -3,11 +3,13 @@ package api
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
 	"net/url"
 	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"sublink/models"
@@ -19,6 +21,7 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"gorm.io/gorm"
 )
 
 const subscriptionNameContextKey = "resolvedSubscriptionName"
@@ -49,6 +52,7 @@ type preparedClientResponse struct {
 	Subscription     models.Subcription
 	SubName          string
 	ShareID          int
+	Group            *models.ShareGroup
 	FallbackName     string
 	FallbackIdentity fallbackIdentityPolicy
 }
@@ -153,29 +157,63 @@ func prepareClientResponse(c *gin.Context, clientType, token string) (preparedCl
 	share, err := models.GetSubscriptionShareByToken(token)
 	if err != nil {
 		utils.Warn("Invalid share token: %s", token)
-		return buildSyntheticFallbackResponse(clientType, "Invalid share link"), true
+		setShareClientHeaders(c, nil, nil, clientType, "", nil)
+		return buildShareStubResponse(c, nil, nil, clientType, models.ShareStubCaseInvalidToken, nil, "", "", nil), true
 	}
 
-	if share.IsExpired() {
-		utils.Warn("Share link expired: %s", token)
-		var expiredSub models.Subcription
-		expiredSub.ID = share.SubscriptionID
-		if err := expiredSub.Find(); err != nil {
-			utils.Warn("Subscription for expired share not found: %d", share.SubscriptionID)
-			return buildSyntheticFallbackResponse(clientType, "Subscription not found"), true
-		}
-		if expiredSub.IsProxy() {
-			writeProxyRelayError(c, http.StatusGone, "Subscription expired")
-			return preparedClientResponse{}, false
-		}
-		return buildPreparedExpiredShareResponse(expiredSub, clientType, "Subscription expired", share.ID)
+	group := loadShareGroup(share)
+	clientType = resolveShareClientType(c, group)
+	// Resolve an already bound device up front (read-only) so stub responses
+	// keep X-Sublink-Device-Secret: SNKP must not replace a working profile
+	// with a stub when it is still bound to a legitimate device.
+	stubDevice, stubDeviceStatus := lookupShareStubDevice(c, share, group)
+	setShareClientHeaders(c, share, group, clientType, stubDeviceStatus, stubDevice)
+
+	// A disabled group stops serving every link it owns, including links that
+	// were created before the group was disabled.
+	if group != nil && !group.Enabled {
+		return buildShareStubResponse(c, share, group, clientType, models.ShareStubCaseGroupDisabled, nil, "", "", nil), true
+	}
+
+	// The group template list is the delivery allowlist: a resolved renderer
+	// that is not listed is answered with a stub instead of the config.
+	if group != nil && !shareTemplateServed(group, clientType) {
+		models.RecordShareAccessAsync(&models.ShareAccessLog{
+			ShareID:   share.ID,
+			HWID:      models.NormalizeShareDeviceValue(c.GetHeader("X-HWID"), 128),
+			DeviceKey: models.NormalizeShareDeviceValue(c.GetHeader("X-Device-ID"), 128),
+			Action:    models.ShareAccessActionStub,
+			Template:  clientType,
+			Reason:    models.ShareStubCaseTemplateDisabled,
+		})
+		return buildShareStubResponse(c, share, group, clientType, models.ShareStubCaseTemplateDisabled, nil, "", "", nil), true
 	}
 
 	var sub models.Subcription
 	sub.ID = share.SubscriptionID
 	if err := sub.Find(); err != nil {
 		utils.Warn("Subscription not found: %d", share.SubscriptionID)
+		setShareClientHeaders(c, share, group, clientType, "", nil)
 		return buildSyntheticFallbackResponse(clientType, "Subscription not found"), true
+	}
+
+	if share.IsExpired() {
+		utils.Warn("Share link expired: %s", token)
+		if sub.IsProxy() {
+			writeProxyRelayError(c, http.StatusGone, "Subscription expired")
+			return preparedClientResponse{}, false
+		}
+		return buildShareStubResponse(c, share, group, clientType, models.ShareStubCaseExpired, &sub, "", "", nil), true
+	}
+
+	if share.IsQuotaExhausted() {
+		return buildShareStubResponse(c, share, group, clientType, models.ShareStubCaseQuotaExhausted, &sub, "", "", nil), true
+	}
+
+	// Hide-config groups are SNKP-only: other apps get an editable stub
+	// rendered in the format they asked for.
+	if group != nil && group.HideConfig && !isSnkpRequest(c) {
+		return buildShareStubResponse(c, share, group, clientType, models.ShareStubCaseUnsupportedApp, nil, "", "", nil), true
 	}
 
 	// IP 黑白名单检查；代理订阅只转发上游内容，不做 IP 限制（历史数据可能残留名单）。
@@ -194,8 +232,34 @@ func prepareClientResponse(c *gin.Context, clientType, token string) (preparedCl
 		}
 	}
 
+	hwid := models.NormalizeShareDeviceValue(c.GetHeader("X-HWID"), 128)
+	deviceID := models.NormalizeShareDeviceValue(c.GetHeader("X-Device-ID"), 128)
+	device, deviceStatus, stubCase := resolveShareDevicePolicy(c, share, group)
+	if stubCase != "" {
+		models.RecordShareAccessAsync(&models.ShareAccessLog{
+			ShareID:   share.ID,
+			DeviceID:  deviceIDInt(device),
+			HWID:      hwid,
+			DeviceKey: deviceID,
+			Action:    models.ShareAccessActionStub,
+			Template:  clientType,
+			Reason:    stubCase,
+		})
+		setShareClientHeaders(c, share, group, clientType, deviceStatus, device)
+		return buildShareStubResponse(c, share, group, clientType, stubCase, &sub, hwid, deviceID, device), true
+	}
+
 	// 异步更新访问统计，避免订阅生成热路径等待数据库写入。
 	share.RecordAccessAsync()
+	models.RecordShareAccessAsync(&models.ShareAccessLog{
+		ShareID:   share.ID,
+		DeviceID:  deviceIDInt(device),
+		HWID:      hwid,
+		DeviceKey: deviceID,
+		Action:    models.ShareAccessActionFetch,
+		Template:  clientType,
+	})
+	setShareClientHeaders(c, share, group, clientType, deviceStatus, device)
 
 	// 代理订阅不参与节点渲染，直接把上游内容原样转给客户端。
 	if sub.IsProxy() {
@@ -212,7 +276,325 @@ func prepareClientResponse(c *gin.Context, clientType, token string) (preparedCl
 	if !ok {
 		return preparedClientResponse{}, false
 	}
+	// The group owns the delivery policy, including the rendered template files.
+	prepared.Group = group
 	return prepared, true
+}
+
+func loadShareGroup(share *models.SubscriptionShare) *models.ShareGroup {
+	if share == nil || share.GroupID == nil {
+		return nil
+	}
+	group, err := models.GetShareGroupByID(*share.GroupID)
+	if err != nil {
+		utils.Warn("Share group not found: %d", *share.GroupID)
+		return nil
+	}
+	return group
+}
+
+// lookupShareStubDevice finds an already bound device without creating one.
+// Stub replies use it to keep the device secret header, so SNKP can tell a
+// temporary stub apart from a link that is no longer bound to the device.
+func lookupShareStubDevice(c *gin.Context, share *models.SubscriptionShare, group *models.ShareGroup) (*models.ShareDevice, string) {
+	if share == nil || group == nil || !share.IsManaged() {
+		return nil, ""
+	}
+	secret := models.NormalizeShareDeviceValue(c.GetHeader("X-Sublink-Device-Secret"), 64)
+	if secret != "" {
+		device, err := models.FindShareDeviceBySecret(share.ID, secret)
+		if err != nil {
+			return nil, ""
+		}
+		return device, device.Status
+	}
+	hwid := models.NormalizeShareDeviceValue(c.GetHeader("X-HWID"), 128)
+	deviceID := models.NormalizeShareDeviceValue(c.GetHeader("X-Device-ID"), 128)
+	if hwid == "" || deviceID == "" {
+		return nil, "unbound"
+	}
+	device, err := models.FindShareDevice(share.ID, hwid, deviceID)
+	if err != nil {
+		return nil, "unbound"
+	}
+	return device, device.Status
+}
+
+// isSnkpRequest detects the SNKP client. SNKP currently sends its version in
+// the User-Agent; X-Sublink-Client is the explicit marker used by newer builds.
+func isSnkpRequest(c *gin.Context) bool {
+	if strings.Contains(strings.ToLower(c.GetHeader("User-Agent")), "snkp") {
+		return true
+	}
+	marker := strings.ToLower(strings.TrimSpace(c.GetHeader("X-Sublink-Client")))
+	return marker == "snkp" || strings.Contains(marker, "snkp")
+}
+
+// resolveShareClientType resolves the concrete renderer for a request.
+// Managed groups use SNKP-aware auto detection; legacy links keep the original
+// v2ray fallback behaviour.
+func resolveShareClientType(c *gin.Context, group *models.ShareGroup) string {
+	if group == nil {
+		return resolveSubscriptionClient(c)
+	}
+
+	requested := strings.ToLower(strings.TrimSpace(c.Query("client")))
+	snkp := isSnkpRequest(c)
+
+	if group.HideConfig {
+		return models.ShareTemplateMihomoSnkp
+	}
+
+	switch requested {
+	case models.ShareTemplateMihomoSnkp:
+		return models.ShareTemplateMihomoSnkp
+	case "clash", "mihomo", "clashmeta", "clash-meta":
+		if snkp && group.MihomoSnkp {
+			return models.ShareTemplateMihomoSnkp
+		}
+		return models.ShareTemplateMihomo
+	case models.ShareTemplateSurge:
+		return models.ShareTemplateSurge
+	case models.ShareTemplateV2Ray, "uri", "v2ray-uri":
+		return models.ShareTemplateV2Ray
+	case "":
+		// auto
+	default:
+		if substore.IsSupportedTarget(requested) {
+			return requested
+		}
+	}
+
+	if snkp {
+		return models.ShareTemplateMihomoSnkp
+	}
+
+	userAgent := strings.ToLower(c.GetHeader("User-Agent"))
+	switch {
+	case strings.Contains(userAgent, "surge"):
+		return models.ShareTemplateSurge
+	case strings.Contains(userAgent, "clash"), strings.Contains(userAgent, "mihomo"):
+		return models.ShareTemplateMihomo
+	case strings.Contains(userAgent, "v2ray"), strings.Contains(userAgent, "sing-box"), strings.Contains(userAgent, "shadowrocket"):
+		return models.ShareTemplateV2Ray
+	default:
+		// Auto with an unknown application is served the SNKP profile.
+		return models.ShareTemplateMihomoSnkp
+	}
+}
+
+// shareTemplateServed reports whether a resolved renderer may be delivered for
+// a managed group. Sub-Store export targets perform their own conversion and
+// are not restricted by the template allowlist.
+func shareTemplateServed(group *models.ShareGroup, template string) bool {
+	if group == nil {
+		return true
+	}
+	if substore.IsSupportedTarget(template) {
+		return true
+	}
+	return group.AllowsTemplate(template)
+}
+
+func setShareClientHeaders(c *gin.Context, share *models.SubscriptionShare, group *models.ShareGroup, template, deviceStatus string, device *models.ShareDevice) {
+	c.Header("X-Sublink-Server", "sublinkpro")
+	c.Header("X-Sublink-Proto", "1")
+	if template != "" {
+		c.Header("X-Sublink-Template", template)
+	}
+
+	features := []string{"status", "stubs"}
+	if share != nil && share.IsManaged() {
+		features = append(features, "devices")
+	}
+	if group != nil && group.TelemetryEnabled {
+		features = append(features, "telemetry")
+	}
+	c.Header("X-Sublink-Features", strings.Join(features, ","))
+
+	if deviceStatus != "" {
+		c.Header("X-Sublink-Device-Status", deviceStatus)
+	}
+	if device != nil && deviceStatus == models.ShareDeviceStatusActive {
+		if device.Secret != "" {
+			c.Header("X-Sublink-Device-Secret", device.Secret)
+		}
+		if device.Name != "" {
+			c.Header("X-Sublink-Device-Name", url.QueryEscape(device.Name))
+		}
+	}
+
+	if share != nil && group != nil && group.TelemetryEnabled {
+		if share.ReportIntervalSessions > 0 {
+			c.Header("X-Sublink-Report-Interval-Sessions", strconv.Itoa(share.ReportIntervalSessions))
+		}
+		if share.ReportIntervalNodes > 0 {
+			c.Header("X-Sublink-Report-Interval-Nodes", strconv.Itoa(share.ReportIntervalNodes))
+		}
+		if share.ReportIntervalReliability > 0 {
+			c.Header("X-Sublink-Report-Interval-Reliability", strconv.Itoa(share.ReportIntervalReliability))
+		}
+	}
+}
+
+func resolveShareDevicePolicy(c *gin.Context, share *models.SubscriptionShare, group *models.ShareGroup) (*models.ShareDevice, string, string) {
+	if group == nil || share == nil || !share.IsManaged() {
+		return nil, "", ""
+	}
+
+	hwid := models.NormalizeShareDeviceValue(c.GetHeader("X-HWID"), 128)
+	deviceID := models.NormalizeShareDeviceValue(c.GetHeader("X-Device-ID"), 128)
+	if hwid == "" || deviceID == "" {
+		if group.AllowLegacyClients {
+			return nil, "unbound", ""
+		}
+		return nil, "unbound", models.ShareStubCaseUnsupportedApp
+	}
+
+	device, err := models.FindShareDevice(share.ID, hwid, deviceID)
+	if err == nil {
+		switch device.Status {
+		case models.ShareDeviceStatusBlocked:
+			return device, models.ShareDeviceStatusBlocked, models.ShareStubCaseDeviceBlocked
+		case models.ShareDeviceStatusPending:
+			return device, models.ShareDeviceStatusPending, models.ShareStubCaseDevicePending
+		}
+		if c.Request.Method != http.MethodHead {
+			models.TouchShareDevice(device.ID)
+		}
+		return device, models.ShareDeviceStatusActive, ""
+	}
+	if !errors.Is(err, gorm.ErrRecordNotFound) {
+		utils.Warn("Failed to load share device: %v", err)
+		return nil, "error", models.ShareStubCaseUnsupportedApp
+	}
+
+	status := models.ShareDeviceStatusActive
+	if group.DeviceMode == models.ShareDeviceModeApprove {
+		status = models.ShareDeviceStatusPending
+	}
+
+	if status == models.ShareDeviceStatusActive && share.MaxDevices > 0 {
+		count, countErr := models.CountActiveShareDevices(share.ID)
+		if countErr != nil {
+			utils.Warn("Failed to count share devices: %v", countErr)
+		} else if count >= int64(share.MaxDevices) {
+			return nil, "limit", models.ShareStubCaseDeviceLimit
+		}
+	}
+
+	if c.Request.Method == http.MethodHead {
+		if status == models.ShareDeviceStatusPending {
+			return nil, models.ShareDeviceStatusPending, models.ShareStubCaseDevicePending
+		}
+		return nil, models.ShareDeviceStatusActive, ""
+	}
+
+	device, created, createErr := models.EnsureShareDeviceWithLimit(
+		share.ID,
+		share.MaxDevices,
+		hwid,
+		deviceID,
+		c.GetHeader("X-Device-Name"),
+		c.GetHeader("X-Device-Platform"),
+		c.GetHeader("X-App-Version"),
+		status,
+	)
+	if createErr != nil {
+		utils.Warn("Failed to bind share device: %v", createErr)
+		return nil, "error", models.ShareStubCaseUnsupportedApp
+	}
+	if !created {
+		return nil, "limit", models.ShareStubCaseDeviceLimit
+	}
+	if status == models.ShareDeviceStatusPending {
+		return device, models.ShareDeviceStatusPending, models.ShareStubCaseDevicePending
+	}
+	return device, models.ShareDeviceStatusActive, ""
+}
+
+func deviceIDInt(device *models.ShareDevice) int {
+	if device == nil {
+		return 0
+	}
+	return device.ID
+}
+
+// buildShareStubResponse renders an editable stub in the format requested by
+// the client. When baseSub is available the original profile envelope is kept
+// and only the node list is replaced, matching the expired-link behaviour.
+func buildShareStubResponse(c *gin.Context, share *models.SubscriptionShare, group *models.ShareGroup, clientType, caseKey string, baseSub *models.Subcription, hwid, deviceID string, device *models.ShareDevice) preparedClientResponse {
+	stub := models.ResolveShareStub(share, caseKey)
+	vars := map[string]string{
+		"case": caseKey,
+	}
+	if share != nil {
+		vars["share_name"] = share.Name
+	}
+	if group != nil {
+		vars["group_name"] = group.Name
+	}
+	if device != nil {
+		vars["device_name"] = device.Name
+	} else if name := strings.TrimSpace(c.GetHeader("X-Device-Name")); name != "" {
+		vars["device_name"] = name
+	}
+
+	switch caseKey {
+	case models.ShareStubCaseDeviceLimit:
+		if share != nil && share.MaxDevices > 0 {
+			vars["limit"] = strconv.Itoa(share.MaxDevices)
+		}
+	case models.ShareStubCaseQuotaExhausted:
+		if share != nil {
+			vars["used"] = utils.FormatBytes(share.ReportedTrafficBytes)
+			vars["limit"] = utils.FormatBytes(share.TrafficLimitBytes)
+		}
+	case models.ShareStubCaseExpired:
+		if share != nil {
+			vars["expires_at"] = shareExpiresAtLabel(share)
+		}
+	}
+
+	title, content := models.RenderShareStub(stub, vars)
+	c.Header("X-Sublink-Reason", caseKey)
+	c.Header("X-Sublink-Stub", stub.CaseKey)
+
+	if baseSub != nil {
+		// Keep the original profile envelope (and its filename) so clients keep
+		// the link identity; only the proxy list is replaced with the stub text.
+		if prepared, ok := buildPreparedExpiredShareResponse(*baseSub, clientType, content, 0); ok {
+			prepared.FallbackName = content
+			if share != nil {
+				prepared.ShareID = share.ID
+			}
+			return prepared
+		}
+	}
+
+	prepared := buildSyntheticFallbackResponse(clientType, content)
+	prepared.SubName = title
+	if share != nil {
+		prepared.ShareID = share.ID
+	}
+	return prepared
+}
+
+func shareExpiresAtLabel(share *models.SubscriptionShare) string {
+	if share == nil {
+		return ""
+	}
+	switch share.ExpireType {
+	case models.ExpireTypeDays:
+		if share.ExpireDays > 0 {
+			return share.CreatedAt.AddDate(0, 0, share.ExpireDays).Format("2006-01-02 15:04")
+		}
+	case models.ExpireTypeDateTime:
+		if share.ExpireAt != nil {
+			return share.ExpireAt.Format("2006-01-02 15:04")
+		}
+	}
+	return ""
 }
 
 func resolveSubscriptionClient(c *gin.Context) string {
@@ -223,7 +605,7 @@ func resolveSubscriptionClient(c *gin.Context) string {
 	}
 	clientIndex := normalizeClashFamilyClient(strings.ToLower(strings.TrimSpace(c.Query("client"))))
 	switch clientIndex {
-	case "clash", "mihomo", "surge", "v2ray", "uri", "v2ray-uri":
+	case "clash", "mihomo", "mihomo_snkp", "surge", "v2ray", "uri", "v2ray-uri":
 		return clientIndex
 	}
 	if substore.IsSupportedTarget(clientIndex) {
@@ -267,7 +649,7 @@ func normalizeClashFamilyClient(client string) string {
 
 func dispatchPreparedClientResponse(c *gin.Context, prepared preparedClientResponse) {
 	switch prepared.ClientType {
-	case "clash", "mihomo":
+	case "clash", "mihomo", "mihomo_snkp":
 		renderPreparedClash(c, prepared)
 	case "surge":
 		renderPreparedSurge(c, prepared)
@@ -373,10 +755,40 @@ func writeSyntheticTemplateFile(pattern, content string) (string, error) {
 	return file.Name(), nil
 }
 
+// applyGroupTemplateOverrides swaps the node pool template selection for the
+// group-level one. Empty group values keep the pool/built-in defaults, so
+// existing groups and legacy links keep rendering exactly as before.
+func applyGroupTemplateOverrides(configs *protocol.OutputConfig, group *models.ShareGroup) {
+	if configs == nil || group == nil {
+		return
+	}
+	if group.ClashTemplate != "" {
+		configs.Clash = resolveGroupTemplatePath(group.ClashTemplate)
+	}
+	if group.SurgeTemplate != "" {
+		configs.Surge = resolveGroupTemplatePath(group.SurgeTemplate)
+	}
+}
+
+// resolveGroupTemplatePath maps a group template selection to a readable path.
+// The group dialog stores the bare file name (the `file` value from
+// GET /template/get), while subscription configs store ./template/<file>.
+// Both spellings must resolve, and remote templates pass through untouched.
+func resolveGroupTemplatePath(value string) string {
+	value = strings.TrimSpace(value)
+	if value == "" || strings.Contains(value, "://") || baseTemplateDir == "" {
+		return value
+	}
+	if value == filepath.Base(value) {
+		return filepath.Join(baseTemplateDir, value)
+	}
+	return value
+}
+
 func buildPreparedResponseFromSubscription(sub models.Subcription, clientType string, shareID int) (preparedClientResponse, bool) {
 	preparedSub := sub
 	materializeClientType := clientType
-	if substore.IsSupportedTarget(clientType) || clientType == "uri" || clientType == "v2ray-uri" || clientType == "mihomo" {
+	if substore.IsSupportedTarget(clientType) || clientType == "uri" || clientType == "v2ray-uri" || clientType == "mihomo" || clientType == "mihomo_snkp" {
 		materializeClientType = "clash"
 	}
 	if err := preparedSub.GetSub(materializeClientType); err != nil {
@@ -500,8 +912,8 @@ func prepareRendererResponse(c *gin.Context, prepared preparedClientResponse) (r
 	if sub.RefreshUsageOnRequest {
 		node.RefreshUsageForSubscriptionNodes(sub.Nodes)
 	}
-	c.Writer.Header().Set("subscription-userinfo", getSubscriptionUsage(sub.Nodes))
-	if prepared.ClientType == "clash" {
+	c.Writer.Header().Set("subscription-userinfo", subscriptionUserInfoForResponse(prepared, sub.Nodes))
+	if prepared.ClientType == "clash" || prepared.ClientType == "mihomo_snkp" {
 		c.Writer.Header().Set("profile-update-interval", strconv.Itoa(resolveSubscriptionUpdateIntervalHours(sub.UpdateInterval)))
 		c.Writer.Header().Set("profile-title", url.QueryEscape(resolved.SubName))
 	}
@@ -510,6 +922,28 @@ func prepareRendererResponse(c *gin.Context, prepared preparedClientResponse) (r
 		return resolved, false
 	}
 	return resolved, true
+}
+
+// subscriptionUserInfoForResponse builds the subscription-userinfo header.
+// Managed share links report their own quota snapshot instead of the airport
+// aggregate: SNKP sums upload+download, so the reported bytes go into upload
+// and download stays zero. Links without a limit and without an expiry keep
+// the legacy airport-based header.
+func subscriptionUserInfoForResponse(prepared preparedClientResponse, nodes []models.Node) string {
+	if prepared.ShareID > 0 {
+		share := models.SubscriptionShare{ID: prepared.ShareID}
+		if err := share.Find(); err == nil {
+			expire := share.EffectiveExpireUnix()
+			if share.TrafficLimitBytes > 0 || expire > 0 {
+				upload := share.ReportedTrafficBytes
+				if upload < 0 {
+					upload = 0
+				}
+				return fmt.Sprintf("upload=%d; download=0; total=%d; expire=%d", upload, share.TrafficLimitBytes, expire)
+			}
+		}
+	}
+	return getSubscriptionUsage(nodes)
 }
 
 func resolveSubscriptionUpdateIntervalHours(interval int) int {
@@ -584,7 +1018,9 @@ func renderPreparedV2ray(c *gin.Context, prepared preparedClientResponse) {
 
 	for idx, v := range sub.Nodes {
 		finalNodeName := nodeNamePlan.NodeNameAt(idx, v.ID)
-		nodeLink := utils.RenameNodeLink(v.Link, finalNodeName)
+		// 稳定唯一键在重命名之后注入：重命名会重新编码链接并丢弃未知字段。
+		nodeKey := v.SublinkNodeUniqueKey()
+		nodeLink := protocol.AppendNodeUniqueKey(utils.RenameNodeLink(v.Link, finalNodeName), nodeKey)
 		switch {
 		// 如果包含多条节点
 		case strings.Contains(v.Link, ","):
@@ -596,7 +1032,7 @@ func renderPreparedV2ray(c *gin.Context, prepared preparedClientResponse) {
 				if i < len(splitNames) && splitNames[i] != "" {
 					linkName = splitNames[i]
 				}
-				links[i] = utils.RenameNodeLink(link, linkName)
+				links[i] = protocol.AppendNodeUniqueKey(utils.RenameNodeLink(link, linkName), nodeKey)
 			}
 			compatibleLinks := filterV2rayCompatibleLinks(links)
 			if len(compatibleLinks) > 0 {
@@ -745,7 +1181,7 @@ func buildPreparedMihomoYAML(c *gin.Context, prepared preparedClientResponse) (m
 	}
 
 	// ========== 第二阶段：遍历节点生成配置 ==========
-	preserveClashExtra := prepared.ClientType == "clash" || prepared.ClientType == "mihomo"
+	preserveClashExtra := prepared.ClientType == "clash" || prepared.ClientType == "mihomo" || prepared.ClientType == "mihomo_snkp"
 	for idx, v := range sub.Nodes {
 		// 计算 dialer-proxy（链式代理规则）
 		// 优先级：中间节点映射 > 目标节点映射 > 节点自身设置
@@ -759,6 +1195,7 @@ func buildPreparedMihomoYAML(c *gin.Context, prepared preparedClientResponse) (m
 		case strings.Contains(v.Link, ","):
 			links := strings.Split(v.Link, ",")
 			splitNames := nodeNamePlan.SplitNamesAt(idx)
+			nodeKey := v.SublinkNodeUniqueKey()
 			for i, link := range links {
 				linkName := finalNodeName
 				if i < len(splitNames) && splitNames[i] != "" {
@@ -769,6 +1206,7 @@ func buildPreparedMihomoYAML(c *gin.Context, prepared preparedClientResponse) (m
 				urls = append(urls, protocol.Urls{
 					Url:             renamedLink,
 					DialerProxyName: dialerProxy,
+					NodeUniqueKey:   nodeKey,
 				})
 			}
 			continue
@@ -799,6 +1237,7 @@ func buildPreparedMihomoYAML(c *gin.Context, prepared preparedClientResponse) (m
 				Url:             nodeLink,
 				DialerProxyName: dialerProxy,
 				ClashExtra:      clashExtra,
+				NodeUniqueKey:   v.SublinkNodeUniqueKey(),
 			})
 		}
 	}
@@ -809,6 +1248,8 @@ func buildPreparedMihomoYAML(c *gin.Context, prepared preparedClientResponse) (m
 		_, _ = c.Writer.WriteString("Configuration read error")
 		return mihomoBridgeOutput{}, false, false
 	}
+	// 分组可覆盖节点池选择、直接指定渲染模板文件。
+	applyGroupTemplateOverrides(&configs, prepared.Group)
 
 	// 如果启用 Host 替换，填充 HostMap
 	if configs.ReplaceServerWithHost {
@@ -965,6 +1406,8 @@ func renderPreparedSurge(c *gin.Context, prepared preparedClientResponse) {
 		_, _ = c.Writer.WriteString("Configuration read error")
 		return
 	}
+	// 分组可覆盖节点池选择、直接指定渲染模板文件。
+	applyGroupTemplateOverrides(&configs, prepared.Group)
 
 	// 如果启用 Host 替换，填充 HostMap
 	if configs.ReplaceServerWithHost {

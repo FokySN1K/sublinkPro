@@ -23,7 +23,6 @@ import { getNodeDisplayName } from 'utils/nodeDisplayName';
 import EditIcon from '@mui/icons-material/Edit';
 import DeleteIcon from '@mui/icons-material/Delete';
 import ContentCopyIcon from '@mui/icons-material/ContentCopy';
-import QrCode2Icon from '@mui/icons-material/QrCode2';
 import HistoryIcon from '@mui/icons-material/History';
 import SortIcon from '@mui/icons-material/Sort';
 import CheckIcon from '@mui/icons-material/Check';
@@ -44,7 +43,6 @@ export default function SubscriptionTable({
   tempSortData,
   selectedSortItems = [],
   onToggleRow,
-  onClient,
   onLogs,
   onEdit,
   onDelete,
@@ -106,6 +104,22 @@ export default function SubscriptionTable({
                 <TableCell>
                   <Chip label={sub.Name} sx={getSubscriptionNameChipSx(theme)} />
                   {sortingSubId === sub.ID && <Chip label={t('subscriptions.table.sorting')} color="warning" size="small" sx={{ ml: 1 }} />}
+                  {sub.UniqueKey ? (
+                    <Tooltip title={t('subscriptions.table.uniqueKeyHint')}>
+                      <Typography
+                        variant="caption"
+                        sx={(theme) => ({
+                          display: 'block',
+                          mt: 0.5,
+                          fontFamily: 'monospace',
+                          fontSize: '0.72rem',
+                          color: theme.vars?.palette.text.secondary || theme.palette.text.secondary
+                        })}
+                      >
+                        {sub.UniqueKey}
+                      </Typography>
+                    </Tooltip>
+                  ) : null}
                   {sub.Description ? (
                     <Tooltip title={sub.Description}>
                       <Typography
@@ -163,11 +177,6 @@ export default function SubscriptionTable({
                     <Tooltip title={t('common.edit')}>
                       <IconButton size="small" onClick={() => onEdit(sub)}>
                         <EditIcon fontSize="small" />
-                      </IconButton>
-                    </Tooltip>
-                    <Tooltip title={t('subscriptions.table.tooltips.share')}>
-                      <IconButton size="small" onClick={() => onClient(sub)}>
-                        <QrCode2Icon fontSize="small" />
                       </IconButton>
                     </Tooltip>
                     <Tooltip title={t('subscriptions.table.tooltips.accessLogs')}>

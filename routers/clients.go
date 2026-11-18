@@ -16,6 +16,8 @@ func Clients(r *gin.Engine) {
 		// ClientsGroup.GET("/surge/:subname", api.GetSurge)
 		ClientsGroup.GET("/", api.GetClient)
 		ClientsGroup.HEAD("/", api.GetClient)
+		ClientsGroup.GET("/status", api.ShareStatus)
+		ClientsGroup.POST("/telemetry", api.ShareReportTraffic)
 	}
 
 }

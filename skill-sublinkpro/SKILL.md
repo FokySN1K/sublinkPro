@@ -212,7 +212,7 @@ Whenever you need one of these values, call its source first and present choices
 | **Source filter** (node `source`) | `GET /api/v1/nodes/sources` | List sources; user picks. |
 | **Tag filter** (`TagWhitelist`/`TagBlacklist`) | `GET /api/v1/tags/list` | List tag names; user picks; comma-join. |
 | **Scripts** (`scripts`) | `GET /api/v1/script/list` | List scripts by id+name; selected IDs → comma-joined. |
-| **Subscription** (to edit/share) | `GET /api/v1/subcription/get` | List by id+name. |
+| **Subscription** (to edit/share) | `GET /api/v1/subcription/get` | List by id+name (+ `UniqueKey`). Prefer the stable `UniqueKey` when updating, so a rename does not break the reference. |
 | **Airport** (to pull/edit) | `GET /api/v1/airports` | List by id+name. |
 
 If a discovery call returns an empty list (e.g. no groups yet), say so and offer the alternative (e.g. "you have no groups — want to pick individual nodes instead, or create the group while adding?").
@@ -248,13 +248,18 @@ These describe how to *lead the user* through each task. Discovery calls (GET) n
 
 **Edit a subscription**
 1. Pick it via `GET /api/v1/subcription/get`. Show current values so the user edits from a known state, not a blank form.
-2. Ask which aspect to change (name / nodes / template / filters), discover options for that aspect via the map, confirm, then `POST /api/v1/subcription/update` (`--form`). **Key detail:** the subscription is located by `oldname` (its current name); `name` is the new name (use the same value if not renaming). You must resend the full field set you want to keep — omitted fields are not preserved. So fetch current values first and re-send them plus your edits.
+2. Ask which aspect to change (name / nodes / template / filters), discover options for that aspect via the map, confirm, then `POST /api/v1/subcription/update` (`--form`). **Key detail:** send `unique_key` (the pool's stable key) to locate the subscription, so renaming is safe; `oldname` (its current name) remains supported as a fallback for legacy clients. `name` is the new name (use the same value if not renaming). You must resend the full field set you want to keep — omitted fields are not preserved. So fetch current values first and re-send them plus your edits.
 
 **Create a share link**
-1. Pick the subscription via `GET /api/v1/subcription/get` (numbered list).
-2. Ask about expiration in words: never / after N days / specific date → map to `expire_type` 0/1/2 (+ `expire_days` or `expire_at`).
-3. Confirm, then `POST /api/v1/shares/add` (`--json`).
+1. Pick the share group that will serve the link via `GET /api/v1/share-groups/list` (numbered list). A node pool alone does not hand out links — every link belongs to a group, and the group owns the delivery policy and templates.
+2. Ask about expiration in words: never / after N days / specific date → map to `expire_type` 0/1/2 (+ `expire_days` or `expire_at`). If you skip expiry, the link inherits the group snapshot.
+3. Confirm, then `POST /api/v1/shares/add` (`--json`) with both `subscription_id` and `group_id`.
 4. Report the share token and build the consumable URL: `GET /c/?token=<shareToken>` (use `--raw` if fetching the actual output).
+
+**Pick group templates**
+1. Pick the group via `GET /api/v1/share-groups/list`.
+2. List templates via `GET /api/v1/template/get`; a `clash` file maps to `clash_template`, a `surge` file to `surge_template`. Empty means "inherit from the node pool".
+3. Confirm, then `POST /api/v1/share-groups/update` (`--json`) with `id` and the chosen file names.
 
 **Import an airport**
 1. Ask for the airport URL.

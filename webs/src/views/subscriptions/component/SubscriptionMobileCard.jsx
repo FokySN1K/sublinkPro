@@ -21,7 +21,6 @@ import { getNodeDisplayName } from 'utils/nodeDisplayName';
 import EditIcon from '@mui/icons-material/Edit';
 import DeleteIcon from '@mui/icons-material/Delete';
 import ContentCopyIcon from '@mui/icons-material/ContentCopy';
-import QrCode2Icon from '@mui/icons-material/QrCode2';
 import HistoryIcon from '@mui/icons-material/History';
 import SortIcon from '@mui/icons-material/Sort';
 import CheckIcon from '@mui/icons-material/Check';
@@ -46,7 +45,6 @@ export default function SubscriptionMobileCard({
   selectedSortItems = [],
   theme,
   onToggleRow,
-  onClient,
   onLogs,
   onEdit,
   onDelete,
@@ -263,6 +261,16 @@ export default function SubscriptionMobileCard({
                     </Typography>
                   ) : null}
 
+                  {sub.UniqueKey ? (
+                    <Typography
+                      variant="caption"
+                      title={t('subscriptions.table.uniqueKeyHint')}
+                      sx={{ color: tertiaryText, display: 'block', mt: -0.5, fontFamily: 'monospace', wordBreak: 'break-all' }}
+                    >
+                      {sub.UniqueKey}
+                    </Typography>
+                  ) : null}
+
                   <Box
                     sx={{
                       px: 1.25,
@@ -405,17 +413,6 @@ export default function SubscriptionMobileCard({
                               <VisibilityIcon />
                             </IconButton>
                           )}
-
-                          <IconButton
-                            size="medium"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              onClient(sub);
-                            }}
-                            sx={getActionIconSx(palette.primary.main)}
-                          >
-                            <QrCode2Icon />
-                          </IconButton>
 
                           <IconButton
                             size="medium"

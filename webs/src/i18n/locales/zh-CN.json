@@ -105,7 +105,7 @@
       "airports": "机场管理",
       "nodes": "节点管理",
       "nodeCheck": "检测中心",
-      "subscriptions": "订阅列表",
+      "subscriptions": "节点池",
       "templates": "模板管理",
       "tags": "标签管理",
       "scripts": "脚本列表",
@@ -119,7 +119,8 @@
       "changelog": "更新日志",
       "userCenter": "个人中心",
       "appSettings": "应用设置",
-      "happDecryptor": "happ 解密"
+      "happDecryptor": "happ 解密",
+      "shareGroups": "订阅组"
     }
   },
   "common": {
@@ -204,6 +205,212 @@
     "invalidLink": "链接格式不正确，需要以 happ:// 开头",
     "privacy": "解密在您自己的 SublinkPro 服务端完成，链接与结果不会发送到任何第三方。",
     "airportHint": "也可以把 happ 链接直接粘贴到机场的订阅地址中，保存前会自动解密。"
+  },
+  "shareGroups": {
+    "page": {
+      "title": "订阅组",
+      "createGroup": "新建订阅组",
+      "createStub": "新建占位页",
+      "noPools": "暂无可用的节点池。请先创建筛选订阅，订阅组只能服务于已存在的节点池。",
+      "emptyGroups": "还没有订阅组。创建一个订阅组后即可开始分发订阅链接。",
+      "emptyStubs": "还没有占位页。当链接无法正常下发时，客户端会看到我们配置的占位页。"
+    },
+    "tabs": {
+      "groups": "订阅组",
+      "stubs": "占位页",
+      "telemetry": "遥测"
+    },
+    "actions": {
+      "links": "链接",
+      "stubs": "占位页映射",
+      "activity": "访问记录"
+    },
+    "badges": {
+      "snkpOnly": "仅 SNKP",
+      "quotaExhaustedCount": "流量已用尽（{{count}}）"
+    },
+    "confirm": {
+      "deleteGroup": "确定删除订阅组「{{name}}」吗？链接会保留，但会失去该组的设置。",
+      "deleteStub": "确定删除占位页「{{name}}」吗？"
+    },
+    "messages": {
+      "loadFailed": "加载订阅组失败",
+      "saveFailed": "保存失败",
+      "createSuccess": "订阅组已创建",
+      "updateSuccess": "订阅组已更新",
+      "deleteSuccess": "删除成功",
+      "deleteFailed": "删除失败",
+      "stubsSaved": "占位页映射已保存",
+      "stubCreated": "占位页已创建",
+      "stubUpdated": "占位页已更新",
+      "stubDeleted": "占位页已删除",
+      "nameRequired": "请输入订阅组名称",
+      "poolRequired": "请选择节点池"
+    },
+    "dialog": {
+      "createTitle": "新建订阅组",
+      "editTitle": "编辑订阅组"
+    },
+    "stubsDialog": {
+      "title": "占位页映射 — {{name}}",
+      "case": "场景",
+      "stub": "占位页",
+      "useDefault": "默认占位页",
+      "hint": "为每个场景选择占位页。保持默认时使用内置文案。",
+      "caseRequired": "请选择场景"
+    },
+    "stubDialog": {
+      "createTitle": "新建占位页",
+      "editTitle": "编辑占位页",
+      "case": "场景",
+      "name": "占位页名称",
+      "title": "标题",
+      "content": "内容",
+      "placeholderHint": "渲染前会替换内容中的占位变量。",
+      "placeholders": "可用变量：{case}、{share_name}、{group_name}、{device_name}、{limit}、{used}、{expires_at}"
+    },
+    "activityDialog": {
+      "title": "访问记录 — {{name}}",
+      "empty": "暂无访问记录。",
+      "time": "时间",
+      "share": "链接",
+      "device": "设备",
+      "action": "动作",
+      "template": "模板",
+      "reason": "原因",
+      "actions": {
+        "fetch": "拉取配置",
+        "status": "状态查询",
+        "stub": "占位页",
+        "bind": "绑定设备",
+        "admin": "后台操作",
+        "telemetry": "遥测上报"
+      },
+      "reasons": {
+        "device_limit": "设备数超限",
+        "device_pending": "设备待审核",
+        "device_blocked": "设备已封禁",
+        "quota_exhausted": "流量已用尽",
+        "expired": "已过期",
+        "group_disabled": "订阅组已禁用",
+        "unsupported_app": "不支持的应用",
+        "template_disabled": "模板未启用",
+        "invalid_token": "无效令牌"
+      }
+    },
+    "fields": {
+      "name": "订阅组名称",
+      "pool": "节点池",
+      "poolHint": "订阅组只服务于该节点池中的节点。",
+      "poolUnknown": "未绑定节点池",
+      "description": "描述",
+      "enabled": "启用订阅组",
+      "hideConfig": "隐藏配置",
+      "hideConfigHint": "启用后订阅组只下发 mihomo_snkp 模板，其他客户端会收到「不支持的应用」占位页。",
+      "hideConfigForces": "隐藏配置会强制使用以下模板：{{templates}}",
+      "mihomoSnkp": "允许 mihomo 模板改用 mihomo_snkp",
+      "allowLegacy": "允许无请求头的旧客户端",
+      "templates": "模板",
+      "clashTemplate": "Clash 模板文件",
+      "surgeTemplate": "Surge 模板文件",
+      "templateInherit": "继承节点池配置",
+      "templateInheritHint": "留空时使用节点池自身配置；选择文件后会覆盖该组所有链接渲染所用的模板。",
+      "deviceMode": "设备模式",
+      "maxDevices": "设备上限",
+      "unlimitedHint": "0 表示不限制",
+      "trafficLimit": "流量上限 (GB)",
+      "trafficLimitHint": "0 表示不限制",
+      "expireType": "默认有效期",
+      "expireNever": "永不过期",
+      "expireDays": "按天数",
+      "expireDaysCount": "天数",
+      "expireAt": "指定时间",
+      "telemetryEnabled": "启用遥测",
+      "reportedTraffic": "已上报流量",
+      "lastReport": "最近上报",
+      "interval_sessions": "会话遥测周期 (秒)",
+      "interval_nodes": "节点遥测周期 (秒)",
+      "interval_reliability": "可靠性遥测周期 (秒)",
+      "intervalHint": "300–86400 秒",
+      "shareCount": "链接数",
+      "deviceCount": "设备数",
+      "stubMapping": "占位页"
+    },
+    "sections": {
+      "delivery": "下发策略",
+      "devices": "设备与限制",
+      "expiry": "有效期",
+      "telemetry": "遥测"
+    },
+    "templates": {
+      "auto": "自动",
+      "mihomo": "mihomo",
+      "mihomo_snkp": "mihomo_snkp",
+      "surge": "Surge",
+      "v2ray": "v2ray"
+    },
+    "deviceModes": {
+      "open": "开放",
+      "auto_bind": "自动绑定",
+      "approve": "人工审核"
+    },
+    "deviceStatus": {
+      "active": "正常",
+      "pending": "待审核",
+      "blocked": "已封禁",
+      "disabled": "已停用"
+    },
+    "telemetry": {
+      "subtitle": "所有拉取过链接的安装终端，按使用到的订阅聚合展示。",
+      "filters": {
+        "pool": "节点池",
+        "poolAll": "全部节点池",
+        "status": "状态",
+        "statusAll": "全部状态",
+        "keywordPlaceholder": "搜索名称、HWID、设备 ID、链接..."
+      },
+      "summary": {
+        "total": "{{count}} 台设备",
+        "active": "{{count}} 台正常",
+        "pending": "{{count}} 台待审核",
+        "blocked": "{{count}} 台已封禁",
+        "windowTraffic": "近 {{days}} 天 {{bytes}}",
+        "lifetimeTraffic": "累计 {{bytes}}"
+      },
+      "columns": {
+        "device": "设备",
+        "status": "状态",
+        "subscriptions": "使用的订阅",
+        "traffic": "流量",
+        "windowTraffic": "近 {{days}} 天",
+        "lastSeen": "最近联网",
+        "lastReport": "最近上报"
+      },
+      "empty": "暂无设备。客户端携带 SNKP 设备请求头拉取链接后会出现在这里。",
+      "loadFailed": "加载设备失败",
+      "unknownDevice": "未知设备",
+      "deviceFallback": "设备 {{id}}",
+      "shareCount": "{{count}} 个链接"
+    },
+    "telemetryDetail": {
+      "title": "设备 — {{name}}",
+      "identity": "HWID：{{hwid}} · 设备 ID：{{deviceId}}",
+      "stats": {
+        "lifetime": "累计流量",
+        "window": "近 {{days}} 天",
+        "firstSeen": "首次出现",
+        "lastSeen": "最近联网",
+        "lastReport": "最近上报"
+      },
+      "subscriptions": "使用的订阅",
+      "noSubscriptions": "该设备暂无有效链接。",
+      "hourly": "按小时段的流量分布",
+      "hourlyHint": "按本地时区合并近 {{days}} 天的上报数据。",
+      "hourlyEmpty": "保留窗口内暂无上报数据。",
+      "peakHour": "高峰 {{hour}}",
+      "activity": "最近活动",
+      "activityEmpty": "暂无访问记录。"
+    }
   },
   "airports": {
     "title": "机场管理",
@@ -2661,12 +2868,12 @@
       }
     },
     "proxyDialog": {
-      "addTitle": "添加代理订阅",
-      "editTitle": "编辑代理订阅",
-      "description": "SublinkPro 在服务端请求所选机场的上游订阅，并将内容原样返回：不解析、不过滤、不重命名节点。请求使用机场自身的地址、User-Agent、请求头、设备信息、代理和 TLS 设置，修改机场后转发配置会自动生效。分享和访问记录与普通订阅一致；不启用 IP 黑白名单，每个分享只提供一个订阅链接。",
+      "addTitle": "添加代理节点池",
+      "editTitle": "编辑代理节点池",
+      "description": "SublinkPro 在服务端请求所选机场的上游订阅，并将内容原样返回：不解析、不过滤、不重命名节点。请求使用机场自身的地址、User-Agent、请求头、设备信息、代理和 TLS 设置，修改机场后转发配置会自动生效。分享链接和访问记录与普通节点池一致；不启用 IP 黑白名单，每个分享只提供一个订阅链接。",
       "confirm": "保存",
       "fields": {
-        "name": "订阅名称",
+        "name": "节点池名称",
         "description": "描述",
         "airport": "机场",
         "airportHelp": "上游订阅地址与请求配置均取自该机场",
@@ -2732,34 +2939,34 @@
       "blacklistHelper": "包含黑名单标签的节点会被排除。"
     },
     "page": {
-      "title": "订阅管理",
+      "title": "节点池",
       "actions": {
         "groupSort": "分组排序",
-        "addSubscription": "添加订阅",
-        "addProxySubscription": "添加代理订阅"
+        "addSubscription": "添加节点池",
+        "addProxySubscription": "添加代理节点池"
       },
       "tabs": {
-        "aggregated": "聚合订阅",
-        "proxy": "代理订阅",
-        "proxyHint": "代理订阅原样转发所选机场的上游订阅内容，不解析、不过滤、不重命名节点。"
+        "aggregated": "聚合节点池",
+        "proxy": "代理节点池",
+        "proxyHint": "代理节点池原样转发所选机场的上游订阅内容，不解析、不过滤、不重命名节点。"
       },
       "search": {
-        "label": "搜索订阅",
-        "placeholder": "搜索订阅名称、分享链接或 Token"
+        "label": "搜索节点池",
+        "placeholder": "搜索名称或唯一键"
       },
       "confirm": {
-        "deleteTitle": "删除订阅",
-        "deleteOne": "确定要删除订阅 \"{{name}}\" 吗？",
-        "copyTitle": "复制订阅",
-        "copyOne": "确定要复制订阅 \"{{name}}\" 吗？"
+        "deleteTitle": "删除节点池",
+        "deleteOne": "确定要删除节点池 \"{{name}}\" 吗？",
+        "copyTitle": "复制节点池",
+        "copyOne": "确定要复制节点池 \"{{name}}\" 吗？"
       },
       "messages": {
-        "loadFailed": "获取订阅列表失败",
+        "loadFailed": "获取节点池列表失败",
         "deleteSuccess": "删除成功",
         "deleteFailed": "删除失败",
         "copySuccess": "复制成功",
         "copyFailed": "复制失败",
-        "nameRequired": "请输入订阅名称",
+        "nameRequired": "请输入节点池名称",
         "airportRequired": "请选择机场",
         "updateSuccess": "更新成功",
         "updateFailed": "更新失败",
@@ -2771,25 +2978,24 @@
         "sortCancelled": "已取消排序",
         "batchSortSuccess": "批量排序成功",
         "batchSortFailed": "批量排序失败",
-        "movedItems": "已移动 {{count}} 项到位置 {{position}}",
-        "shareSearchFailed": "搜索分享链接失败"
+        "movedItems": "已移动 {{count}} 项到位置 {{position}}"
       }
     },
     "table": {
-      "name": "订阅名称",
+      "name": "节点池名称",
       "nodesAndGroups": "节点/分组/机场",
       "airport": "机场",
       "airportMissing": "机场已删除",
       "createdAt": "创建时间",
       "actions": "操作",
       "sorting": "排序中",
+      "uniqueKeyHint": "稳定唯一键：重命名后保持不变，自动化与 API 查询不受影响。",
       "nodeCount": "{{count}} 个节点",
       "groupCount": "{{count}} 个分组",
       "airportCount": "{{count}} 个机场",
       "tooltips": {
         "preview": "预览节点",
         "copy": "复制本配置为新副本",
-        "share": "分享管理",
         "accessLogs": "访问记录",
         "chainProxy": "链式代理",
         "sort": "排序"
@@ -3044,6 +3250,12 @@
       "unnamed": "未命名分享",
       "defaultChip": "默认",
       "cardMeta": "{{expire}} · 访问 {{count}} 次",
+      "cardTraffic": "流量 {{used}} / {{limit}}",
+      "cardLastUsage": "· 最近上报 {{time}}",
+      "quotaExhausted": "流量已用尽",
+      "telemetryUsed": "已上报流量：{{used}} / {{limit}}",
+      "telemetryLastReport": "最近上报：{{time}}",
+      "telemetryNoReport": "暂无上报",
       "empty": "暂无分享链接，点击“新增”创建第一个分享",
       "detailTitle": "分享链接",
       "proxyClientUrl": "订阅链接",
@@ -3052,6 +3264,7 @@
         "auto": "自动识别",
         "clash": "Clash",
         "mihomo": "Mihomo",
+        "mihomo_snkp": "Mihomo SNKP",
         "surge": "Surge",
         "v2ray": "V2Ray",
         "loon": "Loon",
@@ -3066,7 +3279,32 @@
       },
       "actions": {
         "accessLogs": "访问日志",
-        "refreshToken": "刷新Token"
+        "refreshToken": "刷新Token",
+        "devices": "设备"
+      },
+      "devicesTitle": "设备管理 - {{name}}",
+      "devicesDialog": {
+        "empty": "该链接还没有绑定任何设备。",
+        "limit": "已使用 {{active}} / {{limit}} 个设备名额",
+        "unlimited": "设备名额不限",
+        "columns": {
+          "device": "设备",
+          "status": "状态",
+          "traffic": "流量",
+          "lastSeen": "最近联网",
+          "lastReport": "最近上报"
+        },
+        "actions": {
+          "approve": "通过",
+          "block": "封禁",
+          "unblock": "解封",
+          "delete": "解绑"
+        },
+        "confirmDelete": "确定解绑设备“{{name}}”吗？客户端下次拉取时会重新绑定。",
+        "updated": "设备已更新",
+        "deleted": "设备已解绑",
+        "updateFailed": "更新设备失败",
+        "deleteFailed": "解绑设备失败"
       },
       "expire": {
         "never": "永不过期",
@@ -3095,7 +3333,7 @@
         "namePlaceholder": "例如：朋友使用、临时分享",
         "token": "自定义Token（可选）",
         "tokenPlaceholder": "留空自动生成随机token",
-        "tokenHelper": "自定义token便于记忆，留空则自动生成安全的随机token",
+        "tokenHelper": "自动生成的 token 为 32 位十六进制字符（16 字节随机数）；自定义 token 最长 64 个字符。",
         "expirePolicy": "过期策略",
         "expireByDays": "按天数过期",
         "expireAt": "指定时间过期",
@@ -3105,7 +3343,10 @@
         "expireType": "过期类型",
         "expireTypeNever": "永不过期",
         "expireTypeDays": "按天数过期",
-        "expireTypeDateTime": "指定时间过期"
+        "expireTypeDateTime": "指定时间过期",
+        "group": "订阅组",
+        "noGroup": "不分组（旧行为）",
+        "overrideHint": "链接默认继承订阅组设置。修改下方数值可仅为此链接单独覆盖；填 0 表示继承。"
       },
       "batch": {
         "create": "批量添加",
@@ -3162,6 +3403,7 @@
       "addSingle": "添加单个",
       "loadMore": "加载更多",
       "noMore": "没有更多分享",
+      "groupChip": "订阅组",
       "noResults": "未找到符合搜索条件的分享",
       "searchPlaceholder": "通过名称、Token、IP地址或分享链接搜索...",
       "sortLabel": "排序",

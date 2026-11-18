@@ -12,7 +12,8 @@ import {
   IconPlane,
   IconFlag,
   IconRefreshDot,
-  IconLockOpen
+  IconLockOpen,
+  IconUsersGroup
 } from '@tabler/icons-react';
 
 // ==============================|| SUBSCRIPTION MENU ITEMS ||============================== //
@@ -52,11 +53,20 @@ const subscription = {
     },
     {
       id: 'subs',
-      title: 'Subscriptions',
+      title: 'Node Pools',
       titleKey: 'navigation.items.subscriptions',
       type: 'item',
       url: '/subscription/subs',
       icon: IconList,
+      breadcrumbs: true
+    },
+    {
+      id: 'share-groups',
+      title: 'Share Groups',
+      titleKey: 'navigation.items.shareGroups',
+      type: 'item',
+      url: '/subscription/share-groups',
+      icon: IconUsersGroup,
       breadcrumbs: true
     },
     {

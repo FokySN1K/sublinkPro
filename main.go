@@ -534,6 +534,12 @@ func Run() {
 	if err := models.InitSubscriptionShareCache(); err != nil {
 		utils.Error("Failed to load subscription shares into cache: %v", err)
 	}
+	if err := models.InitShareGroupCache(); err != nil {
+		utils.Error("Failed to load share groups into cache: %v", err)
+	}
+	if err := models.InitShareStubCache(); err != nil {
+		utils.Error("Failed to load share stubs into cache: %v", err)
+	}
 	if err := models.InitChainRuleCache(); err != nil {
 		utils.Error("Failed to load chain proxy rules into cache: %v", err)
 	}
@@ -661,6 +667,8 @@ func Run() {
 	routers.GeoIP(r)
 	routers.Host(r)
 	routers.Share(r)
+	routers.ShareGroup(r)
+	routers.ShareStub(r)
 	routers.Airport(r)
 	routers.GroupSort(r)
 	routers.NodeCheck(r)

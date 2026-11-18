@@ -219,6 +219,13 @@ func RunMigrations() error {
 		{name: "IPInfo", model: &IPInfo{}},
 		{name: "Host", model: &Host{}},
 		{name: "SubscriptionShare", model: &SubscriptionShare{}},
+		{name: "ShareGroup", model: &ShareGroup{}},
+		{name: "ShareStub", model: &ShareStub{}},
+		{name: "ShareGroupStub", model: &ShareGroupStub{}},
+		{name: "ShareSubscriptionStub", model: &ShareSubscriptionStub{}},
+		{name: "ShareDevice", model: &ShareDevice{}},
+		{name: "ShareDeviceUsageHour", model: &ShareDeviceUsageHour{}},
+		{name: "ShareAccessLog", model: &ShareAccessLog{}},
 		{name: "SubscriptionChainRule", model: &SubscriptionChainRule{}},
 		{name: "Airport", model: &Airport{}},
 		{name: "AirportUsageSnapshot", model: &AirportUsageSnapshot{}},
@@ -472,6 +479,85 @@ func RunMigrations() error {
 		return rotatePredictableShareTokens(db)
 	}); err != nil {
 		utils.Error("执行迁移 0044_rotate_predictable_share_tokens 失败: %v", err)
+	}
+
+	// 0045_seed_share_stubs - 初始化可编辑的「占位页」库。
+	// 已有的自定义内容不会被覆盖，只补充缺失的默认条目。
+	if err := database.RunCustomMigration("0045_seed_share_stubs", func() error {
+		return SeedDefaultShareStubs(db)
+	}); err != nil {
+		utils.Error("执行迁移 0045_seed_share_stubs 失败: %v", err)
+	}
+
+	// 0046_add_pool_unique_key_and_group_templates - 节点池稳定唯一键与分组级模板文件。
+	// unique_key 在创建时生成、重命名后保持不变，接口与自动化可依赖它定位节点池；
+	// 存量节点池先补写唯一键，再创建唯一索引，避免空值冲突。
+	if err := database.RunCustomMigration("0046_add_pool_unique_key_and_group_templates", func() error {
+		if !db.Migrator().HasColumn(&Subcription{}, "UniqueKey") {
+			if err := db.Migrator().AddColumn(&Subcription{}, "UniqueKey"); err != nil {
+				return err
+			}
+		}
+		if !db.Migrator().HasColumn(&ShareGroup{}, "ClashTemplate") {
+			if err := db.Migrator().AddColumn(&ShareGroup{}, "ClashTemplate"); err != nil {
+				return err
+			}
+		}
+		if !db.Migrator().HasColumn(&ShareGroup{}, "SurgeTemplate") {
+			if err := db.Migrator().AddColumn(&ShareGroup{}, "SurgeTemplate"); err != nil {
+				return err
+			}
+		}
+
+		var subs []Subcription
+		if err := db.Select("id", "name", "unique_key").Order("id ASC").Find(&subs).Error; err != nil {
+			return err
+		}
+		used := make(map[string]bool, len(subs))
+		for _, sub := range subs {
+			if key := strings.TrimSpace(sub.UniqueKey); key != "" {
+				used[key] = true
+			}
+		}
+		backfilled := 0
+		for i := range subs {
+			if strings.TrimSpace(subs[i].UniqueKey) != "" {
+				continue
+			}
+			candidate := GenerateSubcriptionUniqueKey(subs[i].Name)
+			for attempt := 0; used[candidate] && attempt < 8; attempt++ {
+				candidate = GenerateSubcriptionUniqueKey(subs[i].Name)
+			}
+			used[candidate] = true
+			if err := db.Model(&Subcription{}).Where("id = ?", subs[i].ID).Update("unique_key", candidate).Error; err != nil {
+				return err
+			}
+			backfilled++
+		}
+		if backfilled > 0 {
+			utils.Info("已为 %d 个节点池补齐稳定唯一键", backfilled)
+		}
+
+		// 补写完成后再确保字段与唯一索引存在。
+		return db.AutoMigrate(&Subcription{}, &ShareGroup{})
+	}); err != nil {
+		utils.Error("执行迁移 0046_add_pool_unique_key_and_group_templates 失败: %v", err)
+	}
+
+	if err := database.RunCustomMigration("0047_add_share_device_telemetry", func() error {
+		// 0047_add_share_device_telemetry - 设备级流量统计：设备累计上报量与
+		// 按小时桶保存的用量，用于遥测标签页展示“什么时候用网、用了多少”。
+		return db.AutoMigrate(&ShareDevice{}, &ShareDeviceUsageHour{})
+	}); err != nil {
+		utils.Error("执行迁移 0047_add_share_device_telemetry 失败: %v", err)
+	}
+
+	if err := database.RunCustomMigration("0048_add_share_device_report_baseline", func() error {
+		// 0048_add_share_device_report_baseline - 绝对上报基线：设备行记录上次
+		// 接受的安装总量与安装代（install_id），用于幂等和重装检测。
+		return db.AutoMigrate(&ShareDevice{})
+	}); err != nil {
+		utils.Error("执行迁移 0048_add_share_device_report_baseline 失败: %v", err)
 	}
 
 	if err := database.RunCustomMigration("0024_migrate_legacy_webhook_settings", func() error {

@@ -105,7 +105,7 @@
       "airports": "Airport",
       "nodes": "Node",
       "nodeCheck": "Detection",
-      "subscriptions": "Subscriptions",
+      "subscriptions": "Node Pools",
       "templates": "Templates",
       "tags": "Tags",
       "scripts": "Scripts",
@@ -119,7 +119,8 @@
       "changelog": "Changelog",
       "userCenter": "User Center",
       "appSettings": "Settings",
-      "happDecryptor": "happ Decryptor"
+      "happDecryptor": "happ Decryptor",
+      "shareGroups": "Share Groups"
     }
   },
   "common": {
@@ -204,6 +205,212 @@
     "invalidLink": "The link is invalid. It must start with happ://",
     "privacy": "Decryption runs locally on your SublinkPro server. The link and the result are never sent anywhere else.",
     "airportHint": "You can also paste a happ link directly into the airport subscription URL field. It is decrypted before saving."
+  },
+  "shareGroups": {
+    "page": {
+      "title": "Share Groups",
+      "createGroup": "New Group",
+      "createStub": "New Stub",
+      "noPools": "No node pools found. Create a filtered subscription first — a group can only serve an existing node pool.",
+      "emptyGroups": "No share groups yet. Create a group to start handing out subscription links.",
+      "emptyStubs": "No stubs yet. A stub is what a client sees when its link cannot be served."
+    },
+    "tabs": {
+      "groups": "Groups",
+      "stubs": "Stubs",
+      "telemetry": "Telemetry"
+    },
+    "actions": {
+      "links": "Links",
+      "stubs": "Stub mapping",
+      "activity": "Activity"
+    },
+    "badges": {
+      "snkpOnly": "SNKP only",
+      "quotaExhaustedCount": "Quota exhausted ({{count}})"
+    },
+    "confirm": {
+      "deleteGroup": "Delete group \"{{name}}\"? Its links stay, but they lose the group settings.",
+      "deleteStub": "Delete stub \"{{name}}\"?"
+    },
+    "messages": {
+      "loadFailed": "Failed to load share groups",
+      "saveFailed": "Failed to save",
+      "createSuccess": "Group created",
+      "updateSuccess": "Group updated",
+      "deleteSuccess": "Deleted successfully",
+      "deleteFailed": "Delete failed",
+      "stubsSaved": "Stub mapping saved",
+      "stubCreated": "Stub created",
+      "stubUpdated": "Stub updated",
+      "stubDeleted": "Stub deleted",
+      "nameRequired": "Enter a group name",
+      "poolRequired": "Select a node pool"
+    },
+    "dialog": {
+      "createTitle": "New Share Group",
+      "editTitle": "Edit Share Group"
+    },
+    "stubsDialog": {
+      "title": "Stub mapping — {{name}}",
+      "case": "Case",
+      "stub": "Stub",
+      "useDefault": "Default stub",
+      "hint": "Pick a stub for every case. Cases left on the default use the built-in text.",
+      "caseRequired": "Select a case"
+    },
+    "stubDialog": {
+      "createTitle": "New Stub",
+      "editTitle": "Edit Stub",
+      "case": "Case",
+      "name": "Stub name",
+      "title": "Title",
+      "content": "Content",
+      "placeholderHint": "Placeholders inside the content are substituted before rendering.",
+      "placeholders": "Available placeholders: {case}, {share_name}, {group_name}, {device_name}, {limit}, {used}, {expires_at}"
+    },
+    "activityDialog": {
+      "title": "Activity — {{name}}",
+      "empty": "No access records yet.",
+      "time": "Time",
+      "share": "Link",
+      "device": "Device",
+      "action": "Action",
+      "template": "Template",
+      "reason": "Reason",
+      "actions": {
+        "fetch": "Fetch",
+        "status": "Status",
+        "stub": "Stub",
+        "bind": "Bind",
+        "admin": "Admin",
+        "telemetry": "Telemetry"
+      },
+      "reasons": {
+        "device_limit": "Device limit",
+        "device_pending": "Device pending",
+        "device_blocked": "Device blocked",
+        "quota_exhausted": "Quota exhausted",
+        "expired": "Expired",
+        "group_disabled": "Group disabled",
+        "unsupported_app": "Unsupported app",
+        "template_disabled": "Template disabled",
+        "invalid_token": "Invalid token"
+      }
+    },
+    "fields": {
+      "name": "Group name",
+      "pool": "Node pool",
+      "poolHint": "A group serves nodes from this node pool only.",
+      "poolUnknown": "No node pool",
+      "description": "Description",
+      "enabled": "Group enabled",
+      "hideConfig": "Hide configuration",
+      "hideConfigHint": "When enabled, the group hands out the mihomo_snkp template only; every other client receives the unsupported-app stub.",
+      "hideConfigForces": "Hide configuration forces this template set: {{templates}}",
+      "mihomoSnkp": "Allow mihomo template over mihomo_snkp",
+      "allowLegacy": "Allow clients without headers",
+      "templates": "Templates",
+      "clashTemplate": "Clash template file",
+      "surgeTemplate": "Surge template file",
+      "templateInherit": "Inherit from node pool",
+      "templateInheritHint": "Empty means the node pool config is used. A selected file overrides the template used to render every link in this group.",
+      "deviceMode": "Device mode",
+      "maxDevices": "Max devices",
+      "unlimitedHint": "0 means unlimited",
+      "trafficLimit": "Traffic limit (GB)",
+      "trafficLimitHint": "0 means unlimited",
+      "expireType": "Default expiry",
+      "expireNever": "Never",
+      "expireDays": "By days",
+      "expireDaysCount": "Days",
+      "expireAt": "Date & time",
+      "telemetryEnabled": "Telemetry enabled",
+      "reportedTraffic": "Reported traffic",
+      "lastReport": "Last report",
+      "interval_sessions": "Sessions interval (s)",
+      "interval_nodes": "Nodes interval (s)",
+      "interval_reliability": "Reliability interval (s)",
+      "intervalHint": "300–86400 seconds",
+      "shareCount": "Links",
+      "deviceCount": "Devices",
+      "stubMapping": "Stubs"
+    },
+    "sections": {
+      "delivery": "Delivery",
+      "devices": "Devices & limits",
+      "expiry": "Expiry",
+      "telemetry": "Telemetry"
+    },
+    "templates": {
+      "auto": "Auto",
+      "mihomo": "mihomo",
+      "mihomo_snkp": "mihomo_snkp",
+      "surge": "Surge",
+      "v2ray": "v2ray"
+    },
+    "deviceModes": {
+      "open": "Open",
+      "auto_bind": "Auto bind",
+      "approve": "Manual approval"
+    },
+    "deviceStatus": {
+      "active": "Active",
+      "pending": "Pending",
+      "blocked": "Blocked",
+      "disabled": "Disabled"
+    },
+    "telemetry": {
+      "subtitle": "Every installation that fetched a link, aggregated across the subscriptions it uses.",
+      "filters": {
+        "pool": "Node pool",
+        "poolAll": "All node pools",
+        "status": "Status",
+        "statusAll": "All statuses",
+        "keywordPlaceholder": "Search name, HWID, device ID, link..."
+      },
+      "summary": {
+        "total": "{{count}} devices",
+        "active": "{{count}} active",
+        "pending": "{{count}} pending",
+        "blocked": "{{count}} blocked",
+        "windowTraffic": "{{bytes}} in {{days}}d",
+        "lifetimeTraffic": "{{bytes}} total"
+      },
+      "columns": {
+        "device": "Device",
+        "status": "Status",
+        "subscriptions": "Subscriptions",
+        "traffic": "Traffic",
+        "windowTraffic": "Last {{days}} days",
+        "lastSeen": "Last online",
+        "lastReport": "Last report"
+      },
+      "empty": "No devices yet. A device appears here after a client fetches a link with SNKP device headers.",
+      "loadFailed": "Failed to load devices",
+      "unknownDevice": "Unknown device",
+      "deviceFallback": "Device {{id}}",
+      "shareCount": "{{count}} links"
+    },
+    "telemetryDetail": {
+      "title": "Device — {{name}}",
+      "identity": "HWID: {{hwid}} · Device ID: {{deviceId}}",
+      "stats": {
+        "lifetime": "Total traffic",
+        "window": "Last {{days}} days",
+        "firstSeen": "First seen",
+        "lastSeen": "Last online",
+        "lastReport": "Last report"
+      },
+      "subscriptions": "Subscriptions used",
+      "noSubscriptions": "This device has no active links.",
+      "hourly": "Traffic by hour of day",
+      "hourlyHint": "Folded from the last {{days}} days in your local time.",
+      "hourlyEmpty": "No traffic reports in the retention window.",
+      "peakHour": "Peak {{hour}}",
+      "activity": "Recent activity",
+      "activityEmpty": "No recent access records."
+    }
   },
   "airports": {
     "title": "Airport Management",
@@ -2662,12 +2869,12 @@
       }
     },
     "proxyDialog": {
-      "addTitle": "Add proxy subscription",
-      "editTitle": "Edit proxy subscription",
-      "description": "SublinkPro fetches the upstream subscription of the selected airport server-side and returns its content as-is: no parsing, filtering, or node renaming. The request uses the airport's URL, User-Agent, headers, device profile, proxy, and TLS settings, so updating the airport also updates the relay. Shares and access logs work as with regular subscriptions; IP allow/deny lists are not applied and each share exposes a single subscription link.",
+      "addTitle": "Add proxy pool",
+      "editTitle": "Edit proxy pool",
+      "description": "SublinkPro fetches the upstream subscription of the selected airport server-side and returns its content as-is: no parsing, filtering, or node renaming. The request uses the airport's URL, User-Agent, headers, device profile, proxy, and TLS settings, so updating the airport also updates the relay. Share links and access logs work as with regular node pools; IP allow/deny lists are not applied and each share exposes a single subscription link.",
       "confirm": "Save",
       "fields": {
-        "name": "Subscription name",
+        "name": "Node pool name",
         "description": "Description",
         "airport": "Airport",
         "airportHelp": "The upstream subscription and request settings are taken from this airport",
@@ -2736,34 +2943,34 @@
       "blacklistHelper": "Nodes containing blacklist tags are excluded."
     },
     "page": {
-      "title": "Subscription Management",
+      "title": "Node Pools",
       "actions": {
         "groupSort": "Group sort",
-        "addSubscription": "Add subscription",
-        "addProxySubscription": "Add proxy subscription"
+        "addSubscription": "Add node pool",
+        "addProxySubscription": "Add proxy pool"
       },
       "tabs": {
-        "aggregated": "Aggregated",
-        "proxy": "Proxy",
-        "proxyHint": "Proxy subscriptions relay the upstream subscription of the selected airport as-is, without parsing, filtering, or renaming nodes."
+        "aggregated": "Aggregated pools",
+        "proxy": "Proxy pools",
+        "proxyHint": "Proxy pools relay the upstream subscription of the selected airport as-is, without parsing, filtering, or renaming nodes."
       },
       "search": {
-        "label": "Search subscriptions",
-        "placeholder": "Search name, share link, or token"
+        "label": "Search node pools",
+        "placeholder": "Search name or unique key"
       },
       "confirm": {
-        "deleteTitle": "Delete Subscription",
-        "deleteOne": "Delete subscription \"{{name}}\"?",
-        "copyTitle": "Copy Subscription",
-        "copyOne": "Copy subscription \"{{name}}\"?"
+        "deleteTitle": "Delete Node Pool",
+        "deleteOne": "Delete node pool \"{{name}}\"?",
+        "copyTitle": "Copy Node Pool",
+        "copyOne": "Copy node pool \"{{name}}\"?"
       },
       "messages": {
-        "loadFailed": "Failed to load subscription list",
+        "loadFailed": "Failed to load node pools",
         "deleteSuccess": "Deleted successfully",
         "deleteFailed": "Delete failed",
         "copySuccess": "Copied successfully",
         "copyFailed": "Copy failed",
-        "nameRequired": "Enter a subscription name",
+        "nameRequired": "Enter a node pool name",
         "airportRequired": "Select an airport",
         "updateSuccess": "Updated successfully",
         "updateFailed": "Update failed",
@@ -2775,18 +2982,18 @@
         "sortCancelled": "Sort cancelled",
         "batchSortSuccess": "Batch sort succeeded",
         "batchSortFailed": "Batch sort failed",
-        "movedItems": "Moved {{count}} items to position {{position}}",
-        "shareSearchFailed": "Failed to search share links"
+        "movedItems": "Moved {{count}} items to position {{position}}"
       }
     },
     "table": {
-      "name": "Subscription Name",
+      "name": "Node Pool Name",
       "nodesAndGroups": "Nodes / Groups / Airports",
       "airport": "Airport",
       "airportMissing": "Airport deleted",
       "createdAt": "Created At",
       "actions": "Actions",
       "sorting": "Sorting",
+      "uniqueKeyHint": "Stable key: it stays the same after renaming, so automation and API lookups keep working.",
       "nodeCount": "{{count}} nodes",
       "nodeCount_one": "{{count}} node",
       "groupCount": "{{count}} groups",
@@ -2796,7 +3003,6 @@
       "tooltips": {
         "preview": "Preview nodes",
         "copy": "Copy this configuration as a new copy",
-        "share": "Share management",
         "accessLogs": "Access logs",
         "chainProxy": "Chain proxy",
         "sort": "Sort"
@@ -3051,6 +3257,12 @@
       "unnamed": "Unnamed share",
       "defaultChip": "Default",
       "cardMeta": "{{expire}} · {{count}} visits",
+      "cardTraffic": "Traffic {{used}} / {{limit}}",
+      "cardLastUsage": "· Last report {{time}}",
+      "quotaExhausted": "Quota exhausted",
+      "telemetryUsed": "Reported traffic: {{used}} / {{limit}}",
+      "telemetryLastReport": "Last report: {{time}}",
+      "telemetryNoReport": "No reports yet",
       "empty": "No share links yet. Click “Add” to create the first share.",
       "detailTitle": "Share link",
       "proxyClientUrl": "Subscription link",
@@ -3059,6 +3271,7 @@
         "auto": "Auto detect",
         "clash": "Clash",
         "mihomo": "Mihomo",
+        "mihomo_snkp": "Mihomo SNKP",
         "surge": "Surge",
         "v2ray": "V2Ray",
         "loon": "Loon",
@@ -3073,7 +3286,32 @@
       },
       "actions": {
         "accessLogs": "Access logs",
-        "refreshToken": "Refresh token"
+        "refreshToken": "Refresh token",
+        "devices": "Devices"
+      },
+      "devicesTitle": "Devices - {{name}}",
+      "devicesDialog": {
+        "empty": "No devices are bound to this link yet.",
+        "limit": "{{active}} of {{limit}} device slots used",
+        "unlimited": "Unlimited device slots",
+        "columns": {
+          "device": "Device",
+          "status": "Status",
+          "traffic": "Traffic",
+          "lastSeen": "Last seen",
+          "lastReport": "Last report"
+        },
+        "actions": {
+          "approve": "Approve",
+          "block": "Block",
+          "unblock": "Unblock",
+          "delete": "Unbind"
+        },
+        "confirmDelete": "Unbind device \"{{name}}\"? The client will bind again on the next fetch.",
+        "updated": "Device updated",
+        "deleted": "Device unbound",
+        "updateFailed": "Failed to update the device",
+        "deleteFailed": "Failed to unbind the device"
       },
       "expire": {
         "never": "Never expires",
@@ -3102,7 +3340,7 @@
         "namePlaceholder": "For example: friend access, temporary share",
         "token": "Custom token (optional)",
         "tokenPlaceholder": "Leave blank to generate a random token",
-        "tokenHelper": "Custom tokens are easier to remember. Leave blank to generate a secure random token.",
+        "tokenHelper": "Auto-generated tokens are 32 hex characters (16 random bytes); custom tokens may be up to 64 characters.",
         "expirePolicy": "Expiration policy",
         "expireByDays": "Expire by days",
         "expireAt": "Expire at specific time",
@@ -3112,7 +3350,10 @@
         "expireType": "Expiration type",
         "expireTypeNever": "Never expires",
         "expireTypeDays": "Expire by days",
-        "expireTypeDateTime": "Expire at specific time"
+        "expireTypeDateTime": "Expire at specific time",
+        "group": "Share group",
+        "noGroup": "No group (legacy behaviour)",
+        "overrideHint": "The link inherits the group settings. Change a value below to override it for this link only; leave 0 to inherit."
       },
       "batch": {
         "create": "Batch Add",
@@ -3169,6 +3410,7 @@
       "addSingle": "Add Single",
       "loadMore": "Load more",
       "noMore": "No more shares",
+      "groupChip": "Group",
       "noResults": "No results found for your search",
       "searchPlaceholder": "Search by name, token, IP address, or share link...",
       "sortLabel": "Sort",

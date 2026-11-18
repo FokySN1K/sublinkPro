@@ -14,12 +14,14 @@ import { useTranslation } from 'react-i18next';
 import ContentCopyIcon from '@mui/icons-material/ContentCopy';
 import QrCodeIcon from '@mui/icons-material/QrCode';
 import useResolvedColorScheme from 'hooks/useResolvedColorScheme';
+import { formatDateTime } from 'i18n/locales';
+import { formatBytes } from 'views/airports/utils';
 import { getReadableTextTokens, getSurfaceTokens } from 'themes/surfaceTokens';
 import { withAlpha } from 'utils/colorUtils';
 
-export default function ClientUrlsDialog({ open, title, legacy = false, clientUrls, onClose, onQrCode, onCopy }) {
+export default function ClientUrlsDialog({ open, title, legacy = false, telemetry = null, clientUrls, onClose, onQrCode, onCopy }) {
   const theme = useTheme();
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
   const { isDark } = useResolvedColorScheme();
   const { palette, dialogSurface, dialogSurfaceGradient, mutedPanelSurface, nestedPanelSurface, panelBorder } = getSurfaceTokens(
@@ -104,6 +106,44 @@ export default function ClientUrlsDialog({ open, title, legacy = false, clientUr
           bgcolor: dialogSurface
         }}
       >
+        {telemetry && (
+          <Box
+            sx={{
+              mt: 1,
+              px: 1.5,
+              py: 1.25,
+              borderRadius: 2.5,
+              bgcolor: mutedPanelSurface,
+              border: '1px solid',
+              borderColor: rowBorder
+            }}
+          >
+            <Stack direction="row" spacing={1} alignItems="center" useFlexGap flexWrap="wrap">
+              <Typography variant="caption" sx={{ color: secondaryText }}>
+                {t('subscriptions.share.telemetryUsed', {
+                  used: formatBytes(telemetry.used || 0),
+                  limit: telemetry.limit > 0 ? formatBytes(telemetry.limit) : '∞'
+                })}
+              </Typography>
+              <Typography variant="caption" sx={{ color: secondaryText }}>
+                {telemetry.lastUsageAt
+                  ? t('subscriptions.share.telemetryLastReport', {
+                      time: formatDateTime(telemetry.lastUsageAt, i18n.resolvedLanguage || i18n.language)
+                    })
+                  : t('subscriptions.share.telemetryNoReport')}
+              </Typography>
+              {telemetry.exhausted && (
+                <Chip
+                  size="small"
+                  color="error"
+                  variant="outlined"
+                  label={t('subscriptions.share.quotaExhausted')}
+                  sx={{ height: 22, fontSize: '0.7rem' }}
+                />
+              )}
+            </Stack>
+          </Box>
+        )}
         <Stack spacing={1.5} sx={{ mt: 1 }}>
           {Object.entries(clientUrls).map(([name, url]) => {
             const resolvedUrl = url;

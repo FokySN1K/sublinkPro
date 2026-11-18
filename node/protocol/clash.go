@@ -123,6 +123,7 @@ func (m Mbps) MarshalYAML() (any, error) {
 
 type Proxy struct {
 	Name                  string         `yaml:"name,omitempty"`                        // 节点名称
+	Sublinkpro_unique_key string         `yaml:"sublinkpro_unique_key,omitempty"`       // 节点稳定唯一键（与名称处理无关，供遥测归因）
 	Type                  string         `yaml:"type,omitempty"`                        // 代理类型 (ss, vmess, trojan, etc.)
 	Server                string         `yaml:"server,omitempty"`                      // 服务器地址
 	Port                  FlexPort       `yaml:"port,omitempty"`                        // 服务器端口
@@ -252,6 +253,9 @@ type Urls struct {
 	Url             string
 	DialerProxyName string
 	ClashExtra      string
+	// NodeUniqueKey 是该节点的稳定唯一键，写入 Clash/Mihomo 代理的
+	// sublinkpro_unique_key 字段，供客户端遥测归因使用。
+	NodeUniqueKey string
 }
 
 // 删除opts中的空值
@@ -377,6 +381,8 @@ func LinkToProxy(link Urls, config OutputConfig) (Proxy, error) {
 	if err := ApplyClashExtra(&proxy, link.ClashExtra); err != nil {
 		return Proxy{}, err
 	}
+	// 稳定唯一键在导入属性合并之后写入，保证导出结果不会被历史属性覆盖。
+	proxy.Sublinkpro_unique_key = strings.TrimSpace(link.NodeUniqueKey)
 	return proxy, nil
 }
 

@@ -2,16 +2,20 @@ import request from './request';
 
 /**
  * 获取订阅的所有分享列表
- * @param {number} subId 订阅ID
+ * @param {number} subId 订阅ID（节点池）
  * @param {number} page 页码（可选，用于分页）
  * @param {number} pageSize 每页数量（可选，用于分页）
  * @param {string} keyword 搜索关键词（可选）
  * @param {string} ipFilter IP地址筛选（可选）
  * @param {string} sortBy 排序字段（可选，如: access_count, name）
  * @param {string} sortOrder 排序方向（可选，asc/desc）
+ * @param {number} groupId 分享分组ID（可选，仅返回该分组下的链接）
  */
-export function getShares(subId, page, pageSize, keyword, ipFilter, sortBy, sortOrder) {
+export function getShares(subId, page, pageSize, keyword, ipFilter, sortBy, sortOrder, groupId) {
   const params = { subId };
+  if (groupId) {
+    params.groupId = groupId;
+  }
   if (page !== undefined && pageSize !== undefined) {
     params.page = page;
     params.pageSize = pageSize;
@@ -101,18 +105,22 @@ export function refreshShareToken(id) {
  * @param {object} data { baseName, count, expireType, expireDays?, expireAt?, enabled }
  */
 export function batchCreateShares(subscriptionId, data) {
+  const payload = {
+    subscription_id: subscriptionId,
+    base_name: data.baseName,
+    count: data.count,
+    expire_type: data.expireType,
+    expire_days: data.expireDays,
+    expire_at: data.expireAt,
+    enabled: data.enabled
+  };
+  if (data.groupId) {
+    payload.group_id = data.groupId;
+  }
   return request({
     url: '/v1/shares/batch-add',
     method: 'post',
-    data: {
-      subscription_id: subscriptionId,
-      base_name: data.baseName,
-      count: data.count,
-      expire_type: data.expireType,
-      expire_days: data.expireDays,
-      expire_at: data.expireAt,
-      enabled: data.enabled
-    }
+    data: payload
   });
 }
 

@@ -1,9 +1,12 @@
 package models
 
 import (
+	"crypto/rand"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"sort"
+	"strconv"
 	"strings"
 	"sublink/cache"
 	"sublink/database"
@@ -22,6 +25,67 @@ var subcriptionCache *cache.MapCache[int, Subcription]
 func init() {
 	subcriptionCache = cache.NewMapCache(func(s Subcription) int { return s.ID })
 	subcriptionCache.AddIndex("name", func(s Subcription) string { return s.Name })
+	subcriptionCache.AddIndex("uniquekey", func(s Subcription) string { return s.UniqueKey })
+}
+
+// GenerateSubcriptionUniqueKey 基于订阅名称生成稳定唯一键。
+// 结构为 <slug>-<8 位随机十六进制>；名称不含 ASCII 字母数字时回落到 pool-<随机>。
+// 唯一键在创建时生成，重命名后保持不变，供依赖标识而非名称的调用方使用。
+func GenerateSubcriptionUniqueKey(name string) string {
+	slug := make([]byte, 0, 48)
+	lastDash := false
+	for _, r := range strings.ToLower(strings.TrimSpace(name)) {
+		switch {
+		case r >= 'a' && r <= 'z', r >= '0' && r <= '9':
+			slug = append(slug, byte(r))
+			lastDash = false
+		case r == '-' || r == '_' || r == ' ' || r == '.':
+			if len(slug) > 0 && !lastDash {
+				slug = append(slug, '-')
+				lastDash = true
+			}
+		}
+		if len(slug) >= 48 {
+			break
+		}
+	}
+	trimmed := strings.Trim(string(slug), "-")
+	if trimmed == "" {
+		trimmed = "pool"
+	}
+	suffix := make([]byte, 4)
+	if _, err := rand.Read(suffix); err != nil {
+		return fmt.Sprintf("%s-%d", trimmed, time.Now().UnixNano())
+	}
+	return fmt.Sprintf("%s-%s", trimmed, hex.EncodeToString(suffix))
+}
+
+// IsSubcriptionUniqueKeyTaken 判断唯一键是否已被其他订阅占用。
+func IsSubcriptionUniqueKeyTaken(key string, excludeID int) bool {
+	if key == "" {
+		return false
+	}
+	for _, sub := range subcriptionCache.GetByIndex("uniquekey", key) {
+		if sub.ID != excludeID {
+			return true
+		}
+	}
+	return false
+}
+
+// ensureUniqueKey 在唯一键缺失或冲突时重新生成并写入模型（不落库）。
+func (sub *Subcription) ensureUniqueKey() {
+	if sub.UniqueKey != "" && !IsSubcriptionUniqueKeyTaken(sub.UniqueKey, sub.ID) {
+		return
+	}
+	for attempt := 0; attempt < 8; attempt++ {
+		candidate := GenerateSubcriptionUniqueKey(sub.Name)
+		if !IsSubcriptionUniqueKeyTaken(candidate, sub.ID) {
+			sub.UniqueKey = candidate
+			return
+		}
+	}
+	sub.UniqueKey = fmt.Sprintf("pool-%s", strconv.FormatInt(time.Now().UnixNano(), 16))
 }
 
 // 订阅类型
@@ -48,8 +112,9 @@ func (sub *Subcription) IsProxy() bool {
 type Subcription struct {
 	ID                    int
 	Name                  string
-	Description           string    `gorm:"size:512" json:"Description"`    // 订阅描述
-	Type                  string    `gorm:"default:collection" json:"Type"` // 订阅类型: collection/proxy
+	UniqueKey             string    `gorm:"size:64;uniqueIndex" json:"UniqueKey"` // 稳定唯一键：创建时生成，重命名后保持不变
+	Description           string    `gorm:"size:512" json:"Description"`          // 订阅描述
+	Type                  string    `gorm:"default:collection" json:"Type"`       // 订阅类型: collection/proxy
 	Config                string    `gorm:"embedded"`
 	Nodes                 []Node    `gorm:"-" json:"-"`
 	SubLogs               []SubLogs `gorm:"foreignKey:SubcriptionID;"` // 一对多关系 约束父表被删除子表记录跟着删除
@@ -159,12 +224,49 @@ func InitSubcriptionCache() error {
 	subcriptionCache.LoadAll(subs)
 	utils.Info("Subscription cache initialized with %d subscriptions", subcriptionCache.Count())
 
+	if err := BackfillSubcriptionUniqueKeys(); err != nil {
+		utils.Warn("Failed to backfill subscription unique keys: %v", err)
+	}
+
 	cache.Manager.Register("subcription", subcriptionCache)
+	return nil
+}
+
+// BackfillSubcriptionUniqueKeys 为缺失唯一键的历史订阅补齐唯一键。
+// 唯一键只生成一次，已有的唯一键不会被改写，因此重命名不会影响它。
+func BackfillSubcriptionUniqueKeys() error {
+	var subs []Subcription
+	if err := database.DB.Where("unique_key = '' OR unique_key IS NULL").Find(&subs).Error; err != nil {
+		return err
+	}
+	if len(subs) == 0 {
+		return nil
+	}
+	for i := range subs {
+		candidate := ""
+		for attempt := 0; attempt < 8; attempt++ {
+			guess := GenerateSubcriptionUniqueKey(subs[i].Name)
+			if !IsSubcriptionUniqueKeyTaken(guess, subs[i].ID) {
+				candidate = guess
+				break
+			}
+		}
+		if candidate == "" {
+			candidate = fmt.Sprintf("pool-%d-%d", subs[i].ID, time.Now().UnixNano())
+		}
+		if err := database.DB.Model(&Subcription{}).Where("id = ?", subs[i].ID).Update("unique_key", candidate).Error; err != nil {
+			return err
+		}
+		subs[i].UniqueKey = candidate
+		subcriptionCache.Set(subs[i].ID, subs[i])
+	}
+	utils.Info("Backfilled unique keys for %d subscriptions", len(subs))
 	return nil
 }
 
 // Add 添加订阅 (Write-Through)
 func (sub *Subcription) Add() error {
+	sub.ensureUniqueKey()
 	err := database.DB.Create(sub).Error
 	if err != nil {
 		return err
@@ -316,8 +418,9 @@ func (sub *Subcription) Update() error {
 		"unlock_rule_mode":         sub.UnlockRuleMode,
 		"type":                     sub.Type,
 		"airport_id":               sub.AirportID,
+		// 唯一键不随重命名改变，因此这里刻意不写入 unique_key。
 	}
-	err := database.DB.Model(&Subcription{}).Where("id = ? or name = ?", sub.ID, sub.Name).Updates(updates).Error
+	err := database.DB.Model(&Subcription{}).Where("id = ?", sub.ID).Updates(updates).Error
 	if err != nil {
 		return err
 	}
@@ -416,11 +519,18 @@ func (sub *Subcription) UpdateScripts(scriptIDs []int) error {
 }
 
 // 查找订阅（优先从缓存查找）
+// 依次尝试：ID、唯一键、名称。唯一键在重命名后保持不变，是首选的非 ID 标识。
 func (sub *Subcription) Find() error {
 	// 优先从缓存查找
 	if sub.ID > 0 {
 		if cached, ok := subcriptionCache.Get(sub.ID); ok {
 			*sub = cached
+			return nil
+		}
+	}
+	if sub.UniqueKey != "" {
+		if subs := subcriptionCache.GetByIndex("uniquekey", sub.UniqueKey); len(subs) > 0 {
+			*sub = subs[0]
 			return nil
 		}
 	}
@@ -431,9 +541,20 @@ func (sub *Subcription) Find() error {
 			return nil
 		}
 	}
-	// 缓存未命中，查数据库
-	err := database.DB.Where("id = ? or name = ?", sub.ID, sub.Name).First(sub).Error
-	if err != nil {
+	if sub.ID <= 0 && sub.UniqueKey == "" && sub.Name == "" {
+		return gorm.ErrRecordNotFound
+	}
+	// 缓存未命中，查数据库：唯一键优先，其次兼容名称
+	query := database.DB
+	switch {
+	case sub.ID > 0:
+		query = query.Where("id = ?", sub.ID)
+	case sub.UniqueKey != "":
+		query = query.Where("unique_key = ?", sub.UniqueKey)
+	default:
+		query = query.Where("name = ?", sub.Name)
+	}
+	if err := query.First(sub).Error; err != nil {
 		return err
 	}
 	// 更新缓存
@@ -1213,7 +1334,7 @@ func (sub *Subcription) Del() error {
 }
 
 // Copy 复制订阅及其关联数据（节点、分组、脚本）
-// 新订阅名称为：原名称_复制
+// 新订阅名称为：原名称_copy，唯一键重新生成
 func (sub *Subcription) Copy() (*Subcription, error) {
 	// 创建新订阅对象，复制所有配置字段
 	newSub := &Subcription{
@@ -1241,6 +1362,7 @@ func (sub *Subcription) Copy() (*Subcription, error) {
 		UpdateInterval:        sub.UpdateInterval,
 		AirportID:             sub.AirportID,
 	}
+	newSub.ensureUniqueKey()
 
 	// 使用事务确保数据一致性
 	tx := database.DB.Begin()

@@ -4,13 +4,16 @@ English | [简体中文](subscription-share.zh-CN.md)
 
 The new subscription share management feature replaces the old single Token mode with safer and more flexible share link management.
 
+> [!TIP]
+> Links can be organized into share groups that own the delivery policy (templates, hiding the config, device binding, quotas, telemetry) and serve editable placeholders (Заглушка) instead of a config when a request cannot be served. See [Share Groups & Placeholders](share-groups.md).
+
 ---
 
 ## Core Features
 
 | Feature | Description |
 |:---|:---|
-| **Multiple link management** | Each subscription can create multiple independent share links for different users or scenarios |
+| **Multiple link management** | Each share group can create multiple independent share links for different users or scenarios. A node pool only aggregates and renames nodes; links are managed where the group policy lives |
 | **Secure Token** | Random secure Tokens are generated, with optional custom Tokens for easier memory |
 | **Expiration policies** | Supports never expire, expire after a number of days, and expire at a specific time |
 | **Independent statistics** | Each share link records its own access count and IP logs |
@@ -54,7 +57,7 @@ Case 3: Access tracking
 ## Upgrade Notes
 
 > [!TIP]
-> **Default share**: After upgrade, the system automatically creates a “default” share link for each subscription, keeping old links available for a smooth upgrade.
+> **Default share (legacy only)**: The upgrade migration created one “default” share link for subscriptions that existed before links moved under share groups, so old links keep working. New node pools do not create links automatically — create and manage them from the share group that serves the pool.
 
 > [!IMPORTANT]
 > **Legacy token rotation**: Early versions derived default share tokens from `md5(subscription name)`, which made links predictable. On upgrade, migration `0044_rotate_predictable_share_tokens` automatically replaces such tokens with random ones. Links that used the old tokens stop working, so re-copy the affected share links from Share Management.

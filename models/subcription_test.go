@@ -73,6 +73,7 @@ func nodeNames(nodes []Node) []string {
 func resetSubcriptionCacheForTest() {
 	subcriptionCache = cache.NewMapCache(func(s Subcription) int { return s.ID })
 	subcriptionCache.AddIndex("name", func(s Subcription) string { return s.Name })
+	subcriptionCache.AddIndex("uniquekey", func(s Subcription) string { return s.UniqueKey })
 }
 
 func resetSubLogsCacheForTest() {

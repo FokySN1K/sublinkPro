@@ -32,6 +32,7 @@ import DeleteIcon from '@mui/icons-material/Delete';
 import LinkIcon from '@mui/icons-material/Link';
 import RefreshIcon from '@mui/icons-material/Refresh';
 import HistoryIcon from '@mui/icons-material/History';
+import DevicesIcon from '@mui/icons-material/Devices';
 import DownloadIcon from '@mui/icons-material/Download';
 import SortIcon from '@mui/icons-material/Sort';
 import Checkbox from '@mui/material/Checkbox';
@@ -49,13 +50,16 @@ import {
   batchUpdateShares
 } from '../../../api/shares';
 import { getSubStoreSettings, getSystemDomain } from '../../../api/settings';
+import { getShareGroups } from '../../../api/shareGroups';
 import useResolvedColorScheme from 'hooks/useResolvedColorScheme';
 import { getReadableTextTokens, getSurfaceTokens } from 'themes/surfaceTokens';
 import { withAlpha } from 'utils/colorUtils';
-import AccessLogsDialog from './AccessLogsDialog';
+import AccessLogsDialog from 'components/AccessLogsDialog';
+import { formatBytes } from 'views/airports/utils';
 import ClientUrlsDialog from './ClientUrlsDialog';
 import QrCodeDialog from './QrCodeDialog';
-import ConfirmDialog from './ConfirmDialog';
+import ShareDevicesDialog from './ShareDevicesDialog';
+import ConfirmDialog from 'views/subscriptions/component/ConfirmDialog';
 import ShareBatchCreateDialog from './ShareBatchCreateDialog';
 import ShareBatchUpdateDialog from './ShareBatchUpdateDialog';
 import ShareExportDialog from './ShareExportDialog';
@@ -64,6 +68,14 @@ const EXPIRE_TYPE_NEVER = 0;
 const EXPIRE_TYPE_DAYS = 1;
 const EXPIRE_TYPE_DATETIME = 2;
 const SHARE_PAGE_SIZE = 50;
+const GB = 1024 * 1024 * 1024;
+
+// Managed links always carry telemetry metadata; legacy links only when they
+// have actually accumulated reports.
+function hasShareTelemetry(share) {
+  if (!share) return false;
+  return Boolean(share.group_id || share.last_usage_at || (share.reported_traffic_bytes || 0) > 0 || (share.traffic_limit_bytes || 0) > 0);
+}
 
 const NATIVE_CLIENT_LINKS = [
   { key: 'clash', client: 'clash' },
@@ -84,7 +96,7 @@ const EXPANDED_CLIENT_LINKS = [
   { key: 'json', client: 'json' }
 ];
 
-export default function ShareManageDialog({ open, subscription, onClose, showMessage }) {
+export default function ShareManageDialog({ open, subscription, group = null, onClose, showMessage }) {
   const theme = useTheme();
   const { t, i18n } = useTranslation();
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
@@ -126,18 +138,27 @@ export default function ShareManageDialog({ open, subscription, onClose, showMes
 
   const [formOpen, setFormOpen] = useState(false);
   const [editingShare, setEditingShare] = useState(null);
+  const [shareGroups, setShareGroups] = useState([]);
   const [formData, setFormData] = useState({
     name: '',
     token: '',
+    group_id: '',
     expire_type: EXPIRE_TYPE_NEVER,
     expire_days: 30,
     expire_at: '',
+    traffic_limit_gb: '',
+    max_devices: 0,
+    report_interval_sessions: 3600,
+    report_interval_nodes: 3600,
+    report_interval_reliability: 3600,
     enabled: true
   });
 
   const [qrOpen, setQrOpen] = useState(false);
   const [qrUrl, setQrUrl] = useState('');
   const [qrTitle, setQrTitle] = useState('');
+
+  const [devicesShare, setDevicesShare] = useState(null);
 
   const [logsOpen, setLogsOpen] = useState(false);
   const [logsLoading, setLogsLoading] = useState(false);
@@ -188,7 +209,16 @@ export default function ShareManageDialog({ open, subscription, onClose, showMes
         const actualSortBy = customSortBy !== null ? customSortBy : sortBy;
         const actualSortOrder = customSortOrder !== null ? customSortOrder : sortOrder;
 
-        const res = await getShares(subscription.ID, 1, SHARE_PAGE_SIZE, keywordValue, ipFilterValue, actualSortBy, actualSortOrder);
+        const res = await getShares(
+          subscription.ID,
+          1,
+          SHARE_PAGE_SIZE,
+          keywordValue,
+          ipFilterValue,
+          actualSortBy,
+          actualSortOrder,
+          group?.id
+        );
         if (res.data?.items) {
           // 分页响应
           setShares(res.data.items);
@@ -212,7 +242,7 @@ export default function ShareManageDialog({ open, subscription, onClose, showMes
         }
       }
     },
-    [subscription?.ID, sortBy, sortOrder] // 添加sortBy和sortOrder依赖,但实际使用customSortBy/customSortOrder参数
+    [subscription?.ID, group?.id, sortBy, sortOrder] // 添加sortBy和sortOrder依赖,但实际使用customSortBy/customSortOrder参数
   );
 
   const loadMoreShares = useCallback(async () => {
@@ -228,7 +258,8 @@ export default function ShareManageDialog({ open, subscription, onClose, showMes
         isIP ? '' : searchQuery,
         isIP ? searchQuery : ipFilter,
         sortBy,
-        sortOrder
+        sortOrder,
+        group?.id
       );
       if (res.data?.items) {
         setShares((prev) => [...prev, ...res.data.items]);
@@ -240,7 +271,7 @@ export default function ShareManageDialog({ open, subscription, onClose, showMes
     } finally {
       setLoadingMore(false);
     }
-  }, [loadingMore, hasMore, subscription?.ID, page, searchQuery, ipFilter, sortBy, sortOrder]);
+  }, [loadingMore, hasMore, subscription?.ID, group?.id, page, searchQuery, ipFilter, sortBy, sortOrder]);
 
   const handleSort = (field) => {
     let newSortBy = sortBy;
@@ -287,6 +318,23 @@ export default function ShareManageDialog({ open, subscription, onClose, showMes
     }
   }, []);
 
+  const fetchShareGroups = useCallback(async () => {
+    if (!subscription?.ID) return;
+    // 分组维度的链接管理固定使用当前分组，不再提供分组切换。
+    if (group?.id) {
+      setShareGroups([group]);
+      return;
+    }
+    try {
+      const res = await getShareGroups();
+      const items = (res.data || []).filter((item) => item.subscription_id === subscription.ID);
+      setShareGroups(items);
+    } catch (error) {
+      console.error('Failed to get share groups:', error);
+      setShareGroups([]);
+    }
+  }, [subscription?.ID, group]);
+
   useEffect(() => {
     if (open && subscription?.ID) {
       // 重置状态
@@ -300,9 +348,10 @@ export default function ShareManageDialog({ open, subscription, onClose, showMes
       fetchSystemDomain();
       fetchShares('', false, '', 'desc'); // 明确传入初始排序参数
       fetchSubStoreTargets();
+      fetchShareGroups();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, subscription?.ID]);
+  }, [open, subscription?.ID, group?.id]);
 
   const copyToClipboard = (text) => {
     navigator.clipboard.writeText(text);
@@ -319,9 +368,15 @@ export default function ShareManageDialog({ open, subscription, onClose, showMes
     setFormData({
       name: '',
       token: '',
+      group_id: group?.id ?? (shareGroups.length > 0 ? shareGroups[0].id : ''),
       expire_type: EXPIRE_TYPE_NEVER,
       expire_days: 30,
       expire_at: '',
+      traffic_limit_gb: '',
+      max_devices: 0,
+      report_interval_sessions: 3600,
+      report_interval_nodes: 3600,
+      report_interval_reliability: 3600,
       enabled: true
     });
     setFormOpen(true);
@@ -333,9 +388,15 @@ export default function ShareManageDialog({ open, subscription, onClose, showMes
     setFormData({
       name: share.name || '',
       token: share.token || '',
+      group_id: share.group_id || '',
       expire_type: share.expire_type || EXPIRE_TYPE_NEVER,
       expire_days: share.expire_days || 30,
       expire_at: share.expire_at ? share.expire_at.substring(0, 16) : '',
+      traffic_limit_gb: share.traffic_limit_bytes > 0 ? (share.traffic_limit_bytes / GB).toFixed(2) : '',
+      max_devices: share.max_devices || 0,
+      report_interval_sessions: share.report_interval_sessions || 3600,
+      report_interval_nodes: share.report_interval_nodes || 3600,
+      report_interval_reliability: share.report_interval_reliability || 3600,
       enabled: share.enabled !== false
     });
     setFormOpen(true);
@@ -343,10 +404,24 @@ export default function ShareManageDialog({ open, subscription, onClose, showMes
 
   const handleSave = async () => {
     try {
+      const hasGroup = formData.group_id !== '' && formData.group_id !== null && formData.group_id !== undefined;
       const data = {
-        ...formData,
-        subscription_id: subscription.ID
+        subscription_id: subscription.ID,
+        name: formData.name,
+        token: formData.token,
+        expire_type: Number(formData.expire_type) || 0,
+        expire_days: Number(formData.expire_days) || 0,
+        expire_at: formData.expire_at,
+        enabled: formData.enabled,
+        group_id: hasGroup ? Number(formData.group_id) : 0
       };
+      if (hasGroup) {
+        data.traffic_limit_bytes = Math.round((Number(formData.traffic_limit_gb) || 0) * GB);
+        data.max_devices = Number(formData.max_devices) || 0;
+        data.report_interval_sessions = Number(formData.report_interval_sessions) || 3600;
+        data.report_interval_nodes = Number(formData.report_interval_nodes) || 3600;
+        data.report_interval_reliability = Number(formData.report_interval_reliability) || 3600;
+      }
 
       if (editingShare) {
         data.id = editingShare.id;
@@ -435,7 +510,7 @@ export default function ShareManageDialog({ open, subscription, onClose, showMes
   // 批量操作处理函数
   const handleBatchCreate = async (data) => {
     try {
-      await batchCreateShares(subscription.ID, data);
+      await batchCreateShares(subscription.ID, { ...data, groupId: group?.id });
       showMessage?.(t('subscriptions.share.batch.createSuccess'), 'success');
       fetchShares();
       setSelectedShares([]);
@@ -805,10 +880,43 @@ export default function ShareManageDialog({ open, subscription, onClose, showMes
                     {share.name || t('subscriptions.share.unnamed')}
                   </Typography>
                   {share.is_legacy && <Chip label={t('subscriptions.share.defaultChip')} size="small" sx={legacyChipSx} />}
+                  {share.group_id && (
+                    <Chip
+                      label={shareGroups.find((group) => group.id === share.group_id)?.name || t('subscriptions.share.groupChip')}
+                      size="small"
+                      variant="outlined"
+                      sx={{ height: 20, fontSize: '0.68rem' }}
+                    />
+                  )}
                 </Stack>
                 <Typography variant="caption" sx={{ color: expired ? tertiaryText : secondaryText }}>
                   {t('subscriptions.share.cardMeta', { expire: getExpireText(share), count: share.access_count || 0 })}
                 </Typography>
+                {hasShareTelemetry(share) && (
+                  <Stack direction="row" spacing={0.75} alignItems="center" flexWrap="wrap" useFlexGap>
+                    <Typography variant="caption" sx={{ color: expired ? tertiaryText : secondaryText }}>
+                      {t('subscriptions.share.cardTraffic', {
+                        used: formatBytes(share.reported_traffic_bytes || 0),
+                        limit: share.traffic_limit_bytes > 0 ? formatBytes(share.traffic_limit_bytes) : '∞'
+                      })}
+                    </Typography>
+                    {share.last_usage_at && (
+                      <Typography variant="caption" sx={{ color: expired ? tertiaryText : secondaryText }}>
+                        {t('subscriptions.share.cardLastUsage', {
+                          time: formatDateTime(share.last_usage_at, i18n.resolvedLanguage || i18n.language)
+                        })}
+                      </Typography>
+                    )}
+                    {share.traffic_limit_bytes > 0 && share.reported_traffic_bytes >= share.traffic_limit_bytes && (
+                      <Chip
+                        label={t('subscriptions.share.quotaExhausted')}
+                        size="small"
+                        color="error"
+                        sx={{ height: 20, fontSize: '0.68rem' }}
+                      />
+                    )}
+                  </Stack>
+                )}
               </Box>
             </Box>
             <Stack direction="row" spacing={0.5}>
@@ -817,6 +925,20 @@ export default function ShareManageDialog({ open, subscription, onClose, showMes
                   <HistoryIcon fontSize="small" />
                 </IconButton>
               </Tooltip>
+              {share.group_id && (
+                <Tooltip title={t('subscriptions.share.actions.devices')}>
+                  <IconButton
+                    size="small"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setDevicesShare(share);
+                    }}
+                    sx={actionIconButtonSx}
+                  >
+                    <DevicesIcon fontSize="small" />
+                  </IconButton>
+                </Tooltip>
+              )}
               <Tooltip title={t('common.edit')}>
                 <IconButton size="small" onClick={(e) => handleEdit(share, e)} sx={actionIconButtonSx}>
                   <EditIcon fontSize="small" />
@@ -873,7 +995,54 @@ export default function ShareManageDialog({ open, subscription, onClose, showMes
     return [...NATIVE_CLIENT_LINKS, ...EXPANDED_CLIENT_LINKS.filter((item) => allowedTargets.has(item.client))];
   }, [subStoreTargets]);
 
+  const detailGroup = useMemo(() => {
+    if (!detailShare?.group_id) return null;
+    return shareGroups.find((item) => item.id === detailShare.group_id) || null;
+  }, [detailShare, shareGroups]);
+
+  // 托管链接只提供订阅组允许的渲染器；隐藏配置的订阅组只对 SNKP 下发配置，
+  // 其他客户端只会拿到占位提示，因此只展示自动识别与 Mihomo SNKP。
+  const allowedClientLinks = useMemo(() => {
+    if (!detailGroup) {
+      return visibleClientLinks;
+    }
+    if (detailGroup.hide_config) {
+      return [{ key: 'mihomo_snkp', client: 'mihomo_snkp' }];
+    }
+    const templates = new Set(detailGroup.template_list || []);
+    const nativeLinks = NATIVE_CLIENT_LINKS.filter((item) =>
+      item.client === 'clash' || item.client === 'mihomo' ? templates.has('mihomo') : templates.has(item.client)
+    );
+    const orderedLinks = [...nativeLinks];
+    if (templates.has('mihomo_snkp')) {
+      const surgeIndex = orderedLinks.findIndex((item) => item.client === 'surge');
+      const snkpLink = { key: 'mihomo_snkp', client: 'mihomo_snkp' };
+      if (surgeIndex === -1) {
+        orderedLinks.push(snkpLink);
+      } else {
+        orderedLinks.splice(surgeIndex, 0, snkpLink);
+      }
+    }
+    // Sub-Store 转换目标由客户端自行转换，不受订阅组模板限制。
+    const expandedLinks = EXPANDED_CLIENT_LINKS.filter((item) => subStoreTargets.includes(item.client));
+    return [...orderedLinks, ...expandedLinks];
+  }, [detailGroup, subStoreTargets, visibleClientLinks]);
+
   const isProxySubscription = (subscription?.Type || 'collection') === 'proxy';
+
+  // Telemetry snapshot for the URL dialog; null hides the panel entirely
+  // (e.g. legacy links without a group).
+  const detailTelemetry = useMemo(() => {
+    if (!hasShareTelemetry(detailShare)) return null;
+    const used = detailShare.reported_traffic_bytes || 0;
+    const limit = detailShare.traffic_limit_bytes || 0;
+    return {
+      used,
+      limit,
+      lastUsageAt: detailShare.last_usage_at || null,
+      exhausted: limit > 0 && used >= limit
+    };
+  }, [detailShare]);
 
   const detailClientUrls = useMemo(() => {
     if (!detailShare) return {};
@@ -882,14 +1051,14 @@ export default function ShareManageDialog({ open, subscription, onClose, showMes
       // 代理订阅原样转发上游内容，client 参数无效，只提供一个订阅链接。
       return { [t('subscriptions.share.proxyClientUrl')]: baseUrl };
     }
-    return visibleClientLinks.reduce(
+    return allowedClientLinks.reduce(
       (urls, item) => ({
         ...urls,
         [t(`subscriptions.share.clients.${item.key}`)]: `${baseUrl}&client=${item.client}`
       }),
       { [t('subscriptions.share.clients.auto')]: baseUrl }
     );
-  }, [detailShare, getServerUrl, isProxySubscription, t, visibleClientLinks]);
+  }, [detailShare, getServerUrl, isProxySubscription, t, allowedClientLinks]);
 
   return (
     <>
@@ -1159,6 +1328,7 @@ export default function ShareManageDialog({ open, subscription, onClose, showMes
         open={detailOpen}
         title={detailShare?.name || t('subscriptions.share.detailTitle')}
         legacy={Boolean(detailShare?.is_legacy)}
+        telemetry={detailTelemetry}
         clientUrls={detailClientUrls}
         onClose={() => setDetailOpen(false)}
         onQrCode={handleQrCode}
@@ -1198,6 +1368,22 @@ export default function ShareManageDialog({ open, subscription, onClose, showMes
               fullWidth
             />
 
+            <FormControl size="small" fullWidth disabled={Boolean(group)}>
+              <InputLabel>{t('subscriptions.share.form.group')}</InputLabel>
+              <Select
+                value={formData.group_id}
+                label={t('subscriptions.share.form.group')}
+                onChange={(e) => setFormData({ ...formData, group_id: e.target.value })}
+              >
+                {!group && <MenuItem value="">{t('subscriptions.share.form.noGroup')}</MenuItem>}
+                {shareGroups.map((item) => (
+                  <MenuItem key={item.id} value={item.id}>
+                    {item.name}
+                  </MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+
             <TextField
               label={t('subscriptions.share.form.token')}
               value={formData.token}
@@ -1205,6 +1391,7 @@ export default function ShareManageDialog({ open, subscription, onClose, showMes
               placeholder={t('subscriptions.share.form.tokenPlaceholder')}
               size="small"
               fullWidth
+              inputProps={{ maxLength: 64 }}
               helperText={t('subscriptions.share.form.tokenHelper')}
             />
 
@@ -1251,6 +1438,62 @@ export default function ShareManageDialog({ open, subscription, onClose, showMes
                 label={t('subscriptions.share.form.enabled')}
               />
             )}
+
+            {formData.group_id !== '' && (
+              <>
+                <Typography variant="caption" color="textSecondary">
+                  {t('subscriptions.share.form.overrideHint')}
+                </Typography>
+                <TextField
+                  label={t('shareGroups.fields.maxDevices')}
+                  type="number"
+                  value={formData.max_devices}
+                  onChange={(e) => setFormData({ ...formData, max_devices: e.target.value })}
+                  size="small"
+                  fullWidth
+                  helperText={t('shareGroups.fields.unlimitedHint')}
+                  inputProps={{ min: 0 }}
+                />
+                <TextField
+                  label={t('shareGroups.fields.trafficLimit')}
+                  type="number"
+                  value={formData.traffic_limit_gb}
+                  onChange={(e) => setFormData({ ...formData, traffic_limit_gb: e.target.value })}
+                  size="small"
+                  fullWidth
+                  helperText={t('shareGroups.fields.trafficLimitHint')}
+                  inputProps={{ min: 0, step: 0.5 }}
+                />
+                <TextField
+                  label={t('shareGroups.fields.interval_sessions')}
+                  type="number"
+                  value={formData.report_interval_sessions}
+                  onChange={(e) => setFormData({ ...formData, report_interval_sessions: e.target.value })}
+                  size="small"
+                  fullWidth
+                  helperText={t('shareGroups.fields.intervalHint')}
+                  inputProps={{ min: 300, max: 86400, step: 300 }}
+                />
+                <TextField
+                  label={t('shareGroups.fields.interval_nodes')}
+                  type="number"
+                  value={formData.report_interval_nodes}
+                  onChange={(e) => setFormData({ ...formData, report_interval_nodes: e.target.value })}
+                  size="small"
+                  fullWidth
+                  inputProps={{ min: 300, max: 86400, step: 300 }}
+                />
+                <TextField
+                  label={t('shareGroups.fields.interval_reliability')}
+                  type="number"
+                  value={formData.report_interval_reliability}
+                  onChange={(e) => setFormData({ ...formData, report_interval_reliability: e.target.value })}
+                  size="small"
+                  fullWidth
+                  inputProps={{ min: 300, max: 86400, step: 300 }}
+                />
+              </>
+            )}
           </Stack>
         </DialogContent>
         <DialogActions sx={{ px: 2.5, py: 1.75, bgcolor: mutedPanelSurface, borderTop: '1px solid', borderColor: panelBorder }}>
@@ -1260,6 +1503,13 @@ export default function ShareManageDialog({ open, subscription, onClose, showMes
           </Button>
         </DialogActions>
       </Dialog>
+
+      <ShareDevicesDialog
+        open={Boolean(devicesShare)}
+        share={devicesShare}
+        onClose={() => setDevicesShare(null)}
+        showMessage={showMessage}
+      />
 
       <AccessLogsDialog
         open={logsOpen}

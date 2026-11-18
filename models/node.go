@@ -139,6 +139,49 @@ func hashNodeLink(link string) string {
 	return hex.EncodeToString(sum[:])
 }
 
+// nodeUniqueKeyLength 是导出到客户端的稳定节点键长度（128 位十六进制）。
+// 截断后的哈希仍保留足够抗碰撞能力，同时让配置里的字段更短。
+const nodeUniqueKeyLength = 32
+
+// BuildNodeUniqueKey 生成导出配置中的稳定节点唯一键。
+// ContentHash 由解析后的代理内容计算且排除节点名称，名称处理（如统一改成 1）
+// 不会改变它；存量节点缺少 ContentHash 时退回 LinkHash，再退回原始链接哈希。
+func BuildNodeUniqueKey(contentHash, linkHash, link string) string {
+	for _, candidate := range []string{contentHash, linkHash} {
+		if key := normalizeNodeUniqueKey(candidate); key != "" {
+			return key
+		}
+	}
+	link = strings.TrimSpace(link)
+	if link == "" {
+		return ""
+	}
+	return hashNodeLink(link)[:nodeUniqueKeyLength]
+}
+
+// normalizeNodeUniqueKey 将存量哈希统一成小写十六进制前缀；非法值返回空串。
+func normalizeNodeUniqueKey(value string) string {
+	value = strings.ToLower(strings.TrimSpace(value))
+	if len(value) < nodeUniqueKeyLength {
+		return ""
+	}
+	value = value[:nodeUniqueKeyLength]
+	for _, char := range value {
+		if (char >= '0' && char <= '9') || (char >= 'a' && char <= 'f') {
+			continue
+		}
+		return ""
+	}
+	return value
+}
+
+// SublinkNodeUniqueKey 返回节点导出到客户端的稳定唯一键。
+// 该键写入 Clash/Mihomo 代理的 sublinkpro_unique_key 字段和 URI 查询参数，
+// 供客户端遥测在节点重命名后继续归属到同一节点。
+func (node Node) SublinkNodeUniqueKey() string {
+	return BuildNodeUniqueKey(node.ContentHash, node.LinkHash, node.Link)
+}
+
 func normalizeNodeRemarkName(name string) string {
 	return strings.TrimSpace(name)
 }

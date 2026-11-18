@@ -17,6 +17,12 @@ func resetSubscriptionShareCacheForTest() {
 	subscriptionShareCache = cache.NewMapCache(func(s SubscriptionShare) int { return s.ID })
 	subscriptionShareCache.AddIndex("token", func(s SubscriptionShare) string { return s.Token })
 	subscriptionShareCache.AddIndex("subscriptionID", func(s SubscriptionShare) string { return strconv.Itoa(s.SubscriptionID) })
+	subscriptionShareCache.AddIndex("groupID", func(s SubscriptionShare) string {
+		if s.GroupID == nil {
+			return ""
+		}
+		return strconv.Itoa(*s.GroupID)
+	})
 }
 
 func setupSubscriptionShareTestDB(t *testing.T) {
@@ -232,6 +238,58 @@ func TestGetSharesBySubscriptionIDPaginatedSortsBeforePagination(t *testing.T) {
 		t.Fatalf("get second sorted page: %v", err)
 	}
 	assertShareNames(t, secondPage, []string{"测试sss-3", "测试sss-10"})
+}
+
+func TestGetSharesByGroupIDPaginatedScopesToGroup(t *testing.T) {
+	setupSubscriptionShareTestDB(t)
+
+	groupOne, groupTwo := 1, 2
+	shares := []*SubscriptionShare{
+		{SubscriptionID: 1, Name: "group-one-alpha", GroupID: &groupOne, ExpireType: ExpireTypeNever},
+		{SubscriptionID: 1, Name: "group-one-beta", GroupID: &groupOne, ExpireType: ExpireTypeNever},
+		{SubscriptionID: 2, Name: "group-two-alpha", GroupID: &groupTwo, ExpireType: ExpireTypeNever},
+		{SubscriptionID: 1, Name: "group-one-unmanaged", ExpireType: ExpireTypeNever},
+	}
+	for _, share := range shares {
+		if err := share.Add(); err != nil {
+			t.Fatalf("add share %q: %v", share.Name, err)
+		}
+	}
+
+	got, total, err := GetSharesByGroupIDPaginated(groupOne, 1, 10, "", "", "name", "asc")
+	if err != nil {
+		t.Fatalf("get group shares: %v", err)
+	}
+	if total != 2 {
+		t.Fatalf("expected total=2, got %d", total)
+	}
+	assertShareNames(t, got, []string{"group-one-alpha", "group-one-beta"})
+
+	filtered, total, err := GetSharesByGroupIDPaginated(groupOne, 1, 10, "beta", "", "name", "asc")
+	if err != nil {
+		t.Fatalf("get group shares by keyword: %v", err)
+	}
+	if total != 1 {
+		t.Fatalf("expected keyword total=1, got %d", total)
+	}
+	assertShareNames(t, filtered, []string{"group-one-beta"})
+
+	firstPage, total, err := GetSharesByGroupIDPaginated(groupOne, 1, 1, "", "", "name", "asc")
+	if err != nil {
+		t.Fatalf("get first group page: %v", err)
+	}
+	if total != 2 {
+		t.Fatalf("expected paginated total=2, got %d", total)
+	}
+	assertShareNames(t, firstPage, []string{"group-one-alpha"})
+
+	empty, total, err := GetSharesByGroupIDPaginated(99, 1, 10, "", "", "name", "asc")
+	if err != nil {
+		t.Fatalf("get shares for unknown group: %v", err)
+	}
+	if total != 0 || len(empty) != 0 {
+		t.Fatalf("expected no shares for unknown group, got %d (total=%d)", len(empty), total)
+	}
 }
 
 func assertShareNames(t *testing.T, shares []SubscriptionShare, expected []string) {

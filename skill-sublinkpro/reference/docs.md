@@ -63,6 +63,7 @@ suffix for Chinese.
 | AI template editing, operation sessions, server preview validation, read-only diff review, validation warnings, accept into editor, normal save | `docs/features/template-ai.md` |
 | Airport management — import, scheduled updates, traffic monitoring | `docs/features/airport.md` |
 | Subscription sharing — multiple links, expiration policies, access stats | `docs/features/subscription-share.md` |
+| Share groups — delivery policy, link snapshots, device binding, placeholders (Заглушка), `/c/status`, telemetry | `docs/features/share-groups.md` |
 | Proxy subscriptions — relay an airport's upstream subscription as-is, headers, errors, limits | `docs/features/subscription-proxy.md` |
 | Host management — domain mappings, DNS, CDN preferred IPs | `docs/features/host.md` |
 | Cloudflare Tunnel — create tunnel, token, public access | `docs/features/cloudflare-tunnel.md` |

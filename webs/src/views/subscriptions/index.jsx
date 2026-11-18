@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 
 // material-ui
@@ -14,7 +14,6 @@ import TextField from '@mui/material/TextField';
 import Tabs from '@mui/material/Tabs';
 import Tab from '@mui/material/Tab';
 import InputAdornment from '@mui/material/InputAdornment';
-import CircularProgress from '@mui/material/CircularProgress';
 
 // icons
 import AddIcon from '@mui/icons-material/Add';
@@ -50,7 +49,6 @@ import {
 import { getTemplates } from 'api/templates';
 import { getScripts } from 'api/scripts';
 import { getTags } from 'api/tags';
-import { getShares } from 'api/shares';
 import { getAirports } from 'api/airports';
 import { buildUnlockRulesPayload, normalizeUnlockRules, setUnlockMeta } from 'views/nodes/utils';
 import { getRegisteredProtocolNames } from 'utils/protocolPresentation';
@@ -59,20 +57,17 @@ import { getNodeDisplayName } from 'utils/nodeDisplayName';
 // components
 import {
   ConfirmDialog,
-  QrCodeDialog,
-  ClientUrlsDialog,
   AccessLogsDialog,
   SubscriptionMobileCard,
   SubscriptionTable,
   SubscriptionFormDialog,
   ProxySubscriptionFormDialog,
   NodePreviewDialog,
-  ShareManageDialog,
   ChainProxyDialog,
   GroupSortDialog
 } from './component';
 
-// ==============================|| 订阅管理 ||============================== //
+// ==============================|| 节点池管理 ||============================== //
 
 const createProxyFormData = () => ({
   name: '',
@@ -177,15 +172,6 @@ export default function SubscriptionList() {
   const [nodeCountryFilter, setNodeCountryFilter] = useState([]);
   const [countryOptions, setCountryOptions] = useState([]);
 
-  // QR码对话框
-  const [qrDialogOpen, setQrDialogOpen] = useState(false);
-  const [qrUrl, setQrUrl] = useState('');
-  const [qrTitle, setQrTitle] = useState('');
-
-  // 客户端对话框
-  const [clientDialogOpen, setClientDialogOpen] = useState(false);
-  const [clientUrls] = useState({});
-
   // 访问记录对话框
   const [logsDialogOpen, setLogsDialogOpen] = useState(false);
   const [currentLogs, setCurrentLogs] = useState([]);
@@ -225,10 +211,6 @@ export default function SubscriptionList() {
   });
   const [totalItems, setTotalItems] = useState(0);
   const [subscriptionSearch, setSubscriptionSearch] = useState('');
-  const [shareSearchResults, setShareSearchResults] = useState([]);
-  const [shareSearching, setShareSearching] = useState(false);
-  const [shareSearchActive, setShareSearchActive] = useState(false);
-  const shareSearchRequestRef = useRef(0);
 
   const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' });
 
@@ -293,37 +275,6 @@ export default function SubscriptionList() {
     }
   }, [buildSelectorParams, hydrateSelectedNodeMap]);
 
-  const extractShareSearchKeyword = useCallback((input) => {
-    const trimmed = input.trim();
-    if (!trimmed) return '';
-
-    const tokenMatch = trimmed.match(/[?&]token=([^&\s]+)/);
-    if (tokenMatch?.[1]) return tokenMatch[1];
-
-    const pathTokenMatch = trimmed.match(/(?:^|\/)c\/([^/?&#\s]+)/);
-    return pathTokenMatch?.[1] || trimmed;
-  }, []);
-
-  const isShareLookupQuery = useCallback((input) => {
-    const trimmed = input.trim();
-    if (!trimmed) return false;
-    if (/^https?:\/\//i.test(trimmed) || trimmed.includes('/c/') || /[?&]token=/.test(trimmed)) return true;
-    return /^[A-Za-z0-9_-]{8,}$/.test(trimmed);
-  }, []);
-
-  const normalizeSubscriptionResponse = useCallback((response) => {
-    if (response.data && response.data.items !== undefined) {
-      return response.data.items || [];
-    }
-    return response.data || [];
-  }, []);
-
-  const fetchAllSubscriptionsForSearch = useCallback(async () => {
-    if (totalItems <= subscriptions.length) return subscriptions;
-    const response = await getSubscriptions({ page: 1, pageSize: Math.max(totalItems, rowsPerPage), type: activeTab });
-    return normalizeSubscriptionResponse(response);
-  }, [activeTab, normalizeSubscriptionResponse, rowsPerPage, subscriptions, totalItems]);
-
   const refreshNodeSelector = useCallback(() => {
     if (!dialogOpen || formData.selectionMode === 'groups') return;
     void fetchNodeSelector();
@@ -331,13 +282,14 @@ export default function SubscriptionList() {
 
   const trimmedSubscriptionSearch = subscriptionSearch.trim();
 
-  const nameFilteredSubscriptions = useMemo(() => {
+  // 搜索同时匹配名称与稳定唯一键（unique_key 在重命名后保持不变）
+  const displayedSubscriptions = useMemo(() => {
     if (!trimmedSubscriptionSearch) return subscriptions;
     const keyword = trimmedSubscriptionSearch.toLowerCase();
-    return subscriptions.filter((sub) => (sub.Name || '').toLowerCase().includes(keyword));
+    return subscriptions.filter(
+      (sub) => (sub.Name || '').toLowerCase().includes(keyword) || (sub.UniqueKey || '').toLowerCase().includes(keyword)
+    );
   }, [subscriptions, trimmedSubscriptionSearch]);
-
-  const displayedSubscriptions = trimmedSubscriptionSearch && shareSearchActive ? shareSearchResults : nameFilteredSubscriptions;
 
   const fetchSelectedNodeDetails = useCallback(
     async (ids) => {
@@ -457,69 +409,6 @@ export default function SubscriptionList() {
   const showMessage = useCallback((message, severity = 'success') => {
     setSnackbar({ open: true, message, severity });
   }, []);
-
-  useEffect(() => {
-    const query = subscriptionSearch.trim();
-    const requestId = shareSearchRequestRef.current + 1;
-    shareSearchRequestRef.current = requestId;
-
-    if (!query) {
-      setShareSearchActive(false);
-      setShareSearchResults([]);
-      setShareSearching(false);
-      return undefined;
-    }
-
-    const shouldSearchShares = isShareLookupQuery(query) || nameFilteredSubscriptions.length === 0;
-    if (!shouldSearchShares) {
-      setShareSearchActive(false);
-      setShareSearchResults([]);
-      setShareSearching(false);
-      return undefined;
-    }
-
-    setShareSearchActive(true);
-    setShareSearchResults([]);
-    setShareSearching(true);
-
-    const timeoutId = window.setTimeout(async () => {
-      const keyword = extractShareSearchKeyword(query);
-      try {
-        const allSubscriptions = await fetchAllSubscriptionsForSearch();
-        const checks = await Promise.all(
-          allSubscriptions.map(async (sub) => {
-            const response = await getShares(sub.ID, 1, 100, keyword);
-            const shares = response.data?.items || response.data || [];
-            return shares.length > 0 ? sub : null;
-          })
-        );
-
-        if (shareSearchRequestRef.current === requestId) {
-          setShareSearchResults(checks.filter(Boolean));
-        }
-      } catch (error) {
-        console.error(error);
-        if (shareSearchRequestRef.current === requestId) {
-          showMessage(error.message || t('subscriptions.page.messages.shareSearchFailed'), 'error');
-          setShareSearchResults([]);
-        }
-      } finally {
-        if (shareSearchRequestRef.current === requestId) {
-          setShareSearching(false);
-        }
-      }
-    }, 500);
-
-    return () => window.clearTimeout(timeoutId);
-  }, [
-    extractShareSearchKeyword,
-    fetchAllSubscriptionsForSearch,
-    isShareLookupQuery,
-    nameFilteredSubscriptions.length,
-    showMessage,
-    subscriptionSearch,
-    t
-  ]);
 
   const copyToClipboard = async (text) => {
     try {
@@ -807,6 +696,8 @@ export default function SubscriptionList() {
       }
 
       if (isEdit) {
+        // 优先用稳定唯一键定位记录，重命名后接口仍指向同一条节点池
+        requestData.unique_key = currentSub.UniqueKey || '';
         requestData.oldname = currentSub.Name;
         await updateSubscription(requestData);
         showMessage(t('subscriptions.page.messages.updateSuccess'));
@@ -846,6 +737,7 @@ export default function SubscriptionList() {
       };
 
       if (proxyEditTarget) {
+        requestData.unique_key = proxyEditTarget.UniqueKey || '';
         requestData.oldname = proxyEditTarget.Name;
         await updateSubscription(requestData);
         showMessage(t('subscriptions.page.messages.updateSuccess'));
@@ -1024,10 +916,6 @@ export default function SubscriptionList() {
     }
   };
 
-  // === 分享管理 ===
-  const [shareDialogOpen, setShareDialogOpen] = useState(false);
-  const [shareDialogSub, setShareDialogSub] = useState(null);
-
   // === 分组排序 ===
   const [groupSortOpen, setGroupSortOpen] = useState(false);
 
@@ -1038,17 +926,6 @@ export default function SubscriptionList() {
   const handleChainProxy = (sub) => {
     setChainProxySub(sub);
     setChainProxyOpen(true);
-  };
-
-  const handleClient = (sub) => {
-    setShareDialogSub(sub);
-    setShareDialogOpen(true);
-  };
-
-  const handleQrcode = (url, title) => {
-    setQrUrl(url);
-    setQrTitle(title);
-    setQrDialogOpen(true);
   };
 
   // === 访问记录 ===
@@ -1314,13 +1191,9 @@ export default function SubscriptionList() {
             ),
             endAdornment: trimmedSubscriptionSearch && (
               <InputAdornment position="end">
-                {shareSearching ? (
-                  <CircularProgress size={18} />
-                ) : (
-                  <IconButton size="small" onClick={() => setSubscriptionSearch('')} edge="end" aria-label={t('common.clear')}>
-                    <ClearIcon fontSize="small" />
-                  </IconButton>
-                )}
+                <IconButton size="small" onClick={() => setSubscriptionSearch('')} edge="end" aria-label={t('common.clear')}>
+                  <ClearIcon fontSize="small" />
+                </IconButton>
               </InputAdornment>
             )
           }}
@@ -1340,7 +1213,6 @@ export default function SubscriptionList() {
           selectedSortItems={selectedSortItems}
           theme={theme}
           onToggleRow={toggleRow}
-          onClient={handleClient}
           onLogs={handleLogs}
           onEdit={handleEdit}
           onDelete={handleDelete}
@@ -1371,7 +1243,6 @@ export default function SubscriptionList() {
           tempSortData={tempSortData}
           selectedSortItems={selectedSortItems}
           onToggleRow={toggleRow}
-          onClient={handleClient}
           onLogs={handleLogs}
           onEdit={handleEdit}
           onDelete={handleDelete}
@@ -1474,18 +1345,6 @@ export default function SubscriptionList() {
         onSubmit={handleProxySubmit}
       />
 
-      {/* 客户端对话框 */}
-      <ClientUrlsDialog
-        open={clientDialogOpen}
-        clientUrls={clientUrls}
-        onClose={() => setClientDialogOpen(false)}
-        onQrCode={handleQrcode}
-        onCopy={copyToClipboard}
-      />
-
-      {/* QR码对话框 */}
-      <QrCodeDialog open={qrDialogOpen} title={qrTitle} url={qrUrl} onClose={() => setQrDialogOpen(false)} onCopy={copyToClipboard} />
-
       {/* 访问记录对话框 */}
       <AccessLogsDialog open={logsDialogOpen} logs={currentLogs} onClose={() => setLogsDialogOpen(false)} />
 
@@ -1518,14 +1377,6 @@ export default function SubscriptionList() {
           return acc;
         }, {})}
         onClose={() => setPreviewOpen(false)}
-      />
-
-      {/* 分享管理对话框 */}
-      <ShareManageDialog
-        open={shareDialogOpen}
-        subscription={shareDialogSub}
-        onClose={() => setShareDialogOpen(false)}
-        showMessage={showMessage}
       />
 
       {/* 分组排序对话框 */}

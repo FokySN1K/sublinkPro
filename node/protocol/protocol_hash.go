@@ -18,11 +18,12 @@ type HashFieldConfig struct {
 // Type 字段参与哈希计算，可以自动区分不同协议
 var defaultHashConfig = HashFieldConfig{
 	IgnoredFields: map[string]bool{
-		"Name":               true, // 节点名称不影响节点功能
-		"Dialer_proxy":       true, // 前置代理是用户配置
-		"Udp":                true, // UDP 支持是用户可配置选项
-		"Tfo":                true, // TCP Fast Open 是用户可配置选项
-		"Client_fingerprint": true, // uTLS 指纹，某些机场每次返回随机值
+		"Name":                  true, // 节点名称不影响节点功能
+		"Sublinkpro_unique_key": true, // 导出期注入的稳定唯一键，不属于节点内容
+		"Dialer_proxy":          true, // 前置代理是用户配置
+		"Udp":                   true, // UDP 支持是用户可配置选项
+		"Tfo":                   true, // TCP Fast Open 是用户可配置选项
+		"Client_fingerprint":    true, // uTLS 指纹，某些机场每次返回随机值
 	},
 }
 

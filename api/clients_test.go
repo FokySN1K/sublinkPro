@@ -76,6 +76,14 @@ func setupClientsAPITestDB(t *testing.T) {
 		&models.SubscriptionChainRule{},
 		&models.Script{},
 		&models.SystemSetting{},
+		&models.ShareGroup{},
+		&models.ShareStub{},
+		&models.ShareGroupStub{},
+		&models.ShareSubscriptionStub{},
+		&models.ShareDevice{},
+		&models.ShareDeviceUsageHour{},
+		&models.ShareAccessLog{},
+		&models.Template{},
 	); err != nil {
 		t.Fatalf("auto migrate clients api tables: %v", err)
 	}
@@ -92,6 +100,12 @@ func setupClientsAPITestDB(t *testing.T) {
 	}
 	if err := models.InitSubscriptionShareCache(); err != nil {
 		t.Fatalf("init subscription share cache: %v", err)
+	}
+	if err := models.InitShareGroupCache(); err != nil {
+		t.Fatalf("init share group cache: %v", err)
+	}
+	if err := models.InitShareStubCache(); err != nil {
+		t.Fatalf("init share stub cache: %v", err)
 	}
 	if err := models.InitChainRuleCache(); err != nil {
 		t.Fatalf("init chain rule cache: %v", err)
@@ -1077,7 +1091,7 @@ func TestGetClientInvalidShareReturnsSyntheticV2rayNode(t *testing.T) {
 	recorder := performClientRequest(t, http.MethodGet, "/c/?token=missing-token&client=v2ray")
 	decoded := strings.TrimSpace(utils.Base64Decode(recorder.Body.String()))
 
-	if !strings.Contains(decoded, "ss://") || !strings.Contains(decoded, "#Invalid share link") {
+	if !strings.Contains(decoded, "ss://") || !strings.Contains(decoded, "#This subscription link does not exist.") {
 		t.Fatalf("expected synthetic invalid-share node in v2ray payload, got %q", decoded)
 	}
 	if got := recorder.Header().Get("Content-Type"); got != "text/html; charset=utf-8" {
@@ -1223,7 +1237,7 @@ func TestGetClientExpiredShareReturnsSyntheticClashNode(t *testing.T) {
 	recorder := performClientRequest(t, http.MethodGet, "/c/?token=expired-token&client=clash")
 	body := recorder.Body.String()
 
-	if !strings.Contains(body, "name: Subscription expired") {
+	if !strings.Contains(body, "name: This subscription link expired on ") {
 		t.Fatalf("expected synthetic expired-share clash node, got %q", body)
 	}
 	if !strings.Contains(body, "type: ss") {
@@ -1232,7 +1246,7 @@ func TestGetClientExpiredShareReturnsSyntheticClashNode(t *testing.T) {
 	if !strings.Contains(body, "server: placeholder.invalid") {
 		t.Fatalf("expected synthetic expired-share clash node to use placeholder host, got %q", body)
 	}
-	if !strings.Contains(body, "- Subscription expired") {
+	if !strings.Contains(body, "- This subscription link expired on ") {
 		t.Fatalf("expected clash proxy group to reference synthetic node, got %q", body)
 	}
 	if !strings.Contains(recorder.Header().Get("Content-Disposition"), "expired-sub.yaml") {
@@ -1268,10 +1282,10 @@ func TestGetClientInvalidShareReturnsSyntheticSurgeNode(t *testing.T) {
 	if !strings.Contains(body, "[Proxy]") {
 		t.Fatalf("expected surge proxy section, got %q", body)
 	}
-	if !strings.Contains(body, "Invalid share link = ss, placeholder.invalid, 80") {
+	if !strings.Contains(body, "This subscription link does not exist. = ss, placeholder.invalid, 80") {
 		t.Fatalf("expected synthetic invalid-share surge node, got %q", body)
 	}
-	if !strings.Contains(body, "Proxy = select, Invalid share link") {
+	if !strings.Contains(body, "Proxy = select, This subscription link does not exist.") {
 		t.Fatalf("expected surge proxy group to reference synthetic node, got %q", body)
 	}
 	if got := recorder.Header().Get("Content-Type"); got != "text/plain; charset=utf-8" {
@@ -1307,7 +1321,7 @@ func TestGetClientExpiredSharePreservesSurgeEnvelopeWithSyntheticNode(t *testing
 	recorder := performClientRequest(t, http.MethodGet, "/c/?token=expired-surge-token&client=surge")
 	body := recorder.Body.String()
 
-	if !strings.Contains(body, "Subscription expired = ss, placeholder.invalid, 80") {
+	if !strings.Contains(body, "This subscription link expired on ") || !strings.Contains(body, "= ss, placeholder.invalid, 80") {
 		t.Fatalf("expected synthetic expired-share surge node, got %q", body)
 	}
 	if !strings.Contains(recorder.Header().Get("Content-Disposition"), "expired-surge-sub.conf") {
@@ -1325,7 +1339,7 @@ func TestGetClientExpiredSharePreservesV2rayEnvelopeWithSyntheticNode(t *testing
 	recorder := performClientRequest(t, http.MethodGet, "/c/?token=expired-v2ray-token&client=v2ray")
 	decoded := strings.TrimSpace(utils.Base64Decode(recorder.Body.String()))
 
-	if !strings.Contains(decoded, "ss://") || !strings.Contains(decoded, "#Subscription expired") {
+	if !strings.Contains(decoded, "ss://") || !strings.Contains(decoded, "#This subscription link expired on ") {
 		t.Fatalf("expected synthetic expired-share v2ray node, got %q", decoded)
 	}
 	if !strings.Contains(recorder.Header().Get("Content-Disposition"), "expired-v2ray-sub.txt") {

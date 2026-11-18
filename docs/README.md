@@ -23,6 +23,7 @@ Welcome to SublinkPro documentation. This index helps you find the right documen
 - **[Template Version History](features/template-versioning.md)** - Automatic snapshots, diff, download, and restore
 - **[Airport Management](features/airport.md)** - Import, scheduled updates, traffic monitoring, usage history charts
 - **[Subscription Sharing](features/subscription-share.md)** - Multiple links, expiration, stats
+- **[Share Groups & Placeholders](features/share-groups.md)** - Delivery policy, device binding, placeholders, `/c/status`, telemetry
 - **[Proxy Subscriptions](features/subscription-proxy.md)** - Relay an airport's upstream subscription as-is
 - **[happ Links](features/happ-link.md)** - Decode happ://crypt…crypt5 links, decryptor page, API
 - **[Host Management](features/host.md)** - Domain mappings, DNS, CDN preferred IPs
@@ -91,6 +92,7 @@ Located in `.agents/skills/`:
 | Use speed testing | [Speed Test Feature](features/speedtest.md) |
 | Decode a happ:// link | [happ Links](features/happ-link.md) |
 | Set up MFA | [MFA Feature](features/mfa.md) |
+| Group links and bind devices | [Share Groups](features/share-groups.md) |
 
 ### By Role
 

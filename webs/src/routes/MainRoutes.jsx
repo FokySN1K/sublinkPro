@@ -13,6 +13,7 @@ const NodeMapPage = Loadable(lazy(() => import('views/dashboard/NodeMap')));
 // views routing
 const NodeList = Loadable(lazy(() => import('views/nodes')));
 const SubscriptionList = Loadable(lazy(() => import('views/subscriptions')));
+const ShareGroupList = Loadable(lazy(() => import('views/share-groups')));
 const TemplateList = Loadable(lazy(() => import('views/templates')));
 const ScriptList = Loadable(lazy(() => import('views/scripts')));
 const AccessKeyList = Loadable(lazy(() => import('views/accesskeys')));
@@ -73,6 +74,10 @@ const MainRoutes = {
         {
           path: 'subs',
           element: <SubscriptionList />
+        },
+        {
+          path: 'share-groups',
+          element: <ShareGroupList />
         },
         {
           path: 'templates',

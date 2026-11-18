@@ -366,10 +366,7 @@ func SubAdd(c *gin.Context) {
 		}
 	}
 
-	// 为新订阅创建默认分享链接
-	if err := models.CreateDefaultShareForSubscription(sub.ID); err != nil {
-		utils.Warn("Failed to create default share link: %v", err)
-	}
+	// 节点池仅用于聚合与命名节点，不直接发放链接；链接由分享分组管理。
 
 	utils.OkWithMsg(c, "Added successfully")
 }
@@ -379,6 +376,7 @@ func SubUpdate(c *gin.Context) {
 	var sub models.Subcription
 	name := c.PostForm("name")
 	oldname := c.PostForm("oldname")
+	uniqueKey := strings.TrimSpace(c.PostForm("unique_key"))
 	// 未提交 description 字段时保留原描述（兼容旧版前端）
 	description, hasDescription := c.GetPostForm("description")
 	description = strings.TrimSpace(description)
@@ -466,23 +464,29 @@ func SubUpdate(c *gin.Context) {
 		}
 	}
 
-	// 检查订阅名称是否重复
-	if name != oldname {
-		var checkSub models.Subcription
-		checkSub.Name = name
-		if err := checkSub.Find(); err == nil {
-			utils.FailWithMsg(c, "Subscription name must be unique")
-			return
-		}
+	// 查找目标订阅：unique_key 优先（创建时生成、重命名不变），其次回退到旧名称，
+	// 兼容未提交 unique_key 的旧版前端。
+	if uniqueKey != "" {
+		sub.UniqueKey = uniqueKey
+	} else {
+		sub.Name = oldname
 	}
-
-	// 查找旧节点
-	sub.Name = oldname
 	err := sub.Find()
 	if err != nil {
 		utils.FailWithMsg(c, err.Error())
 		return
 	}
+
+	// 检查订阅名称是否重复（排除自身）
+	if name != sub.Name {
+		var checkSub models.Subcription
+		checkSub.Name = name
+		if err := checkSub.Find(); err == nil && checkSub.ID != sub.ID {
+			utils.FailWithMsg(c, "Subscription name must be unique")
+			return
+		}
+	}
+
 	// 更新节点
 	sub.Config = config
 	sub.Name = name
