@@ -308,7 +308,7 @@ Other supported variables include `$Name`, `$LinkName`, `$Group`, `$Source`, `$P
 Base: `/api/v1/shares`
 
 ### Get Shares (for a subscription)
-**GET** `/shares/get` (query: `?subId=123`) — `subId` is **required**. Optional paginated filters: `page`, `pageSize`, `keyword`, `ipFilter`, `sortBy`, `sortOrder`. Pass `groupId=7` to return only the links that belong to that share group (used by the group page); `subId` is still required. `sortBy` accepts `access_count` or natural numeric-aware `name`; `sortOrder` accepts `asc` or `desc`.
+**GET** `/shares/get` (query: `?subId=123`) — `subId` is **required**. Optional paginated filters: `page`, `pageSize`, `keyword`, `ipFilter`, `sortBy`, `sortOrder`. Pass `groupId=7` to return only the links that belong to that share group (used by the group page); `subId` is still required. `sortBy` accepts `access_count` or natural numeric-aware `name`; `sortOrder` accepts `asc` or `desc`. Each link also carries `active_device_count` and `pending_device_count` (bound devices by status, computed with one query per page) so admin cards can show device usage without per-link requests.
 
 ### Add Share
 **POST** `/shares/add` — **JSON**

@@ -3258,6 +3258,8 @@
       "defaultChip": "Default",
       "cardMeta": "{{expire}} · {{count}} visits",
       "cardTraffic": "Traffic {{used}} / {{limit}}",
+      "cardRemaining": "· Remaining {{remaining}}",
+      "cardDevices": "· Devices {{active}} active / {{pending}} pending",
       "cardLastUsage": "· Last report {{time}}",
       "quotaExhausted": "Quota exhausted",
       "telemetryUsed": "Reported traffic: {{used}} / {{limit}}",

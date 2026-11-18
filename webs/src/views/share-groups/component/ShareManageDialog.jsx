@@ -900,6 +900,22 @@ export default function ShareManageDialog({ open, subscription, group = null, on
                         limit: share.traffic_limit_bytes > 0 ? formatBytes(share.traffic_limit_bytes) : '∞'
                       })}
                     </Typography>
+                    <Typography variant="caption" sx={{ color: expired ? tertiaryText : secondaryText }}>
+                      {t('subscriptions.share.cardRemaining', {
+                        remaining:
+                          share.traffic_limit_bytes > 0
+                            ? formatBytes(Math.max(share.traffic_limit_bytes - (share.reported_traffic_bytes || 0), 0))
+                            : '∞'
+                      })}
+                    </Typography>
+                    {share.group_id && (
+                      <Typography variant="caption" sx={{ color: expired ? tertiaryText : secondaryText }}>
+                        {t('subscriptions.share.cardDevices', {
+                          active: share.active_device_count || 0,
+                          pending: share.pending_device_count || 0
+                        })}
+                      </Typography>
+                    )}
                     {share.last_usage_at && (
                       <Typography variant="caption" sx={{ color: expired ? tertiaryText : secondaryText }}>
                         {t('subscriptions.share.cardLastUsage', {

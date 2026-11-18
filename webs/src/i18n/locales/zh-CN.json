@@ -3251,6 +3251,8 @@
       "defaultChip": "默认",
       "cardMeta": "{{expire}} · 访问 {{count}} 次",
       "cardTraffic": "流量 {{used}} / {{limit}}",
+      "cardRemaining": "· 剩余 {{remaining}}",
+      "cardDevices": "· 设备 {{active}} 活跃 / {{pending}} 待批准",
       "cardLastUsage": "· 最近上报 {{time}}",
       "quotaExhausted": "流量已用尽",
       "telemetryUsed": "已上报流量：{{used}} / {{limit}}",

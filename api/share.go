@@ -133,6 +133,53 @@ func parseShareExpireAt(expireType int, raw string) (*time.Time, error) {
 	return &parsed, nil
 }
 
+// shareListEntry keeps every stored share field and adds per-link device
+// counters so cards render them without one request per link.
+type shareListEntry struct {
+	models.SubscriptionShare
+	ActiveDeviceCount  int `json:"active_device_count"`
+	PendingDeviceCount int `json:"pending_device_count"`
+}
+
+// attachShareDeviceCounts decorates a page of links with active/pending device
+// counts using a single query for the whole page.
+func attachShareDeviceCounts(shares []models.SubscriptionShare) []shareListEntry {
+	entries := make([]shareListEntry, len(shares))
+	if len(shares) == 0 {
+		return entries
+	}
+
+	shareIDs := make([]int, 0, len(shares))
+	for _, share := range shares {
+		shareIDs = append(shareIDs, share.ID)
+	}
+	devices, err := models.ListShareDevicesByShareIDs(shareIDs)
+	if err != nil {
+		utils.Warn("Failed to load share device counts: %v", err)
+	}
+
+	counts := make(map[int][2]int, len(shares))
+	for _, device := range devices {
+		current := counts[device.ShareID]
+		switch device.Status {
+		case models.ShareDeviceStatusActive:
+			current[0]++
+		case models.ShareDeviceStatusPending:
+			current[1]++
+		}
+		counts[device.ShareID] = current
+	}
+
+	for i, share := range shares {
+		entries[i] = shareListEntry{
+			SubscriptionShare:  share,
+			ActiveDeviceCount:  counts[share.ID][0],
+			PendingDeviceCount: counts[share.ID][1],
+		}
+	}
+	return entries
+}
+
 // ShareGet 获取订阅的所有分享列表（支持分页、搜索、IP筛选、排序）
 func ShareGet(c *gin.Context) {
 	var req ShareListReq
@@ -176,7 +223,7 @@ func ShareGet(c *gin.Context) {
 		c.JSON(http.StatusOK, gin.H{
 			"code": 200,
 			"data": gin.H{
-				"items":      shares,
+				"items":      attachShareDeviceCounts(shares),
 				"total":      total,
 				"page":       req.Page,
 				"pageSize":   req.PageSize,
@@ -190,11 +237,11 @@ func ShareGet(c *gin.Context) {
 	// 不分页，返回所有分享（向后兼容，也支持搜索）
 	if req.GroupID > 0 {
 		shares := models.GetSharesByGroupID(req.GroupID)
-		c.JSON(http.StatusOK, gin.H{"code": 200, "data": shares})
+		c.JSON(http.StatusOK, gin.H{"code": 200, "data": attachShareDeviceCounts(shares)})
 		return
 	}
 	shares := models.GetSharesBySubscriptionID(req.SubID, req.Keyword)
-	c.JSON(http.StatusOK, gin.H{"code": 200, "data": shares})
+	c.JSON(http.StatusOK, gin.H{"code": 200, "data": attachShareDeviceCounts(shares)})
 }
 
 // randomShareName builds a short random default link name.
