@@ -18,6 +18,9 @@ func Clients(r *gin.Engine) {
 		ClientsGroup.HEAD("/", api.GetClient)
 		ClientsGroup.GET("/status", api.ShareStatus)
 		ClientsGroup.POST("/telemetry", api.ShareReportTraffic)
+		ClientsGroup.POST("/sessions", api.ShareReportSession)
+		ClientsGroup.POST("/nodes", api.ShareReportNodes)
+		ClientsGroup.POST("/reliability", api.ShareReportReliability)
 	}
 
 }

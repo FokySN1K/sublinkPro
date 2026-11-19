@@ -82,6 +82,11 @@ func setupClientsAPITestDB(t *testing.T) {
 		&models.ShareSubscriptionStub{},
 		&models.ShareDevice{},
 		&models.ShareDeviceUsageHour{},
+		&models.ShareSession{},
+		&models.ShareNodeUsageHour{},
+		&models.ShareNodeReliability{},
+		&models.ShareNodeReliabilityEvent{},
+		&models.ShareClient{},
 		&models.ShareAccessLog{},
 		&models.Template{},
 	); err != nil {

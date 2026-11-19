@@ -5,6 +5,9 @@ webs/node_modules
 db
 logs
 template
+db-test
+logs-test
+template-test
 README.md
 README.en-US.md
 docs

@@ -9,6 +9,9 @@ const (
 	// JobIDWebDAVBackup WebDAV 定时备份任务ID
 	JobIDWebDAVBackup = -102
 
+	// JobIDShareTelemetryCleanup 分享遥测维护任务ID（关闭失联会话、清理过期历史）
+	JobIDShareTelemetryCleanup = -103
+
 	// 预留区间 -100 ~ -199 用于未来系统任务
 	// 新增系统任务时按顺序递减分配ID
 )

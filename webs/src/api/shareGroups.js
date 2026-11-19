@@ -222,6 +222,88 @@ export function deleteShareDevice(id) {
 }
 
 /**
+ * 订阅链接遥测总览：每条分享链接一行（额度、设备、窗口流量、会话）
+ * @param {object} params { subId, groupId, clientId, status, keyword, days, page, pageSize }
+ */
+export function getShareSubscriptionsOverview(params = {}) {
+  return request({
+    url: '/v1/shares/subscriptions/overview',
+    method: 'get',
+    params
+  });
+}
+
+/**
+ * 单条订阅链接详情：设备、按日流量、会话、节点/机场流量与可靠性
+ * @param {object} params { shareId, days }
+ */
+export function getShareSubscriptionDetail(params) {
+  return request({
+    url: '/v1/shares/subscriptions/detail',
+    method: 'get',
+    params
+  });
+}
+
+/**
+ * 用户（客户端）列表
+ * @param {object} params { keyword }
+ */
+export function getShareClients(params = {}) {
+  return request({
+    url: '/v1/shares/clients',
+    method: 'get',
+    params
+  });
+}
+
+/**
+ * 新建用户
+ */
+export function createShareClient(data) {
+  return request({
+    url: '/v1/shares/clients/add',
+    method: 'post',
+    data
+  });
+}
+
+/**
+ * 更新用户
+ */
+export function updateShareClient(data) {
+  return request({
+    url: '/v1/shares/clients/update',
+    method: 'post',
+    data
+  });
+}
+
+/**
+ * 删除用户（卡片保留，归属置空）
+ * @param {number} id 用户ID
+ */
+export function deleteShareClient(id) {
+  return request({
+    url: '/v1/shares/clients/delete',
+    method: 'delete',
+    params: { id }
+  });
+}
+
+/**
+ * 将订阅卡片归属到用户（client_id 为空则取消归属）
+ * @param {object} data { share_ids: number[], client_id: number|null }
+ */
+export function assignShareClients(data) {
+  return request({
+    url: '/v1/shares/clients/assign',
+    method: 'post',
+    data
+  });
+}
+
+/**
  * 获取订阅链接的访问记录
  * @param {number} shareId 分享ID
  */

@@ -48,6 +48,10 @@ type shareTelemetryRequest struct {
 	// InstallID is the client installation epoch. A new value restarts the
 	// absolute baseline from zero (reinstall or moved data).
 	InstallID string `json:"install_id"`
+	// SessionID attributes the accepted delta to the explicit client session
+	// opened by POST /c/sessions. It never changes how the share or device
+	// counters move; it only mirrors the delta into the session row.
+	SessionID string `json:"session_id"`
 }
 
 type shareTelemetryResponse struct {
@@ -183,6 +187,9 @@ func ShareReportTraffic(c *gin.Context) {
 			if usageErr := models.RecordShareDeviceUsage(device, upPart, downPart, now); usageErr != nil {
 				utils.Warn("Failed to record share device traffic: %v", usageErr)
 			}
+			if sessionErr := shareRecordSessionDelta(c, share, device, req.SessionID, upPart, downPart, now); sessionErr != nil {
+				utils.Warn("Failed to record share session traffic: %v", sessionErr)
+			}
 		}
 	} else {
 		reportID := models.NormalizeShareDeviceValue(req.ReportID, shareTelemetryIDMaxLen)
@@ -205,6 +212,9 @@ func ShareReportTraffic(c *gin.Context) {
 					utils.Warn("Failed to record share device traffic: %v", deviceTrafficErr)
 				}
 			}
+			if sessionErr := shareRecordSessionDelta(c, share, device, req.SessionID, up, down, now); sessionErr != nil {
+				utils.Warn("Failed to record share session traffic: %v", sessionErr)
+			}
 		}
 	}
 
@@ -219,6 +229,22 @@ func ShareReportTraffic(c *gin.Context) {
 	}
 
 	utils.OkDetailed(c, "Success", newShareTelemetryResponse(share, device, deviceStatus, accepted, duplicate))
+}
+
+// shareRecordSessionDelta mirrors an accepted report delta into the open
+// session. Sessions are attribution only: the share and device counters have
+// already been moved by the caller, so replaying this helper never doubles
+// traffic.
+func shareRecordSessionDelta(c *gin.Context, share *models.SubscriptionShare, device *models.ShareDevice, sessionID string, up, down int64, at time.Time) error {
+	sessionID = models.NormalizeShareSessionKey(sessionID)
+	if sessionID == "" || up+down <= 0 {
+		return nil
+	}
+	hwid, deviceKey := shareTelemetryDeviceIdentity(c, device)
+	if hwid == "" || deviceKey == "" {
+		return nil
+	}
+	return models.AddShareSessionTraffic(share.ID, device, hwid, deviceKey, sessionID, up, down, at)
 }
 
 // newShareTelemetryResponse builds the shared telemetry reply payload.

@@ -22,6 +22,8 @@ import { formatDateTime } from 'i18n/locales';
 import { formatBytes } from 'views/airports/utils';
 import { getShareDeviceDetail } from 'api/shareGroups';
 
+import { ShareDailyBarChart, ShareReliabilityList, ShareSessionsTable, ShareTrafficBreakdown } from './ShareTelemetryBlocks';
+
 // The overview folds per-hour buckets into hour-of-day totals in the browser so
 // the chart follows the viewer's timezone instead of the server's.
 function foldHourOfDay(hourly) {
@@ -51,7 +53,7 @@ function hourLabel(hour) {
   return `${String(hour).padStart(2, '0')}:00`;
 }
 
-export default function ShareDeviceDetailDialog({ open, hwid, deviceId, onClose }) {
+export default function ShareDeviceDetailDialog({ open, hwid, deviceId, days = 7, onClose }) {
   const { t, i18n } = useTranslation();
   const theme = useTheme();
   const fullScreen = useMediaQuery(theme.breakpoints.down('sm'));
@@ -70,7 +72,7 @@ export default function ShareDeviceDetailDialog({ open, hwid, deviceId, onClose 
     let cancelled = false;
     setLoading(true);
     setError('');
-    getShareDeviceDetail({ hwid, deviceId })
+    getShareDeviceDetail({ hwid, deviceId, days })
       .then((res) => {
         if (!cancelled) setDetail(res.data || null);
       })
@@ -83,10 +85,10 @@ export default function ShareDeviceDetailDialog({ open, hwid, deviceId, onClose 
     return () => {
       cancelled = true;
     };
-  }, [open, hwid, deviceId, t]);
+  }, [open, hwid, deviceId, days, t]);
 
   const device = detail?.device || null;
-  const windowDays = detail?.window_days || 7;
+  const windowDays = detail?.window_days || days;
 
   const hourBuckets = useMemo(() => foldHourOfDay(detail?.hourly), [detail]);
   const maxHourBytes = useMemo(() => Math.max(...hourBuckets.map((bucket) => bucket.bytes), 1), [hourBuckets]);
@@ -273,6 +275,35 @@ export default function ShareDeviceDetailDialog({ open, hwid, deviceId, onClose 
                 </>
               )}
             </Box>
+
+            <Divider />
+
+            <Box>
+              <Typography variant="subtitle2" fontWeight={700} sx={{ mb: 1 }}>
+                {t('shareGroups.telemetryDetail.daily')}
+              </Typography>
+              <ShareDailyBarChart daily={detail?.daily || []} />
+            </Box>
+
+            <Box>
+              <Typography variant="subtitle2" fontWeight={700} sx={{ mb: 1 }}>
+                {t('shareGroups.telemetryDetail.sessions')}
+              </Typography>
+              <ShareSessionsTable sessions={detail?.sessions || []} showShare />
+            </Box>
+
+            <Box>
+              <Typography variant="subtitle2" fontWeight={700} sx={{ mb: 1 }}>
+                {t('shareGroups.telemetryDetail.traffic')}
+              </Typography>
+              <ShareTrafficBreakdown nodes={detail?.nodes || []} airports={detail?.airports || []} />
+            </Box>
+
+            <Divider />
+
+            <ShareReliabilityList reliability={detail?.reliability || []} events={detail?.reliability_events || []} />
+
+            <Divider />
 
             <Box>
               <Typography variant="subtitle2" fontWeight={700} sx={{ mb: 1 }}>

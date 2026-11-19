@@ -362,12 +362,19 @@
     },
     "telemetry": {
       "subtitle": "Every installation that fetched a link, aggregated across the subscriptions it uses.",
+      "modes": {
+        "users": "Users",
+        "subscriptions": "Subscriptions",
+        "devices": "Devices"
+      },
       "filters": {
         "pool": "Node pool",
         "poolAll": "All node pools",
         "status": "Status",
         "statusAll": "All statuses",
-        "keywordPlaceholder": "Search name, HWID, device ID, link..."
+        "keywordPlaceholder": "Search name, HWID, device ID, link...",
+        "days": "Period",
+        "daysValue": "Last {{days}} days"
       },
       "summary": {
         "total": "{{count}} devices",
@@ -408,8 +415,160 @@
       "hourlyHint": "Folded from the last {{days}} days in your local time.",
       "hourlyEmpty": "No traffic reports in the retention window.",
       "peakHour": "Peak {{hour}}",
+      "daily": "Traffic by day",
+      "sessions": "Sessions",
+      "traffic": "Node & airport traffic",
       "activity": "Recent activity",
       "activityEmpty": "No recent access records."
+    },
+    "blocks": {
+      "noDaily": "No traffic in the selected window.",
+      "noSessions": "No sessions in the selected window.",
+      "sessionOpen": "Active",
+      "airports": "By airport",
+      "airportUnknown": "Unknown airport",
+      "nodes": "By node",
+      "reliability": "Node reliability",
+      "reliabilityEmpty": "No problematic nodes.",
+      "reliabilityEvents": "State transitions",
+      "reliabilityEventsEmpty": "No transitions in the retention window.",
+      "reliabilityScore": "score {{score}}",
+      "reliabilityFails": "fails {{fails}} · streak {{streak}}",
+      "reliabilityStates": {
+        "suspect": "Suspect",
+        "silent": "Silent",
+        "ok": "OK",
+        "neutral": "Neutral"
+      },
+      "reasons": {
+        "recovered": "Recovered",
+        "silent": "Stopped reporting",
+        "suspect": "Degraded",
+        "healthy": "Healthy",
+        "state_change": "State change"
+      }
+    },
+    "subscriptions": {
+      "subtitle": "One row per subscription card: quota, devices, traffic and sessions.",
+      "searchPlaceholder": "Search link, token, pool, user...",
+      "empty": "No subscription cards yet. Create links in a share group first.",
+      "loadFailed": "Failed to load subscriptions",
+      "noClient": "No user",
+      "online": "Online",
+      "today": "{{bytes}} today",
+      "lifetime": "{{bytes}} total",
+      "sessionsToday": "{{count}} sessions today",
+      "deviceCounts": "{{total}} devices · {{active}} active",
+      "problemChip": "{{count}} problem nodes",
+      "status": {
+        "enabled": "Enabled",
+        "expired": "Expired",
+        "disabled": "Disabled"
+      },
+      "quota": {
+        "unlimited": "Unlimited",
+        "remaining": "{{bytes}} left",
+        "exhausted": "Exhausted"
+      },
+      "summary": {
+        "total": "{{count}} cards",
+        "enabled": "{{count}} enabled",
+        "expired": "{{count}} expired",
+        "disabled": "{{count}} disabled",
+        "online": "{{count}} online",
+        "devices": "{{count}} devices",
+        "windowTraffic": "{{bytes}} in {{days}}d",
+        "problemNodes": "{{count}} problem nodes"
+      },
+      "columns": {
+        "share": "Link",
+        "client": "User",
+        "quota": "Quota",
+        "devices": "Devices",
+        "traffic": "Traffic",
+        "sessions": "Sessions",
+        "problems": "Problem nodes",
+        "lastReport": "Last seen / report"
+      }
+    },
+    "subscriptionDetail": {
+      "title": "Subscription — {{name}}",
+      "loadFailed": "Failed to load subscription details",
+      "client": "User",
+      "noClient": "No user",
+      "assigned": "User updated",
+      "telemetryOff": "Telemetry disabled",
+      "stats": {
+        "lifetime": "Total traffic",
+        "window": "Last {{days}} days",
+        "remaining": "Remaining quota",
+        "devices": "Devices",
+        "sessions": "Sessions",
+        "accessCount": "Access count",
+        "createdAt": "Created",
+        "lastAccess": "Last access"
+      },
+      "daily": "Daily traffic",
+      "devices": "Devices",
+      "devicesEmpty": "No devices yet.",
+      "deviceSessions": "{{count}} sessions",
+      "sessions": "Sessions",
+      "traffic": "Node & airport traffic",
+      "activity": "Recent activity",
+      "activityEmpty": "No recent access records."
+    },
+    "users": {
+      "subtitle": "Subscription cards grouped by their owning user.",
+      "add": "New user",
+      "empty": "No users yet. Create a user to group subscription cards; assign cards in the subscription details.",
+      "unassigned": "No user",
+      "unassignedHint": "Cards without a user",
+      "shareCount": "{{count}} links",
+      "devices": "{{count}} devices",
+      "online": "{{count}} online",
+      "devicesLabel": "Devices",
+      "onlineLabel": "Online now",
+      "windowLabel": "Last {{days}} days",
+      "sessionsLabel": "Sessions today",
+      "lifetimeLabel": "Total traffic",
+      "problemsLabel": "Problem nodes",
+      "sessionsToday": "{{count}} sessions",
+      "problemNodes": "{{count}} nodes",
+      "truncated": "Showing the first {{count}} cards",
+      "loadFailed": "Failed to load users",
+      "deleteConfirm": "Delete user \"{{name}}\"? Its {{count}} links stay and become unassigned.",
+      "deleteSuccess": "User deleted"
+    },
+    "userDetail": {
+      "title": "User — {{name}}",
+      "loadFailed": "Failed to load user details",
+      "mergeNote": "Aggregated from the {{count}} most active links of this user.",
+      "stats": {
+        "shares": "Links",
+        "devices": "Devices",
+        "online": "Online now",
+        "window": "Last {{days}} days",
+        "lifetime": "Total traffic",
+        "problemNodes": "Problem nodes"
+      },
+      "shares": "Subscriptions",
+      "sharesEmpty": "This user has no subscription cards.",
+      "daily": "Daily traffic",
+      "devices": "Devices",
+      "sessions": "Sessions",
+      "traffic": "Node & airport traffic",
+      "activity": "Recent activity"
+    },
+    "clientDialog": {
+      "createTitle": "New User",
+      "editTitle": "Edit User",
+      "name": "Name",
+      "note": "Note",
+      "enabled": "Enabled",
+      "nameRequired": "Enter a user name",
+      "createSuccess": "User created",
+      "updateSuccess": "User updated",
+      "saveFailed": "Save failed"
     }
   },
   "airports": {
@@ -3414,6 +3573,7 @@
       "noMore": "No more shares",
       "groupChip": "Group",
       "noResults": "No results found for your search",
+      "searching": "Searching...",
       "searchPlaceholder": "Search by name, token, IP address, or share link...",
       "sortLabel": "Sort",
       "sortNone": "Access count",

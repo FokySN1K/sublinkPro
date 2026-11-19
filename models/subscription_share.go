@@ -40,6 +40,7 @@ type SubscriptionShare struct {
 	// GroupID is nil for legacy/unmanaged links. Managed links inherit a
 	// snapshot of the group settings at creation time.
 	GroupID                   *int       `gorm:"index" json:"group_id"`
+	ClientID                  *int       `gorm:"index" json:"client_id"`
 	TrafficLimitBytes         int64      `gorm:"default:0" json:"traffic_limit_bytes"`
 	MaxDevices                int        `gorm:"default:0" json:"max_devices"`
 	ReportIntervalSessions    int        `gorm:"default:0" json:"report_interval_sessions"`
@@ -240,6 +241,7 @@ func (s *SubscriptionShare) Update() error {
 		"expire_at":                   s.ExpireAt,
 		"enabled":                     s.Enabled,
 		"group_id":                    s.GroupID,
+		"client_id":                   s.ClientID,
 		"traffic_limit_bytes":         s.TrafficLimitBytes,
 		"max_devices":                 s.MaxDevices,
 		"report_interval_sessions":    s.ReportIntervalSessions,

@@ -226,6 +226,11 @@ func RunMigrations() error {
 		{name: "ShareDevice", model: &ShareDevice{}},
 		{name: "ShareDeviceUsageHour", model: &ShareDeviceUsageHour{}},
 		{name: "ShareAccessLog", model: &ShareAccessLog{}},
+		{name: "ShareSession", model: &ShareSession{}},
+		{name: "ShareNodeUsageHour", model: &ShareNodeUsageHour{}},
+		{name: "ShareNodeReliability", model: &ShareNodeReliability{}},
+		{name: "ShareNodeReliabilityEvent", model: &ShareNodeReliabilityEvent{}},
+		{name: "ShareClient", model: &ShareClient{}},
 		{name: "SubscriptionChainRule", model: &SubscriptionChainRule{}},
 		{name: "Airport", model: &Airport{}},
 		{name: "AirportUsageSnapshot", model: &AirportUsageSnapshot{}},
@@ -558,6 +563,33 @@ func RunMigrations() error {
 		return db.AutoMigrate(&ShareDevice{})
 	}); err != nil {
 		utils.Error("执行迁移 0048_add_share_device_report_baseline 失败: %v", err)
+	}
+
+	if err := database.RunCustomMigration("0049_add_share_sessions", func() error {
+		// 0049_add_share_sessions - 客户端会话：记录某个安装的“开启 / 关闭”区间、
+		// 持续时长与区间内接受的流量，供订阅详情与设备详情展示。
+		return db.AutoMigrate(&ShareSession{})
+	}); err != nil {
+		utils.Error("执行迁移 0049_add_share_sessions 失败: %v", err)
+	}
+
+	if err := database.RunCustomMigration("0050_add_share_node_telemetry", func() error {
+		// 0050_add_share_node_telemetry - 按节点统计的流量桶与节点可靠性快照：
+		// 节点通过 sublinkpro_unique_key 关联，可靠性事件只记录状态迁移。
+		return db.AutoMigrate(&ShareNodeUsageHour{}, &ShareNodeReliability{}, &ShareNodeReliabilityEvent{})
+	}); err != nil {
+		utils.Error("执行迁移 0050_add_share_node_telemetry 失败: %v", err)
+	}
+
+	if err := database.RunCustomMigration("0051_add_share_clients", func() error {
+		// 0051_add_share_clients - 轻量“用户”实体与订阅卡片的 client_id 归属。
+		// 删除客户端不会删除卡片，只把归属置空。
+		if err := db.AutoMigrate(&ShareClient{}, &SubscriptionShare{}); err != nil {
+			return err
+		}
+		return nil
+	}); err != nil {
+		utils.Error("执行迁移 0051_add_share_clients 失败: %v", err)
 	}
 
 	if err := database.RunCustomMigration("0024_migrate_legacy_webhook_settings", func() error {

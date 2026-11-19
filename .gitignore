@@ -14,6 +14,11 @@ sublinkPro.exe
 # 运行时模板目录（挂载卷内容），默认模板源码在 template-defaults/
 template/
 
+# 本地测试容器 (sublinkpro-test :7004) 的运行时数据目录
+db-test
+logs-test
+template-test
+
 # AI agent runtime and temporary files (DO NOT COMMIT)
 .claude/projects/
 .claude/sessions/

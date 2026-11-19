@@ -79,7 +79,7 @@ type shareDeviceActivityEntry struct {
 // ShareDeviceOverview lists every installation known to the requested share
 // scope, aggregated over all links the installation is bound to.
 //
-//	GET /api/v1/shares/devices/overview?subId=&groupId=&status=&keyword=&page=&pageSize=
+//	GET /api/v1/shares/devices/overview?subId=&groupId=&status=&keyword=&days=&page=&pageSize=
 func ShareDeviceOverview(c *gin.Context) {
 	shares, err := resolveShareDeviceScope(c)
 	if err != nil {
@@ -87,6 +87,7 @@ func ShareDeviceOverview(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"code": 500, "msg": "Failed to load share scope"})
 		return
 	}
+	days := shareTelemetryDaysParam(c)
 	shareIDs := make([]int, 0, len(shares))
 	for _, share := range shares {
 		shareIDs = append(shareIDs, share.ID)
@@ -98,7 +99,7 @@ func ShareDeviceOverview(c *gin.Context) {
 		return
 	}
 
-	windowStart := time.Now().AddDate(0, 0, -models.ShareDeviceUsageWindowDays)
+	windowStart := time.Now().AddDate(0, 0, -days)
 	items := aggregateShareDevices(devices, buildShareDeviceLinkIndex(shares), loadShareDeviceWindowSums(devices, windowStart))
 
 	status := strings.ToLower(strings.TrimSpace(c.Query("status")))
@@ -160,15 +161,16 @@ func ShareDeviceOverview(c *gin.Context) {
 			"page":        page,
 			"page_size":   pageSize,
 			"summary":     summary,
-			"window_days": models.ShareDeviceUsageWindowDays,
+			"window_days": days,
 		},
 	})
 }
 
 // ShareDeviceDetail returns one installation with its link bindings, hourly
-// traffic buckets and recent activity.
+// traffic buckets, local-day totals, sessions, node/airport traffic,
+// reliability and recent activity.
 //
-//	GET /api/v1/shares/devices/detail?hwid=&deviceId=
+//	GET /api/v1/shares/devices/detail?hwid=&deviceId=&days=
 func ShareDeviceDetail(c *gin.Context) {
 	hwid := models.NormalizeShareDeviceValue(c.Query("hwid"), 128)
 	deviceID := models.NormalizeShareDeviceValue(c.Query("deviceId"), 128)
@@ -187,8 +189,9 @@ func ShareDeviceDetail(c *gin.Context) {
 		return
 	}
 
+	days := shareTelemetryDaysParam(c)
 	shares := loadSharesByIDs(devices)
-	windowStart := time.Now().AddDate(0, 0, -models.ShareDeviceUsageWindowDays)
+	windowStart := time.Now().AddDate(0, 0, -days)
 	items := aggregateShareDevices(devices, buildShareDeviceLinkIndex(shares), loadShareDeviceWindowSums(devices, windowStart))
 	if len(items) == 0 {
 		c.JSON(http.StatusNotFound, gin.H{"code": 404, "msg": "Device not found"})
@@ -211,13 +214,27 @@ func ShareDeviceDetail(c *gin.Context) {
 		})
 	}
 
+	sessions, err := models.ListShareSessionsByDeviceIDs(item.deviceRowIDs, windowStart, shareSubscriptionSessionLimit)
+	if err != nil {
+		utils.Warn("Failed to load share sessions: %v", err)
+		sessions = nil
+	}
+	nodes, airports := buildShareNodeTraffic(nil, item.deviceRowIDs, windowStart)
+	reliability, reliabilityEvents := buildShareReliability(nil, item.deviceRowIDs, windowStart)
+
 	c.JSON(http.StatusOK, gin.H{
 		"code": 200,
 		"data": gin.H{
-			"device":      item,
-			"hourly":      hourly,
-			"activity":    loadShareDeviceActivity(item),
-			"window_days": models.ShareDeviceUsageWindowDays,
+			"device":             item,
+			"hourly":             hourly,
+			"daily":              buildShareDailyBuckets(buckets, days),
+			"sessions":           buildShareSessionEntries(sessions, devices, time.Now()),
+			"activity":           loadShareDeviceActivity(item),
+			"nodes":              nodes,
+			"airports":           airports,
+			"reliability":        reliability,
+			"reliability_events": reliabilityEvents,
+			"window_days":        days,
 		},
 	})
 }

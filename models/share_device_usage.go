@@ -11,10 +11,26 @@ import (
 	"gorm.io/gorm/clause"
 )
 
-// ShareDeviceUsageWindowDays bounds the per-hour traffic history kept for a
-// device. The admin UI folds this window into hour-of-day buckets so users can
-// see at which hours a device consumes traffic.
+// ShareDeviceUsageWindowDays is the default window of the device telemetry
+// views. The admin UI offers 7 and 30 day windows; hourly buckets are kept for
+// ShareTelemetryMaxWindowDays days so the wider window stays complete.
 const ShareDeviceUsageWindowDays = 7
+
+// ShareTelemetryMaxWindowDays is the widest window the telemetry views expose
+// and the retention of the hourly buckets backing them.
+const ShareTelemetryMaxWindowDays = 30
+
+// NormalizeShareTelemetryDays clamps a requested window into the supported
+// 1..30 day range; zero falls back to the default window.
+func NormalizeShareTelemetryDays(days int) int {
+	if days <= 0 {
+		return ShareDeviceUsageWindowDays
+	}
+	if days > ShareTelemetryMaxWindowDays {
+		return ShareTelemetryMaxWindowDays
+	}
+	return days
+}
 
 // ShareDeviceUsageHour is one hourly traffic bucket of one device binding.
 // Buckets are keyed by device row and UTC hour start; reports inside the same
@@ -115,7 +131,7 @@ func pruneShareDeviceUsage(at time.Time) {
 	shareDeviceUsagePrunedAt = at
 	shareDeviceUsagePruneMu.Unlock()
 
-	cutoff := at.AddDate(0, 0, -ShareDeviceUsageWindowDays)
+	cutoff := at.AddDate(0, 0, -ShareTelemetryMaxWindowDays)
 	if err := database.DB.Where("window_start < ?", cutoff).Delete(&ShareDeviceUsageHour{}).Error; err != nil {
 		utils.Warn("Failed to prune share device usage buckets: %v", err)
 	}

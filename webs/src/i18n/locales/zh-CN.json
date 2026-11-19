@@ -362,12 +362,19 @@
     },
     "telemetry": {
       "subtitle": "所有拉取过链接的安装终端，按使用到的订阅聚合展示。",
+      "modes": {
+        "users": "用户",
+        "subscriptions": "订阅链接",
+        "devices": "设备"
+      },
       "filters": {
         "pool": "节点池",
         "poolAll": "全部节点池",
         "status": "状态",
         "statusAll": "全部状态",
-        "keywordPlaceholder": "搜索名称、HWID、设备 ID、链接..."
+        "keywordPlaceholder": "搜索名称、HWID、设备 ID、链接...",
+        "days": "统计周期",
+        "daysValue": "近 {{days}} 天"
       },
       "summary": {
         "total": "{{count}} 台设备",
@@ -408,8 +415,160 @@
       "hourlyHint": "按本地时区合并近 {{days}} 天的上报数据。",
       "hourlyEmpty": "保留窗口内暂无上报数据。",
       "peakHour": "高峰 {{hour}}",
+      "daily": "按日流量",
+      "sessions": "会话",
+      "traffic": "节点与机场流量",
       "activity": "最近活动",
       "activityEmpty": "暂无访问记录。"
+    },
+    "blocks": {
+      "noDaily": "所选周期内暂无流量。",
+      "noSessions": "所选周期内暂无会话。",
+      "sessionOpen": "进行中",
+      "airports": "按机场",
+      "airportUnknown": "未知机场",
+      "nodes": "按节点",
+      "reliability": "节点可靠性",
+      "reliabilityEmpty": "暂无异常节点。",
+      "reliabilityEvents": "状态变化",
+      "reliabilityEventsEmpty": "保留期内暂无状态变化。",
+      "reliabilityScore": "评分 {{score}}",
+      "reliabilityFails": "失败 {{fails}} · 连续 {{streak}}",
+      "reliabilityStates": {
+        "suspect": "可疑",
+        "silent": "静默",
+        "ok": "正常",
+        "neutral": "中性"
+      },
+      "reasons": {
+        "recovered": "已恢复",
+        "silent": "停止上报",
+        "suspect": "质量下降",
+        "healthy": "健康",
+        "state_change": "状态变化"
+      }
+    },
+    "subscriptions": {
+      "subtitle": "每条订阅链接一行：额度、设备、流量与会话。",
+      "searchPlaceholder": "搜索链接、令牌、节点池、用户...",
+      "empty": "暂无订阅链接。请先在订阅组中创建链接。",
+      "loadFailed": "加载订阅链接失败",
+      "noClient": "未归属用户",
+      "online": "在线",
+      "today": "今日 {{bytes}}",
+      "lifetime": "累计 {{bytes}}",
+      "sessionsToday": "今日 {{count}} 个会话",
+      "deviceCounts": "{{total}} 台设备 · {{active}} 台正常",
+      "problemChip": "{{count}} 个异常节点",
+      "status": {
+        "enabled": "启用",
+        "expired": "已过期",
+        "disabled": "已禁用"
+      },
+      "quota": {
+        "unlimited": "不限",
+        "remaining": "剩余 {{bytes}}",
+        "exhausted": "已用尽"
+      },
+      "summary": {
+        "total": "{{count}} 条链接",
+        "enabled": "{{count}} 条启用",
+        "expired": "{{count}} 条过期",
+        "disabled": "{{count}} 条禁用",
+        "online": "{{count}} 条在线",
+        "devices": "{{count}} 台设备",
+        "windowTraffic": "近 {{days}} 天 {{bytes}}",
+        "problemNodes": "{{count}} 个异常节点"
+      },
+      "columns": {
+        "share": "链接",
+        "client": "用户",
+        "quota": "额度",
+        "devices": "设备",
+        "traffic": "流量",
+        "sessions": "会话",
+        "problems": "异常节点",
+        "lastReport": "最近联网 / 上报"
+      }
+    },
+    "subscriptionDetail": {
+      "title": "订阅链接 — {{name}}",
+      "loadFailed": "加载订阅链接详情失败",
+      "client": "用户",
+      "noClient": "未归属用户",
+      "assigned": "用户已更新",
+      "telemetryOff": "遥测已关闭",
+      "stats": {
+        "lifetime": "累计流量",
+        "window": "近 {{days}} 天",
+        "remaining": "剩余额度",
+        "devices": "设备",
+        "sessions": "会话",
+        "accessCount": "访问次数",
+        "createdAt": "创建时间",
+        "lastAccess": "最近访问"
+      },
+      "daily": "按日流量",
+      "devices": "设备",
+      "devicesEmpty": "暂无设备。",
+      "deviceSessions": "{{count}} 个会话",
+      "sessions": "会话",
+      "traffic": "节点与机场流量",
+      "activity": "最近活动",
+      "activityEmpty": "暂无访问记录。"
+    },
+    "users": {
+      "subtitle": "按归属用户分组的订阅链接。",
+      "add": "新建用户",
+      "empty": "暂无用户。创建用户可对订阅链接分组；在订阅详情中可调整归属。",
+      "unassigned": "未归属用户",
+      "unassignedHint": "未归属任何用户的链接",
+      "shareCount": "{{count}} 条链接",
+      "devices": "{{count}} 台设备",
+      "online": "{{count}} 条在线",
+      "devicesLabel": "设备数",
+      "onlineLabel": "当前在线",
+      "windowLabel": "近 {{days}} 天流量",
+      "sessionsLabel": "今日会话",
+      "lifetimeLabel": "累计流量",
+      "problemsLabel": "异常节点",
+      "sessionsToday": "{{count}} 个会话",
+      "problemNodes": "{{count}} 个节点",
+      "truncated": "仅展示前 {{count}} 条链接",
+      "loadFailed": "加载用户失败",
+      "deleteConfirm": "确定删除用户 \"{{name}}\"？其 {{count}} 条链接会保留并变为未归属。",
+      "deleteSuccess": "用户已删除"
+    },
+    "userDetail": {
+      "title": "用户 — {{name}}",
+      "loadFailed": "加载用户详情失败",
+      "mergeNote": "已合并该用户最活跃的 {{count}} 条链接。",
+      "stats": {
+        "shares": "链接",
+        "devices": "设备",
+        "online": "当前在线",
+        "window": "近 {{days}} 天",
+        "lifetime": "累计流量",
+        "problemNodes": "异常节点"
+      },
+      "shares": "订阅链接",
+      "sharesEmpty": "该用户暂无订阅链接。",
+      "daily": "按日流量",
+      "devices": "设备",
+      "sessions": "会话",
+      "traffic": "节点与机场流量",
+      "activity": "最近活动"
+    },
+    "clientDialog": {
+      "createTitle": "新建用户",
+      "editTitle": "编辑用户",
+      "name": "名称",
+      "note": "备注",
+      "enabled": "启用",
+      "nameRequired": "请输入用户名称",
+      "createSuccess": "用户已创建",
+      "updateSuccess": "用户已更新",
+      "saveFailed": "保存失败"
     }
   },
   "airports": {
@@ -3407,6 +3566,7 @@
       "noMore": "没有更多分享",
       "groupChip": "订阅组",
       "noResults": "未找到符合搜索条件的分享",
+      "searching": "搜索中...",
       "searchPlaceholder": "通过名称、Token、IP地址或分享链接搜索...",
       "sortLabel": "排序",
       "sortNone": "访问次数",

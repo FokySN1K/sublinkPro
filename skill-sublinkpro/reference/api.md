@@ -366,15 +366,42 @@ Auto-generated tokens are **32 lowercase hex characters** (16 random bytes). Cus
 **DELETE** `/shares/devices/delete` (query: `?id=123`)
 
 ### Device Telemetry Overview
-**GET** `/shares/devices/overview` — devices aggregated **per installation** (`hwid` + `device_id`) across every share they use. Query: optional `subId`, `groupId`, `status` (`active` | `pending` | `blocked`), `keyword`, `page`, `pageSize` (max 200).
+**GET** `/shares/devices/overview` — devices aggregated **per installation** (`hwid` + `device_id`) across every share they use. Query: optional `subId`, `groupId`, `status` (`active` | `pending` | `blocked`), `keyword`, `page`, `pageSize` (max 200), `days` (`7` or `30`, default `7`).
 
-Each item carries `hwid`, `device_id`, `name`, `platform`, `app_version`, `status`, `active_count` / `pending_count` / `blocked_count`, `first_seen_at`, `last_seen_at`, `last_report_at`, `reported_traffic_bytes` (lifetime), `window_traffic_bytes`, `share_count` and `shares` (per-link rows with `share_id`, `share_name`, `token`, `status`, `group_id`, `group_name`, `subscription_id`, `subscription_name`, `reported_traffic_bytes`, `last_seen_at`, `last_report_at`). The response also returns `total`, `page`, `page_size`, `summary` (`total`, `active`, `pending`, `blocked`, `reported_traffic_bytes`, `window_traffic_bytes`) and `window_days` (7).
+Each item carries `hwid`, `device_id`, `name`, `platform`, `app_version`, `status`, `active_count` / `pending_count` / `blocked_count`, `first_seen_at`, `last_seen_at`, `last_report_at`, `reported_traffic_bytes` (lifetime), `window_traffic_bytes`, `share_count` and `shares` (per-link rows with `share_id`, `share_name`, `token`, `status`, `group_id`, `group_name`, `subscription_id`, `subscription_name`, `reported_traffic_bytes`, `last_seen_at`, `last_report_at`). The response also returns `total`, `page`, `page_size`, `summary` (`total`, `active`, `pending`, `blocked`, `reported_traffic_bytes`, `window_traffic_bytes`) and `window_days`.
 
 ### Device Telemetry Detail
-**GET** `/shares/devices/detail` (query: `?hwid=...&deviceId=...`) — one installation. Returns `device` (same shape as an overview item), `hourly` (`window_start`, `up_bytes`, `down_bytes`, `bytes` per UTC hour bucket, 7-day retention), `activity` (up to 100 access-log rows) and `window_days`. Unknown identities answer 404.
+**GET** `/shares/devices/detail` (query: `?hwid=...&deviceId=...&days=7`) — one installation. Returns `device` (same shape as an overview item), `hourly` (`window_start`, `up_bytes`, `down_bytes`, `bytes` per UTC hour bucket), `daily` (`day`, `up_bytes`, `down_bytes`, `bytes`, filled for every day of the window), `sessions` (`id`, `device_id`, `device_name`, `hwid`, `device_key`, `session_key`, `started_at`, `ended_at`, `duration_s`, `up_bytes`, `down_bytes`, `bytes`, `open`), `nodes` and `airports` (traffic per stable node key and per resolved airport, see [Subscription Telemetry Detail](#subscription-telemetry-detail)), `reliability` and `reliability_events` (problematic-node snapshots and transitions), `activity` (up to 100 access-log rows) and `window_days`. Unknown identities answer 404.
 
 ### Share Activity
 **GET** `/shares/activity` (query: `?shareId=123&limit=200`) — recent access rows (`action` is `fetch`, `status`, `stub`, `bind`, `admin` or `telemetry`).
+
+### Subscription Telemetry Overview
+**GET** `/shares/subscriptions/overview` — one row per share link with its client, quota, device counters and session state. Query: optional `subId`, `groupId`, `clientId` (number, `none` or `0` for cards without a client), `status` (`enabled` | `expired` | `disabled`), `keyword`, `days` (`7` or `30`, default `7`), `page`, `pageSize` (max 200).
+
+Each item carries `share_id`, `share_name`, `token`, `group_id`, `group_name`, `subscription_id`, `subscription_name`, `client_id`, `client_name`, `status`, `telemetry_enabled`, `traffic_limit_bytes`, `reported_traffic_bytes`, `remaining_bytes`, `quota_exhausted`, `devices` (`total`, `active`, `pending`, `blocked`), `device_list` (up to 50 rows: `id`, `name`, `hwid`, `device_id`, `platform`, `status`, `reported_traffic_bytes`, `window_traffic_bytes`, `last_seen_at`, `last_report_at`), `today_bytes`, `window_bytes`, `lifetime_bytes`, `last_seen_at`, `last_report_at`, `online_now`, `sessions_today`, `problem_nodes` and `last_session` (`started_at`, `ended_at`, `bytes`). The response returns `items`, `total`, `page`, `page_size`, `summary` (`total`, `enabled`, `expired`, `disabled`, `online`, `devices`, `window_traffic_bytes`, `reported_traffic_bytes`, `problem_nodes`), `window_days` and `generated_at`. Rows are sorted online first, then by last report, then by window traffic.
+
+### Subscription Telemetry Detail
+**GET** `/shares/subscriptions/detail` (query: `?shareId=123&days=7`) — one link with its telemetry blocks:
+
+- `share` — `share_id`, `share_name`, `token`, `group_id`, `group_name`, `subscription_id`, `subscription_name`, `client_id`, `client_name`, `status`, `telemetry_enabled`, `traffic_limit_bytes`, `reported_traffic_bytes`, `remaining_bytes`, `quota_exhausted`, `access_count`, `created_at`, `last_access_at`, `last_usage_at`.
+- `devices` — `id`, `name`, `hwid`, `device_id`, `platform`, `app_version`, `status`, `reported_traffic_bytes`, `window_traffic_bytes`, `sessions_count`, `last_seen_at`, `last_report_at`.
+- `daily` — `day`, `up_bytes`, `down_bytes`, `bytes` for every day of the window.
+- `sessions` — `id`, `device_id`, `device_name`, `hwid`, `device_key`, `session_key`, `started_at`, `ended_at`, `duration_s`, `up_bytes`, `down_bytes`, `bytes`, `open`.
+- `nodes` — `key` (stable `sublinkpro_unique_key`), `name`, `group`, `country`, `airport_id`, `airport_name`, `up_bytes`, `down_bytes`, `bytes`.
+- `airports` — `airport_id`, `airport_name`, `bytes`, `share` (0–1 fraction of window traffic).
+- `reliability` — `key`, `name`, `airport_name`, `score`, `fails`, `streak`, `silent`, `state` (`ok` | `neutral` | `suspect` | `silent`), `last_seen_at`, `reported_at`, `updated_at`.
+- `reliability_events` — `id`, `node_key`, `node_name`, `from_state`, `to_state`, `from_score`, `to_score`, `silent`, `reason` (`recovered` | `silent` | `suspect` | `healthy` | `state_change`), `created_at`.
+- `events` — recent access-log rows; `window_days` echoes the normalized window.
+
+### Share Clients
+Base: `/api/v1/shares/clients`
+
+- **GET** `/shares/clients` (query: optional `keyword`) — `items` with `id`, `name`, `note`, `enabled`, `created_at`, `updated_at` and `share_count`, plus `total`.
+- **POST** `/shares/clients/add` — **JSON**: `name` (required), `note`, `enabled`.
+- **POST** `/shares/clients/update` — **JSON**: `id` plus optional `name`, `note`, `enabled`.
+- **DELETE** `/shares/clients/delete` (query: `?id=3`) — the client is removed and its cards become unassigned (`client_id = NULL`). Cards are never deleted.
+- **POST** `/shares/clients/assign` — **JSON**: `{"share_ids": [1, 2], "client_id": 3}` binds cards to a client; send `client_id: null` (or omit it) to unassign. `share_id` is accepted as a single-id alias of `share_ids`.
 
 ### Consume Subscription (the actual output a client fetches)
 **GET** `/c/` (query: `?token=<shareToken>&client=<idx>&substore=<target>`)
@@ -433,9 +460,49 @@ Absolute report (installation lifetime counter):
 
 - At least one of `up`, `down`, `reported_total_bytes` is required. Negative values, non-numeric values, values above 1 PiB per direction and absolute totals above 1 EiB are rejected with 400 and never touch the counter.
 - Optional identity: `X-Sublink-Device-Secret` (must belong to a device bound to this link), or the `X-HWID` + `X-Device-ID` pair. Reports without identity are counted per link; blocked/pending devices are rejected with 403.
+- Optional `session_id` attributes the accepted delta to a client session (max 64 characters). Unknown session ids are created on the fly by the first report that carries them.
 - `report_id` applies to delta mode only: a retry with the same id inside a 30-minute in-memory window is answered as a duplicate and writes nothing. Duplicates are not written to the access log.
 - `reported_total_bytes` switches to absolute mode and requires a resolved device (without one it falls back to delta semantics). `install_id` is the installation epoch (trimmed, max 64 characters): a value different from the stored epoch restarts the baseline from zero, so reinstalls are not counted twice. `delta <= 0` means a replay: `accepted_bytes` is 0, `duplicate` is `true` and the baseline stays untouched. The accepted delta is written with one conditional `UPDATE ... WHERE id = ? AND report_baseline_bytes = ? AND report_baseline_epoch = ?` and retried up to three times on a lost race.
 - Success returns `reported_traffic_bytes` (link lifetime), `traffic_limit_bytes`, `remaining_bytes`, `quota_exhausted`, `last_usage_at`, `device_status`, `device_reported_traffic_bytes` (device lifetime counter), `accepted_bytes` and `duplicate`. Accepting reports continues after the quota is exhausted so final usage stays accurate.
+
+### Session Telemetry
+**POST** `/c/sessions` (query: `?token=<shareToken>`) — explicit client session boundaries. Requires a telemetry-enabled group and the `X-HWID` + `X-Device-ID` identity (a bound device secret also supplies it); rows without identity are ignored.
+
+```json
+{"event": "session_start", "session_id": "ab12cd34"}
+{"event": "session_stop", "session_id": "ab12cd34"}
+```
+
+- `event` is `session_start` or `session_stop`; `session_id` is trimmed to 64 characters and scoped per link + installation.
+- Sessions are a read-only interval view: traffic is attributed by `/c/telemetry` reports that carry the same `session_id`, never by this endpoint. `up`, `down` and `reported_total_bytes` are accepted for forward compatibility but ignored.
+- Sessions left open without reports for 10 minutes are closed automatically by the maintenance task.
+- Success returns `event`, `session_id`, `accepted`, `duplicate` (`session_stop` for an already closed session), `ignored` and `device_status`.
+
+### Node Telemetry
+**POST** `/c/nodes` (query: `?token=<shareToken>`) — per-node traffic deltas of one report window:
+
+```json
+{"report_id": "r-7", "session_id": "ab12cd34", "nodes": [{"key": "0123456789abcdef0123456789abcdef", "up": 1024, "down": 20480}]}
+```
+
+- `nodes` holds at most 200 rows; each row is `{key, up, down}` with the stable `sublinkpro_unique_key` of the node. Rows with negative values, values above 1 PiB, or unknown/empty keys are skipped.
+- Rows are stored in hourly buckets per installation and node key (30-day retention). The node name, pool and airport are resolved on the server from the key; `provider` is not part of the contract.
+- Reports without a bound device are answered with `ignored: true` and write nothing.
+- `report_id` deduplicates retries for 30 minutes per link, scope and installation.
+- Success returns `accepted_rows`, `skipped_rows`, `ignored_rows` and `duplicate`.
+
+### Reliability Telemetry
+**POST** `/c/reliability` (query: `?token=<shareToken>`) — the latest reputation snapshot of the nodes an installation currently considers problematic:
+
+```json
+{"report_id": "rel-3", "nodes": [{"key": "0123456789abcdef0123456789abcdef", "score": -55, "fails": 3, "streak": 0, "silent": false, "last_seen": "2026-11-19T10:00:00Z", "recovered": false}]}
+```
+
+- `nodes` holds at most 100 rows; each row is `{key, score, fails, streak, silent, last_seen, recovered}`. Only problematic nodes need to be reported; recoveries are sent with `recovered: true`.
+- The server keeps one latest row per link + installation + node and appends `share_node_reliability_events` only when the state, silent flag or `recovered` flag changes. Events are retained for 90 days.
+- Identity (`X-HWID` + `X-Device-ID` or a device secret) is required; rows without it are answered with `ignored: true`.
+- `report_id` deduplicates retries; `reported_at` may backdate the snapshot by up to 24 hours.
+- Success returns `accepted_rows`, `skipped_rows`, `events` (state transitions written) and `duplicate`.
 
 ---
 

@@ -118,6 +118,11 @@ func (sm *SchedulerManager) LoadFromDatabase() error {
 		utils.Error("Failed to create WebDAV scheduled backup task: %v", err)
 	}
 
+	// 启动分享遥测维护任务（失联会话关闭、保留期清理）
+	if err := sm.StartShareTelemetryCleanupTask(); err != nil {
+		utils.Error("Failed to create share telemetry maintenance task: %v", err)
+	}
+
 	return nil
 }
 

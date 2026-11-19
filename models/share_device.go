@@ -352,11 +352,21 @@ func (d *ShareDevice) Update() error {
 	return nil
 }
 
-// Delete removes the device together with its hourly traffic buckets.
+// Delete removes the device together with its telemetry history: hourly
+// traffic buckets, sessions, per-node usage and reliability snapshots.
 // Historical access rows remain for auditing.
 func (d *ShareDevice) Delete() error {
 	return database.DB.Transaction(func(tx *gorm.DB) error {
 		if err := tx.Where("device_id = ?", d.ID).Delete(&ShareDeviceUsageHour{}).Error; err != nil {
+			return err
+		}
+		if err := tx.Where("device_id = ?", d.ID).Delete(&ShareSession{}).Error; err != nil {
+			return err
+		}
+		if err := DeleteShareNodeUsageForDevices(tx, []int{d.ID}); err != nil {
+			return err
+		}
+		if err := DeleteShareReliabilityForDevices(tx, []int{d.ID}); err != nil {
 			return err
 		}
 		return tx.Delete(&ShareDevice{}, d.ID).Error
@@ -376,7 +386,7 @@ func TouchShareDevice(id int) {
 }
 
 // DeleteShareDevices removes all devices bound to a link together with their
-// hourly traffic buckets.
+// telemetry history (hourly buckets, sessions, node usage, reliability).
 func DeleteShareDevices(shareID int) error {
 	return database.DB.Transaction(func(tx *gorm.DB) error {
 		var ids []int
@@ -385,6 +395,15 @@ func DeleteShareDevices(shareID int) error {
 		}
 		if len(ids) > 0 {
 			if err := tx.Where("device_id IN ?", ids).Delete(&ShareDeviceUsageHour{}).Error; err != nil {
+				return err
+			}
+			if err := tx.Where("device_id IN ?", ids).Delete(&ShareSession{}).Error; err != nil {
+				return err
+			}
+			if err := DeleteShareNodeUsageForDevices(tx, ids); err != nil {
+				return err
+			}
+			if err := DeleteShareReliabilityForDevices(tx, ids); err != nil {
 				return err
 			}
 		}

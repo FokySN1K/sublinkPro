@@ -220,6 +220,7 @@ Absolute report:
 | `report_id` | Optional. Delta mode only: a retry with the same id inside a 30-minute window is answered as a duplicate and writes nothing |
 | `reported_total_bytes` | Absolute installation counter. Requires a resolved device; without device identity the report falls back to delta semantics |
 | `install_id` | Installation epoch (trimmed, max 64 characters). A value different from the stored epoch restarts the baseline from zero, so reinstalls and moved data are not counted twice |
+| `session_id` | Optional. Attributes the accepted delta to a client session (trimmed, max 64 characters); see [Session telemetry](#session-telemetry) |
 
 At least one of `up`, `down`, `reported_total_bytes` is required. Negative values, non-numeric values, values above 1 PiB per direction and absolute totals above 1 EiB are rejected with `400` and never touch the counter.
 
@@ -276,14 +277,62 @@ When a report carries a device identity (`X-Sublink-Device-Secret`, or the bound
 - `reported_traffic_bytes` — a lifetime counter on the device, following the same "every accepted report is added" rule as the link,
 - `report_baseline_bytes` / `report_baseline_epoch` — the last accepted absolute total and its installation epoch, returned by the admin device endpoints as well,
 - `last_report_at` — the time of the last accepted report,
-- hourly buckets keyed by `(device, hour)` — kept for **7 days** and pruned in the background. Same-hour reports merge into one row. The server stores UTC buckets and the UI folds them into the viewer's local hour-of-day, so "when the device is online" follows the timezone of whoever opens the chart.
+- hourly buckets keyed by `(device, hour)` — kept for **30 days** and pruned in the background. Same-hour reports merge into one row. The server stores UTC buckets and the UI folds them into the viewer's local hour-of-day, so "when the device is online" follows the timezone of whoever opens the chart.
 
 A report that cannot be attributed to a bound device is still counted per link.
+
+### Session telemetry
+
+`POST /c/sessions?token=<shareToken>` records explicit session boundaries:
+
+```json
+{"event": "session_start", "session_id": "ab12cd34"}
+{"event": "session_stop", "session_id": "ab12cd34"}
+```
+
+Sessions require the installation identity (`X-HWID` + `X-Device-ID`, or a bound device secret); requests without it are answered with `ignored: true`. A session is keyed by link + installation + `session_id`, so a restarted client with the same id resumes the same row instead of duplicating it.
+
+Sessions are **read-only intervals**: traffic is attributed by regular `/c/telemetry` reports that carry the same `session_id`, never by this endpoint (`up`/`down` counters are accepted for forward compatibility and ignored). `session_stop` for an already closed session is answered as `duplicate`. Sessions left open without reports for **10 minutes** are closed automatically by the maintenance task; closed rows are kept for **90 days**.
+
+### Node telemetry
+
+`POST /c/nodes?token=<shareToken>` ingests per-node deltas of one report window:
+
+```json
+{"report_id": "r-7", "session_id": "ab12cd34", "nodes": [{"key": "0123456789abcdef0123456789abcdef", "up": 1024, "down": 20480}]}
+```
+
+- Each row is `{key, up, down}` where `key` is the stable `sublinkpro_unique_key` (32 hex characters) embedded in the delivered profile. Node names may be rewritten by name processing, so the key — not the name — is the contract.
+- At most **200 rows** per request. Duplicate keys inside one batch are merged, negative or oversized values (above 1 PiB) are skipped, and empty keys are ignored.
+- Rows land in hourly buckets per `(installation, node key)` and are kept for **30 days**.
+- The airport of a node is resolved **on the server** from the key (node → airport by source id and name, then by name). Clients do not send a provider.
+- Reports without a bound device are answered with `ignored: true` and write nothing. `report_id` deduplicates retries for 30 minutes per link, scope and installation.
+
+### Reliability telemetry
+
+`POST /c/reliability?token=<shareToken>` sends the latest reputation snapshot of the nodes an installation currently considers problematic:
+
+```json
+{"report_id": "rel-3", "nodes": [{"key": "0123456789abcdef0123456789abcdef", "score": -55, "fails": 3, "streak": 0, "silent": false, "last_seen": "2026-11-19T10:00:00Z", "recovered": false}]}
+```
+
+- Each row is `{key, score, fails, streak, silent, last_seen, recovered}`; at most **100 rows** per request. Only problem nodes need to be reported, and recoveries are sent with `recovered: true`.
+- The server keeps one latest row per link + installation + node. `share_node_reliability_events` receives a row only when the derived state (`ok`, `neutral`, `suspect`, `silent`), the silent flag or the `recovered` flag changes — repeated snapshots of the same state write no event.
+- A score at or below **-30** or `silent: true` marks the node as a problem; the link overview counts them as **Problem nodes**.
+- Events are retained for **90 days**. `reported_at` may backdate a snapshot by up to 24 hours; `report_id` deduplicates retries.
+
+### Users (share clients)
+
+`share_clients` groups subscription cards under a person. A card carries an optional `client_id`; creating or renaming a client never touches the cards, and deleting a client detaches its cards (`client_id = NULL`) instead of deleting them. Cards without a client are shown as a read-only **No user** group in the UI.
 
 ### Where reports are visible
 
 - **Share Groups page** — the group card shows the aggregate **Reported traffic** (`reported_traffic_bytes` summed across the group's links, displayed as `used / limit`), the **Last report** time and a **Quota exhausted (N)** badge when any link has reached its own limit.
-- **Telemetry tab** — one row per installation (HWID + device ID) aggregated across every share it uses: status, the subscriptions it consumes, lifetime and 7-day traffic, last seen and last report time. Filter by keyword, node pool or status; click a row to open the device dialog with traffic tiles, the list of subscriptions the device uses, a 24-hour usage chart and the recent activity log.
+- **Telemetry tab** — three scopes behind one switcher, all honoring the node-pool filter and the **7 / 30 day** period selector:
+  - **Users** (default) — one card per client with its links, device and online counts, window and lifetime traffic, sessions today and problem nodes; clicking a card opens the merged user view (daily chart, devices, sessions, node/airport traffic, reliability and activity of the most active links). **New user** creates a client.
+  - **Subscriptions** — one row per share link: link identity and status, owning user, quota bar (used / limit / remaining / exhausted), device counters, window/today/lifetime traffic, sessions today with an online chip, problem nodes and last seen/report. The row opens the subscription detail dialog with quota, daily traffic, devices, sessions, node/airport traffic, reliability and the access log, plus a user selector that assigns the card (`client_id`).
+  - **Devices** — one row per installation (HWID + device ID) aggregated across every share it uses, unchanged from before.
+- **Device dialog** — traffic tiles, the subscriptions the device uses, a 24-hour usage chart, daily traffic, sessions, node/airport traffic, reliability and the recent activity log.
 - **Links dialog** — the **Devices** action on a managed link opens its per-link device list (platform, version, status, traffic, last report) with approve, block, unblock and remove controls.
 - **Link cards** — each managed link card shows `Traffic used / limit`, the remaining quota (`limit - reported`, `∞` when unlimited), the number of active and pending devices, and the last report time; links at their limit carry a **Quota exhausted** chip. Opening a link repeats the traffic summary above the client URL list.
 - **Activity dialog** — telemetry reports appear with the translated **Telemetry** action label together with the reason labels of the placeholder cases (for example `quota_exhausted`).
