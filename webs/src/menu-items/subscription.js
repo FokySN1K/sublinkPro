@@ -61,6 +61,15 @@ const subscription = {
       breadcrumbs: true
     },
     {
+      id: 'proxy-pools',
+      title: 'Proxy Pools',
+      titleKey: 'navigation.items.proxyPools',
+      type: 'item',
+      url: '/subscription/proxy-pools',
+      icon: IconWorld,
+      breadcrumbs: true
+    },
+    {
       id: 'share-groups',
       title: 'Share Groups',
       titleKey: 'navigation.items.shareGroups',

@@ -18,6 +18,7 @@ import TableContainer from '@mui/material/TableContainer';
 import TableHead from '@mui/material/TableHead';
 import TableRow from '@mui/material/TableRow';
 import TextField from '@mui/material/TextField';
+import Tooltip from '@mui/material/Tooltip';
 import Typography from '@mui/material/Typography';
 import useMediaQuery from '@mui/material/useMediaQuery';
 import { useTheme } from '@mui/material/styles';
@@ -27,6 +28,7 @@ import { formatDateTime } from 'i18n/locales';
 import { formatBytes } from 'views/airports/utils';
 import { getShareSubscriptionsOverview } from 'api/shareGroups';
 
+import { ShareDailyBarChart } from './ShareTelemetryBlocks';
 import ShareSubscriptionDetailDialog from './ShareSubscriptionDetailDialog';
 
 const PAGE_SIZE = 20;
@@ -111,6 +113,45 @@ function SessionsCell({ item }) {
   );
 }
 
+function NodesCell({ item }) {
+  const { t } = useTranslation();
+  const nodes = item.top_nodes || [];
+  if (!nodes.length) {
+    return (
+      <Tooltip title={t('shareGroups.subscriptions.nodesEmpty')}>
+        <Typography variant="caption" color="text.secondary">
+          —
+        </Typography>
+      </Tooltip>
+    );
+  }
+  const [top, ...rest] = nodes;
+  return (
+    <Tooltip
+      arrow
+      title={
+        <Box>
+          {nodes.map((node) => (
+            <Box key={node.key}>
+              {node.name || node.key} · {formatBytes(node.bytes || 0)}
+            </Box>
+          ))}
+        </Box>
+      }
+    >
+      <Box sx={{ minWidth: 0 }}>
+        <Typography variant="body2" noWrap>
+          {top.name || top.key}
+        </Typography>
+        <Typography variant="caption" color="text.secondary" display="block" noWrap>
+          {formatBytes(top.bytes || 0)}
+          {rest.length ? ` · +${rest.length}` : ''}
+        </Typography>
+      </Box>
+    </Tooltip>
+  );
+}
+
 // Subscriptions tab: one row per share link with quota, devices and traffic.
 export default function ShareSubscriptionsPanel({ subId, days, showMessage, refreshKey }) {
   const { t, i18n } = useTranslation();
@@ -122,7 +163,7 @@ export default function ShareSubscriptionsPanel({ subId, days, showMessage, refr
   const [status, setStatus] = useState('');
   const [page, setPage] = useState(1);
   const [loading, setLoading] = useState(false);
-  const [data, setData] = useState({ items: [], total: 0, summary: null, window_days: days });
+  const [data, setData] = useState({ items: [], total: 0, summary: null, daily: [], window_days: days });
   const [detailTarget, setDetailTarget] = useState(null);
 
   const windowDays = data.window_days || days || 7;
@@ -138,9 +179,9 @@ export default function ShareSubscriptionsPanel({ subId, days, showMessage, refr
         page,
         pageSize: PAGE_SIZE
       });
-      setData(res.data || { items: [], total: 0, summary: null, window_days: days });
+      setData(res.data || { items: [], total: 0, summary: null, daily: [], window_days: days });
     } catch (error) {
-      setData({ items: [], total: 0, summary: null, window_days: days });
+      setData({ items: [], total: 0, summary: null, daily: [], window_days: days });
       showMessage?.(error.response?.data?.msg || t('shareGroups.subscriptions.loadFailed'), 'error');
     } finally {
       setLoading(false);
@@ -307,6 +348,18 @@ export default function ShareSubscriptionsPanel({ subId, days, showMessage, refr
         </Stack>
       )}
 
+      <Card variant="outlined" sx={{ p: 1.5, mb: 2 }}>
+        <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 1 }}>
+          <Typography variant="subtitle2" fontWeight={700}>
+            {t('shareGroups.subscriptions.dailyTitle')}
+          </Typography>
+          <Typography variant="caption" color="text.secondary">
+            {t('shareGroups.subscriptions.dailyHint', { days: windowDays })}
+          </Typography>
+        </Stack>
+        <ShareDailyBarChart daily={data.daily || []} />
+      </Card>
+
       {loading ? (
         <Stack alignItems="center" sx={{ py: 6 }}>
           <CircularProgress />
@@ -333,6 +386,15 @@ export default function ShareSubscriptionsPanel({ subId, days, showMessage, refr
                 {renderTraffic(item)}
               </Stack>
               <Divider sx={{ my: 1 }} />
+              <Stack direction="row" spacing={1} alignItems="center">
+                <Typography variant="caption" color="text.secondary">
+                  {t('shareGroups.subscriptions.columns.nodes')}
+                </Typography>
+                <Box sx={{ minWidth: 0, flexGrow: 1 }}>
+                  <NodesCell item={item} />
+                </Box>
+              </Stack>
+              <Divider sx={{ my: 1 }} />
               <Stack direction="row" justifyContent="space-between" spacing={1} alignItems="center">
                 <DeviceCounts counts={item.devices} />
                 <SessionsCell item={item} />
@@ -350,6 +412,7 @@ export default function ShareSubscriptionsPanel({ subId, days, showMessage, refr
                 <TableCell>{t('shareGroups.subscriptions.columns.quota')}</TableCell>
                 <TableCell>{t('shareGroups.subscriptions.columns.devices')}</TableCell>
                 <TableCell>{t('shareGroups.subscriptions.columns.traffic')}</TableCell>
+                <TableCell>{t('shareGroups.subscriptions.columns.nodes')}</TableCell>
                 <TableCell>{t('shareGroups.subscriptions.columns.sessions')}</TableCell>
                 <TableCell>{t('shareGroups.subscriptions.columns.problems')}</TableCell>
                 <TableCell>{t('shareGroups.subscriptions.columns.lastReport')}</TableCell>
@@ -368,6 +431,9 @@ export default function ShareSubscriptionsPanel({ subId, days, showMessage, refr
                     <DeviceCounts counts={item.devices} />
                   </TableCell>
                   <TableCell>{renderTraffic(item)}</TableCell>
+                  <TableCell>
+                    <NodesCell item={item} />
+                  </TableCell>
                   <TableCell>
                     <SessionsCell item={item} />
                   </TableCell>

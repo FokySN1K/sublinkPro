@@ -106,6 +106,7 @@
       "nodes": "节点管理",
       "nodeCheck": "检测中心",
       "subscriptions": "节点池",
+      "proxyPools": "代理池",
       "templates": "模板管理",
       "tags": "标签管理",
       "scripts": "脚本列表",
@@ -368,8 +369,8 @@
         "devices": "设备"
       },
       "filters": {
-        "pool": "节点池",
-        "poolAll": "全部节点池",
+        "pool": "订阅",
+        "poolAll": "全部订阅",
         "status": "状态",
         "statusAll": "全部状态",
         "keywordPlaceholder": "搜索名称、HWID、设备 ID、链接...",
@@ -428,6 +429,7 @@
       "airports": "按机场",
       "airportUnknown": "未知机场",
       "nodes": "按节点",
+      "noNodes": "暂无节点流量上报。客户端会在下次遥测上报时发送。",
       "reliability": "节点可靠性",
       "reliabilityEmpty": "暂无异常节点。",
       "reliabilityEvents": "状态变化",
@@ -450,6 +452,9 @@
     },
     "subscriptions": {
       "subtitle": "每条订阅链接一行：额度、设备、流量与会话。",
+      "dailyTitle": "每日流量",
+      "dailyHint": "最近 {{days}} 天",
+      "nodesEmpty": "暂无节点流量上报",
       "searchPlaceholder": "搜索链接、令牌、节点池、用户...",
       "empty": "暂无订阅链接。请先在订阅组中创建链接。",
       "loadFailed": "加载订阅链接失败",
@@ -486,6 +491,7 @@
         "quota": "额度",
         "devices": "设备",
         "traffic": "流量",
+        "nodes": "节点",
         "sessions": "会话",
         "problems": "异常节点",
         "lastReport": "最近联网 / 上报"
@@ -2923,6 +2929,14 @@
       "empty": "当前筛选条件下没有节点"
     }
   },
+  "proxyPools": {
+    "page": {
+      "title": "代理池",
+      "searchLabel": "搜索代理池",
+      "searchPlaceholder": "搜索名称或唯一键",
+      "empty": "暂无代理池。创建一个即可原样转发机场的上游订阅。"
+    }
+  },
   "subscriptions": {
     "sort": {
       "quickSort": "快速排序",
@@ -3099,6 +3113,7 @@
     },
     "page": {
       "title": "节点池",
+      "empty": "暂无节点池。点击“添加”创建第一个。",
       "actions": {
         "groupSort": "分组排序",
         "addSubscription": "添加节点池",

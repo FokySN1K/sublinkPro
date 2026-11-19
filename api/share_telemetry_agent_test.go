@@ -442,22 +442,24 @@ func TestShareTelemetryMaintenanceClosesStaleSessions(t *testing.T) {
 
 type shareSubscriptionOverviewTestData struct {
 	Items []struct {
-		ShareID       int    `json:"share_id"`
-		ShareName     string `json:"share_name"`
-		ClientID      *int   `json:"client_id"`
-		ClientName    string `json:"client_name"`
-		Status        string `json:"status"`
-		WindowBytes   int64  `json:"window_bytes"`
-		SessionsToday int64  `json:"sessions_today"`
-		OnlineNow     bool   `json:"online_now"`
-		ProblemNodes  int    `json:"problem_nodes"`
+		ShareID       int                     `json:"share_id"`
+		ShareName     string                  `json:"share_name"`
+		ClientID      *int                    `json:"client_id"`
+		ClientName    string                  `json:"client_name"`
+		Status        string                  `json:"status"`
+		WindowBytes   int64                   `json:"window_bytes"`
+		SessionsToday int64                   `json:"sessions_today"`
+		OnlineNow     bool                    `json:"online_now"`
+		ProblemNodes  int                     `json:"problem_nodes"`
+		TopNodes      []shareNodeTrafficEntry `json:"top_nodes"`
 		Devices       struct {
 			Total  int `json:"total"`
 			Active int `json:"active"`
 		} `json:"devices"`
 	} `json:"items"`
-	Total      int `json:"total"`
-	WindowDays int `json:"window_days"`
+	Daily      []shareDailyBucket `json:"daily"`
+	Total      int                `json:"total"`
+	WindowDays int                `json:"window_days"`
 	Summary    struct {
 		Total        int   `json:"total"`
 		Online       int   `json:"online"`
@@ -533,8 +535,12 @@ func TestShareSubscriptionOverviewAggregatesTelemetry(t *testing.T) {
 		t.Fatalf("expected 200 from telemetry, got %d body=%q", report.Code, report.Body.String())
 	}
 	key := strings.Repeat("f", 32)
+	secondKey := strings.Repeat("e", 32)
+	thirdKey := strings.Repeat("d", 32)
+	fourthKey := strings.Repeat("c", 32)
 	nodes := performShareIngestRequest(t, ShareReportNodes, "/c/nodes?token=overview-telemetry-token",
-		fmt.Sprintf(`{"nodes":[{"key":%q,"up":50,"down":50}]}`, key), headers)
+		fmt.Sprintf(`{"nodes":[{"key":%q,"up":50,"down":50},{"key":%q,"up":30,"down":30},{"key":%q,"up":20,"down":20},{"key":%q,"up":10,"down":10}]}`,
+			key, secondKey, thirdKey, fourthKey), headers)
 	if nodes.Code != http.StatusOK {
 		t.Fatalf("expected 200 from nodes, got %d body=%q", nodes.Code, nodes.Body.String())
 	}
@@ -559,11 +565,32 @@ func TestShareSubscriptionOverviewAggregatesTelemetry(t *testing.T) {
 	if item.ProblemNodes != 1 {
 		t.Fatalf("expected one problem node, got %+v", item)
 	}
+	if len(item.TopNodes) != shareSubscriptionTopNodeLimit {
+		t.Fatalf("expected %d top nodes, got %+v", shareSubscriptionTopNodeLimit, item.TopNodes)
+	}
+	if item.TopNodes[0].Bytes != 100 || item.TopNodes[0].Key != key {
+		t.Fatalf("expected the busiest node first, got %+v", item.TopNodes)
+	}
+	for _, entry := range item.TopNodes {
+		if entry.Key == fourthKey {
+			t.Fatalf("the smallest node must be trimmed from the top list, got %+v", item.TopNodes)
+		}
+	}
 	if overview.Summary.Online != 1 || overview.Summary.ProblemNodes != 1 || overview.Summary.WindowBytes != 300 {
 		t.Fatalf("unexpected overview summary: %+v", overview.Summary)
 	}
 	if overview.WindowDays != models.ShareDeviceUsageWindowDays {
 		t.Fatalf("expected the default window of %d days, got %d", models.ShareDeviceUsageWindowDays, overview.WindowDays)
+	}
+	if len(overview.Daily) != models.ShareDeviceUsageWindowDays {
+		t.Fatalf("expected %d daily buckets, got %+v", models.ShareDeviceUsageWindowDays, overview.Daily)
+	}
+	var dailyTotal int64
+	for _, bucket := range overview.Daily {
+		dailyTotal += bucket.Bytes
+	}
+	if dailyTotal != 300 {
+		t.Fatalf("expected the daily buckets to sum the window traffic, got %d (%+v)", dailyTotal, overview.Daily)
 	}
 
 	client := models.ShareClient{Name: "Acme"}

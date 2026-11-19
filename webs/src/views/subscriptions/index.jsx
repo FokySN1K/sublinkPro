@@ -11,8 +11,6 @@ import Alert from '@mui/material/Alert';
 import Snackbar from '@mui/material/Snackbar';
 import Tooltip from '@mui/material/Tooltip';
 import TextField from '@mui/material/TextField';
-import Tabs from '@mui/material/Tabs';
-import Tab from '@mui/material/Tab';
 import InputAdornment from '@mui/material/InputAdornment';
 
 // icons
@@ -75,7 +73,7 @@ const createProxyFormData = () => ({
   AirportID: ''
 });
 
-export default function SubscriptionList() {
+export default function SubscriptionList({ mode = 'collection' }) {
   const theme = useTheme();
   const { t } = useTranslation();
   const matchDownMd = useMediaQuery(theme.breakpoints.down('md'));
@@ -114,8 +112,9 @@ export default function SubscriptionList() {
   const [isEdit, setIsEdit] = useState(false);
   const [currentSub, setCurrentSub] = useState(null);
 
-  // 订阅类型页签：聚合订阅 / 代理订阅
-  const [activeTab, setActiveTab] = useState('collection');
+  // 订阅类型由路由决定：/subscription/subs = 节点池，/subscription/proxy-pools = 代理池
+  const activeTab = mode === 'proxy' ? 'proxy' : 'collection';
+  const isProxyMode = activeTab === 'proxy';
   const [proxyDialogOpen, setProxyDialogOpen] = useState(false);
   const [proxyEditTarget, setProxyEditTarget] = useState(null);
   const [proxyFormData, setProxyFormData] = useState(createProxyFormData());
@@ -351,6 +350,12 @@ export default function SubscriptionList() {
   // 获取其他数据（分层加载）
   const fetchOtherData = useCallback(async () => {
     try {
+      if (isProxyMode) {
+        // 代理池页面只需要机场下拉，避免拉取模板、脚本和节点元数据。
+        const airportsRes = await getAirports();
+        setAirportOptions(normalizeAirportList(airportsRes.data));
+        return;
+      }
       const [
         templatesRes,
         scriptsRes,
@@ -389,7 +394,7 @@ export default function SubscriptionList() {
     } catch (error) {
       console.error(error);
     }
-  }, [normalizeAirportList]);
+  }, [normalizeAirportList, isProxyMode]);
 
   // 初始加载
   useEffect(() => {
@@ -496,14 +501,6 @@ export default function SubscriptionList() {
     setSelectedNodeMap({});
     setDialogOpen(true);
     refreshNodeSelector();
-  };
-
-  const handleTabChange = (event, value) => {
-    if (value === activeTab) return;
-    setActiveTab(value);
-    setSubscriptionSearch('');
-    setExpandedRows({});
-    setSortingSubId(null);
   };
 
   const handleAddProxy = () => {
@@ -1101,11 +1098,11 @@ export default function SubscriptionList() {
 
   return (
     <MainCard
-      title={t('subscriptions.page.title')}
+      title={isProxyMode ? t('proxyPools.page.title') : t('subscriptions.page.title')}
       secondary={
         matchDownMd ? (
           <Stack direction="row" spacing={1}>
-            {activeTab !== 'proxy' && (
+            {!isProxyMode && (
               <Tooltip title={t('subscriptions.page.actions.groupSort')}>
                 <IconButton onClick={() => setGroupSortOpen(true)} size="small">
                   <CategoryIcon />
@@ -1126,21 +1123,19 @@ export default function SubscriptionList() {
                 />
               </IconButton>
             </Tooltip>
-            <Button variant="contained" startIcon={<AddIcon />} disableRipple onClick={activeTab === 'proxy' ? handleAddProxy : handleAdd}>
+            <Button variant="contained" startIcon={<AddIcon />} disableRipple onClick={isProxyMode ? handleAddProxy : handleAdd}>
               {t('common.add')}
             </Button>
           </Stack>
         ) : (
           <Stack direction="row" spacing={1}>
-            {activeTab !== 'proxy' && (
+            {!isProxyMode && (
               <Button variant="outlined" startIcon={<CategoryIcon />} onClick={() => setGroupSortOpen(true)}>
                 {t('subscriptions.page.actions.groupSort')}
               </Button>
             )}
-            <Button variant="contained" startIcon={<AddIcon />} disableRipple onClick={activeTab === 'proxy' ? handleAddProxy : handleAdd}>
-              {activeTab === 'proxy'
-                ? t('subscriptions.page.actions.addProxySubscription')
-                : t('subscriptions.page.actions.addSubscription')}
+            <Button variant="contained" startIcon={<AddIcon />} disableRipple onClick={isProxyMode ? handleAddProxy : handleAdd}>
+              {isProxyMode ? t('subscriptions.page.actions.addProxySubscription') : t('subscriptions.page.actions.addSubscription')}
             </Button>
             <IconButton onClick={() => fetchSubscriptions(page, rowsPerPage)} disabled={loading}>
               <RefreshIcon
@@ -1158,17 +1153,7 @@ export default function SubscriptionList() {
         )
       }
     >
-      <Tabs
-        value={activeTab}
-        onChange={handleTabChange}
-        variant={matchDownMd ? 'fullWidth' : 'standard'}
-        sx={{ mb: 2, borderBottom: 1, borderColor: 'divider' }}
-      >
-        <Tab value="collection" label={t('subscriptions.page.tabs.aggregated')} />
-        <Tab value="proxy" label={t('subscriptions.page.tabs.proxy')} />
-      </Tabs>
-
-      {activeTab === 'proxy' && (
+      {isProxyMode && (
         <Alert severity="info" variant="outlined" sx={{ mb: 2 }}>
           {t('subscriptions.page.tabs.proxyHint')}
         </Alert>
@@ -1178,8 +1163,8 @@ export default function SubscriptionList() {
         <TextField
           size="small"
           fullWidth={matchDownMd}
-          label={t('subscriptions.page.search.label')}
-          placeholder={t('subscriptions.page.search.placeholder')}
+          label={isProxyMode ? t('proxyPools.page.searchLabel') : t('subscriptions.page.search.label')}
+          placeholder={isProxyMode ? t('proxyPools.page.searchPlaceholder') : t('subscriptions.page.search.placeholder')}
           value={subscriptionSearch}
           onChange={(event) => setSubscriptionSearch(event.target.value)}
           sx={{ width: { xs: '100%', md: 460 } }}
@@ -1200,10 +1185,16 @@ export default function SubscriptionList() {
         />
       </Stack>
 
+      {!loading && displayedSubscriptions.length === 0 && (
+        <Alert severity="info" sx={{ mb: 2 }}>
+          {isProxyMode ? t('proxyPools.page.empty') : t('subscriptions.page.empty')}
+        </Alert>
+      )}
+
       {matchDownMd ? (
         <SubscriptionMobileCard
           subscriptions={displayedSubscriptions}
-          isProxyTab={activeTab === 'proxy'}
+          isProxyTab={isProxyMode}
           airportOptions={airportOptions}
           page={page}
           rowsPerPage={rowsPerPage}
@@ -1234,7 +1225,7 @@ export default function SubscriptionList() {
       ) : (
         <SubscriptionTable
           subscriptions={displayedSubscriptions}
-          isProxyTab={activeTab === 'proxy'}
+          isProxyTab={isProxyMode}
           airportOptions={airportOptions}
           page={page}
           rowsPerPage={rowsPerPage}

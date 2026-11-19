@@ -112,7 +112,7 @@ export function ShareSessionsTable({ sessions = [], showShare = false, showDevic
   );
 }
 
-function TrafficList({ title, rows, renderLabel, renderMeta }) {
+function TrafficList({ title, rows, renderLabel, renderMeta, emptyText }) {
   if (!rows.length) {
     return (
       <Box>
@@ -120,7 +120,7 @@ function TrafficList({ title, rows, renderLabel, renderMeta }) {
           {title}
         </Typography>
         <Typography variant="body2" color="text.secondary">
-          —
+          {emptyText || '—'}
         </Typography>
       </Box>
     );
@@ -178,6 +178,7 @@ export function ShareTrafficBreakdown({ nodes = [], airports = [], nodeLimit = 1
           rows={nodeRows}
           renderLabel={(row) => row.name || row.key}
           renderMeta={(row) => row.airport_name || row.group || ''}
+          emptyText={t('shareGroups.blocks.noNodes')}
         />
       </Box>
     </Stack>

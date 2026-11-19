@@ -106,6 +106,7 @@
       "nodes": "Node",
       "nodeCheck": "Detection",
       "subscriptions": "Node Pools",
+      "proxyPools": "Proxy Pools",
       "templates": "Templates",
       "tags": "Tags",
       "scripts": "Scripts",
@@ -368,8 +369,8 @@
         "devices": "Devices"
       },
       "filters": {
-        "pool": "Node pool",
-        "poolAll": "All node pools",
+        "pool": "Subscription",
+        "poolAll": "All subscriptions",
         "status": "Status",
         "statusAll": "All statuses",
         "keywordPlaceholder": "Search name, HWID, device ID, link...",
@@ -428,6 +429,7 @@
       "airports": "By airport",
       "airportUnknown": "Unknown airport",
       "nodes": "By node",
+      "noNodes": "No per-node traffic reported yet. The client sends it with the next telemetry upload.",
       "reliability": "Node reliability",
       "reliabilityEmpty": "No problematic nodes.",
       "reliabilityEvents": "State transitions",
@@ -450,6 +452,9 @@
     },
     "subscriptions": {
       "subtitle": "One row per subscription card: quota, devices, traffic and sessions.",
+      "dailyTitle": "Traffic by day",
+      "dailyHint": "Last {{days}} days",
+      "nodesEmpty": "No per-node traffic reported yet",
       "searchPlaceholder": "Search link, token, pool, user...",
       "empty": "No subscription cards yet. Create links in a share group first.",
       "loadFailed": "Failed to load subscriptions",
@@ -486,6 +491,7 @@
         "quota": "Quota",
         "devices": "Devices",
         "traffic": "Traffic",
+        "nodes": "Nodes",
         "sessions": "Sessions",
         "problems": "Problem nodes",
         "lastReport": "Last seen / report"
@@ -2923,6 +2929,14 @@
       "empty": "No countries match the current filters"
     }
   },
+  "proxyPools": {
+    "page": {
+      "title": "Proxy Pools",
+      "searchLabel": "Search proxy pools",
+      "searchPlaceholder": "Search name or unique key",
+      "empty": "No proxy pools yet. Create one to relay an airport subscription as-is."
+    }
+  },
   "subscriptions": {
     "sort": {
       "quickSort": "Quick sort",
@@ -3103,6 +3117,7 @@
     },
     "page": {
       "title": "Node Pools",
+      "empty": "No node pools yet. Create the first one with the Add button.",
       "actions": {
         "groupSort": "Group sort",
         "addSubscription": "Add node pool",

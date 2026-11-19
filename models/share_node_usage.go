@@ -150,6 +150,32 @@ func SumShareNodeUsage(shareIDs []int, deviceIDs []int, since time.Time) ([]Shar
 	return rows, err
 }
 
+// ShareNodeUsageShareSum is the traffic of one node key of one share link.
+type ShareNodeUsageShareSum struct {
+	ShareID   int
+	NodeKey   string
+	UpBytes   int64
+	DownBytes int64
+	Bytes     int64
+}
+
+// SumShareNodeUsageByShare aggregates node buckets by share link and node key.
+// The telemetry overview uses it to show the busiest nodes of every card.
+func SumShareNodeUsageByShare(shareIDs []int, since time.Time) ([]ShareNodeUsageShareSum, error) {
+	if len(shareIDs) == 0 {
+		return []ShareNodeUsageShareSum{}, nil
+	}
+	query := database.DB.Model(&ShareNodeUsageHour{}).
+		Select("share_id, node_key, SUM(up_bytes) AS up_bytes, SUM(down_bytes) AS down_bytes, SUM(bytes) AS bytes").
+		Where("share_id IN ?", shareIDs)
+	if !since.IsZero() {
+		query = query.Where("window_start >= ?", since.UTC())
+	}
+	var rows []ShareNodeUsageShareSum
+	err := query.Group("share_id, node_key").Order("share_id").Order("bytes DESC").Scan(&rows).Error
+	return rows, err
+}
+
 // DeleteShareNodeUsageForDevices removes node buckets of the given device rows.
 func DeleteShareNodeUsageForDevices(tx *gorm.DB, deviceIDs []int) error {
 	if tx == nil || len(deviceIDs) == 0 {

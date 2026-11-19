@@ -18,6 +18,7 @@ const (
 	shareSubscriptionSessionLimit    = 200
 	shareSubscriptionActivityLimit   = 100
 	shareSubscriptionEventLimit      = 100
+	shareSubscriptionTopNodeLimit    = 3
 )
 
 type shareSubscriptionDeviceCounts struct {
@@ -77,6 +78,7 @@ type shareSubscriptionOverviewItem struct {
 	OnlineNow     bool                          `json:"online_now"`
 	SessionsToday int64                         `json:"sessions_today"`
 	ProblemNodes  int                           `json:"problem_nodes"`
+	TopNodes      []shareNodeTrafficEntry       `json:"top_nodes"`
 	LastSession   *shareSubscriptionLastSession `json:"last_session"`
 
 	searchText string
@@ -229,6 +231,7 @@ func ShareSubscriptionOverview(c *gin.Context) {
 		utils.Warn("Failed to count problem share nodes: %v", err)
 		problemCounts = map[int]int{}
 	}
+	topNodes := buildShareSubscriptionTopNodes(shareIDs, windowStart)
 
 	links := buildShareDeviceLinkIndex(shares)
 	clientNames := models.ClientNameIndex()
@@ -240,6 +243,10 @@ func ShareSubscriptionOverview(c *gin.Context) {
 			continue
 		}
 		item := buildShareSubscriptionOverviewItem(share, entry, clientNames, devicesByShare[share.ID], todaySums, windowSums, sessionSummaries[share.ID], problemCounts[share.ID])
+		item.TopNodes = topNodes[share.ID]
+		if item.TopNodes == nil {
+			item.TopNodes = []shareNodeTrafficEntry{}
+		}
 		items = append(items, item)
 	}
 
@@ -268,6 +275,19 @@ func ShareSubscriptionOverview(c *gin.Context) {
 		filtered = append(filtered, item)
 	}
 	items = filtered
+
+	filteredDeviceIDs := make([]int, 0, len(devices))
+	for _, item := range items {
+		for _, device := range devicesByShare[item.ShareID] {
+			filteredDeviceIDs = append(filteredDeviceIDs, device.ID)
+		}
+	}
+	dailyBuckets, err := models.ListShareDeviceUsage(filteredDeviceIDs, windowStart)
+	if err != nil {
+		utils.Warn("Failed to load share daily usage: %v", err)
+		dailyBuckets = nil
+	}
+	daily := buildShareDailyBuckets(dailyBuckets, days)
 
 	end := time.Now()
 	summary := gin.H{
@@ -349,6 +369,7 @@ func ShareSubscriptionOverview(c *gin.Context) {
 			"page":         page,
 			"page_size":    pageSize,
 			"summary":      summary,
+			"daily":        daily,
 			"window_days":  days,
 			"generated_at": end,
 		},
@@ -667,6 +688,48 @@ func buildShareSessionEntries(sessions []models.ShareSession, devices []models.S
 		})
 	}
 	return entries
+}
+
+// buildShareSubscriptionTopNodes returns the busiest nodes of every share
+// link inside the window. It issues one grouped query and caps each list so
+// the overview keeps a fixed-size payload.
+func buildShareSubscriptionTopNodes(shareIDs []int, since time.Time) map[int][]shareNodeTrafficEntry {
+	result := make(map[int][]shareNodeTrafficEntry, len(shareIDs))
+	sums, err := models.SumShareNodeUsageByShare(shareIDs, since)
+	if err != nil {
+		utils.Warn("Failed to sum share node usage by share: %v", err)
+		return result
+	}
+	if len(sums) == 0 {
+		return result
+	}
+	keys := make([]string, 0, len(sums))
+	for _, row := range sums {
+		keys = append(keys, row.NodeKey)
+	}
+	infos := models.ResolveShareNodeKeys(keys)
+	for _, row := range sums {
+		info := infos[row.NodeKey]
+		result[row.ShareID] = append(result[row.ShareID], shareNodeTrafficEntry{
+			Key:         row.NodeKey,
+			Name:        info.Name,
+			Group:       info.Group,
+			Country:     info.Country,
+			AirportID:   info.AirportID,
+			AirportName: info.AirportName,
+			UpBytes:     row.UpBytes,
+			DownBytes:   row.DownBytes,
+			Bytes:       row.Bytes,
+		})
+	}
+	for shareID, entries := range result {
+		sort.SliceStable(entries, func(i, j int) bool { return entries[i].Bytes > entries[j].Bytes })
+		if len(entries) > shareSubscriptionTopNodeLimit {
+			entries = entries[:shareSubscriptionTopNodeLimit]
+		}
+		result[shareID] = entries
+	}
+	return result
 }
 
 // buildShareNodeTraffic aggregates per-node buckets and rolls them up into

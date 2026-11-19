@@ -73,7 +73,11 @@ const MainRoutes = {
         },
         {
           path: 'subs',
-          element: <SubscriptionList />
+          element: <SubscriptionList mode="collection" />
+        },
+        {
+          path: 'proxy-pools',
+          element: <SubscriptionList mode="proxy" />
         },
         {
           path: 'share-groups',
