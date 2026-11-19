@@ -24,13 +24,14 @@ import useMediaQuery from '@mui/material/useMediaQuery';
 import { useTheme } from '@mui/material/styles';
 
 import DeleteIcon from '@mui/icons-material/Delete';
+import DeleteSweepIcon from '@mui/icons-material/DeleteSweep';
 import BlockIcon from '@mui/icons-material/Block';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import LockOpenIcon from '@mui/icons-material/LockOpen';
 
 import { formatDateTime } from 'i18n/locales';
 import { formatBytes } from 'views/airports/utils';
-import { getShareDevices, updateShareDevice, deleteShareDevice } from 'api/shareGroups';
+import { clearShareDevices, getShareDevices, updateShareDevice, deleteShareDevice } from 'api/shareGroups';
 
 function statusColor(status) {
   switch (status) {
@@ -109,6 +110,19 @@ export default function ShareDevicesDialog({ open, share, onClose, showMessage }
     },
     [fetchDevices, showMessage, t]
   );
+
+  const handleClearAll = useCallback(async () => {
+    if (!share?.id || items.length === 0) return;
+    const name = share.name || `#${share.id}`;
+    if (!window.confirm(t('subscriptions.share.devicesDialog.clearConfirm', { count: items.length, name }))) return;
+    try {
+      const res = await clearShareDevices(share.id);
+      showMessage?.(t('subscriptions.share.devicesDialog.cleared', { count: res.data?.deleted ?? items.length }));
+      fetchDevices();
+    } catch (error) {
+      showMessage?.(error.response?.data?.msg || t('subscriptions.share.devicesDialog.clearFailed'), 'error');
+    }
+  }, [share?.id, share?.name, items.length, fetchDevices, showMessage, t]);
 
   const limitLabel = useMemo(() => {
     if (meta.max_devices > 0) {
@@ -219,6 +233,10 @@ export default function ShareDevicesDialog({ open, share, onClose, showMessage }
         )}
       </DialogContent>
       <DialogActions>
+        <Button color="error" startIcon={<DeleteSweepIcon />} onClick={handleClearAll} disabled={loading || items.length === 0}>
+          {t('subscriptions.share.devicesDialog.clearAll')}
+        </Button>
+        <Box sx={{ flexGrow: 1 }} />
         <Button onClick={onClose}>{t('common.close')}</Button>
       </DialogActions>
     </Dialog>

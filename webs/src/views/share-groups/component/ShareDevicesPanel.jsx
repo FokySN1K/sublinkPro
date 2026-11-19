@@ -154,6 +154,46 @@ export default function ShareDevicesPanel({ subId, days, showMessage, refreshKey
     </Box>
   );
 
+  const renderSessions = (item) => (
+    <Box>
+      <Typography variant="body2">{t('shareGroups.telemetry.sessionsToday', { count: item.sessions_today || 0 })}</Typography>
+      <Typography variant="caption" color="text.secondary" display="block">
+        {t('shareGroups.telemetry.sessionsWindow', { count: item.sessions_window || 0, days: windowDays })}
+      </Typography>
+    </Box>
+  );
+
+  const renderAirports = (item) => {
+    const [top] = item.airports || [];
+    if (!top) {
+      return (
+        <Typography variant="caption" color="text.secondary">
+          —
+        </Typography>
+      );
+    }
+    return (
+      <Box sx={{ minWidth: 0 }}>
+        <Typography variant="body2" noWrap>
+          {top.airport_name || t('shareGroups.blocks.airportUnknown')}
+        </Typography>
+        <Typography variant="caption" color="text.secondary" display="block" noWrap>
+          {formatBytes(top.bytes || 0)}
+          {top.share ? ` · ${Math.round(top.share * 100)}%` : ''}
+        </Typography>
+      </Box>
+    );
+  };
+
+  const renderProblems = (item) =>
+    item.problem_nodes > 0 ? (
+      <Chip size="small" color="error" variant="outlined" label={t('shareGroups.users.problemNodes', { count: item.problem_nodes })} />
+    ) : (
+      <Typography variant="caption" color="text.secondary">
+        —
+      </Typography>
+    );
+
   return (
     <Box>
       <Stack direction={{ xs: 'column', md: 'row' }} spacing={1} sx={{ mb: 2 }}>
@@ -233,13 +273,20 @@ export default function ShareDevicesPanel({ subId, days, showMessage, refreshKey
               <Divider sx={{ my: 1 }} />
               <Stack direction="row" justifyContent="space-between" spacing={1}>
                 {renderTraffic(item)}
-                <Box sx={{ textAlign: 'right' }}>
-                  <Typography variant="caption" color="text.secondary" display="block">
-                    {t('shareGroups.telemetry.columns.lastSeen')}
-                  </Typography>
-                  <Typography variant="caption">{item.last_seen_at ? formatDateTime(item.last_seen_at, language) : '-'}</Typography>
-                </Box>
+                {renderSessions(item)}
               </Stack>
+              <Divider sx={{ my: 1 }} />
+              <Stack direction="row" justifyContent="space-between" spacing={1} alignItems="center">
+                {renderAirports(item)}
+                {renderProblems(item)}
+              </Stack>
+              <Divider sx={{ my: 1 }} />
+              <Box sx={{ textAlign: 'right' }}>
+                <Typography variant="caption" color="text.secondary" display="block">
+                  {t('shareGroups.telemetry.columns.lastSeen')}
+                </Typography>
+                <Typography variant="caption">{item.last_seen_at ? formatDateTime(item.last_seen_at, language) : '-'}</Typography>
+              </Box>
             </Card>
           ))}
         </Stack>
@@ -252,6 +299,9 @@ export default function ShareDevicesPanel({ subId, days, showMessage, refreshKey
                 <TableCell>{t('shareGroups.telemetry.columns.status')}</TableCell>
                 <TableCell>{t('shareGroups.telemetry.columns.subscriptions')}</TableCell>
                 <TableCell>{t('shareGroups.telemetry.columns.traffic')}</TableCell>
+                <TableCell>{t('shareGroups.telemetry.columns.sessions')}</TableCell>
+                <TableCell>{t('shareGroups.telemetry.columns.airports')}</TableCell>
+                <TableCell>{t('shareGroups.telemetry.columns.problems')}</TableCell>
                 <TableCell>{t('shareGroups.telemetry.columns.lastSeen')}</TableCell>
                 <TableCell />
               </TableRow>
@@ -283,6 +333,9 @@ export default function ShareDevicesPanel({ subId, days, showMessage, refreshKey
                   </TableCell>
                   <TableCell>{renderSubscriptions(item)}</TableCell>
                   <TableCell>{renderTraffic(item)}</TableCell>
+                  <TableCell>{renderSessions(item)}</TableCell>
+                  <TableCell>{renderAirports(item)}</TableCell>
+                  <TableCell>{renderProblems(item)}</TableCell>
                   <TableCell>
                     <Typography variant="body2" noWrap>
                       {item.last_seen_at ? formatDateTime(item.last_seen_at, language) : '-'}

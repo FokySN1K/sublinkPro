@@ -457,7 +457,7 @@ export default function ShareGroupsPage() {
             </Grid>
           )
         ) : (
-          <ShareTelemetryTab pools={pools} showMessage={showMessage} />
+          <ShareTelemetryTab showMessage={showMessage} />
         )}
       </MainCard>
 

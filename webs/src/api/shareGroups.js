@@ -222,6 +222,18 @@ export function deleteShareDevice(id) {
 }
 
 /**
+ * 清空订阅链接下的全部设备及其遥测历史
+ * @param {number} shareId 分享ID
+ */
+export function clearShareDevices(shareId) {
+  return request({
+    url: '/v1/shares/devices/clear',
+    method: 'delete',
+    params: { shareId }
+  });
+}
+
+/**
  * 订阅链接遥测总览：每条分享链接一行（额度、设备、窗口流量、会话）
  * @param {object} params { subId, groupId, clientId, status, keyword, days, page, pageSize }
  */

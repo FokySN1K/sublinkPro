@@ -113,6 +113,31 @@ function SessionsCell({ item }) {
   );
 }
 
+function AirportsCell({ item }) {
+  const { t } = useTranslation();
+  const airports = item.airports || [];
+  if (!airports.length) {
+    return (
+      <Typography variant="caption" color="text.secondary">
+        —
+      </Typography>
+    );
+  }
+  const [top, ...rest] = airports;
+  return (
+    <Box sx={{ minWidth: 0 }}>
+      <Typography variant="body2" noWrap>
+        {top.airport_name || t('shareGroups.blocks.airportUnknown')}
+      </Typography>
+      <Typography variant="caption" color="text.secondary" display="block" noWrap>
+        {formatBytes(top.bytes || 0)}
+        {top.share ? ` · ${Math.round(top.share * 100)}%` : ''}
+        {rest.length ? ` · +${rest.length}` : ''}
+      </Typography>
+    </Box>
+  );
+}
+
 function NodesCell({ item }) {
   const { t } = useTranslation();
   const nodes = item.top_nodes || [];
@@ -163,7 +188,7 @@ export default function ShareSubscriptionsPanel({ subId, days, showMessage, refr
   const [status, setStatus] = useState('');
   const [page, setPage] = useState(1);
   const [loading, setLoading] = useState(false);
-  const [data, setData] = useState({ items: [], total: 0, summary: null, daily: [], window_days: days });
+  const [data, setData] = useState({ items: [], total: 0, summary: null, daily: [], top_airports: [], window_days: days });
   const [detailTarget, setDetailTarget] = useState(null);
 
   const windowDays = data.window_days || days || 7;
@@ -179,9 +204,9 @@ export default function ShareSubscriptionsPanel({ subId, days, showMessage, refr
         page,
         pageSize: PAGE_SIZE
       });
-      setData(res.data || { items: [], total: 0, summary: null, daily: [], window_days: days });
+      setData(res.data || { items: [], total: 0, summary: null, daily: [], top_airports: [], window_days: days });
     } catch (error) {
-      setData({ items: [], total: 0, summary: null, daily: [], window_days: days });
+      setData({ items: [], total: 0, summary: null, daily: [], top_airports: [], window_days: days });
       showMessage?.(error.response?.data?.msg || t('shareGroups.subscriptions.loadFailed'), 'error');
     } finally {
       setLoading(false);
@@ -360,6 +385,32 @@ export default function ShareSubscriptionsPanel({ subId, days, showMessage, refr
         <ShareDailyBarChart daily={data.daily || []} />
       </Card>
 
+      {(data.top_airports || []).length > 0 && (
+        <Card variant="outlined" sx={{ p: 1.5, mb: 2 }}>
+          <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 1 }}>
+            <Typography variant="subtitle2" fontWeight={700}>
+              {t('shareGroups.subscriptions.topAirports')}
+            </Typography>
+            <Typography variant="caption" color="text.secondary">
+              {t('shareGroups.subscriptions.dailyHint', { days: windowDays })}
+            </Typography>
+          </Stack>
+          <Stack spacing={0.75}>
+            {(data.top_airports || []).map((row) => (
+              <Stack key={row.airport_id} direction="row" spacing={1} alignItems="center">
+                <Typography variant="body2" noWrap sx={{ minWidth: 0, flexGrow: 1 }}>
+                  {row.airport_name || t('shareGroups.blocks.airportUnknown')}
+                </Typography>
+                <Typography variant="caption" color="text.secondary">
+                  {Math.round((row.share || 0) * 100)}%
+                </Typography>
+                <Typography variant="body2">{formatBytes(row.bytes || 0)}</Typography>
+              </Stack>
+            ))}
+          </Stack>
+        </Card>
+      )}
+
       {loading ? (
         <Stack alignItems="center" sx={{ py: 6 }}>
           <CircularProgress />
@@ -395,6 +446,15 @@ export default function ShareSubscriptionsPanel({ subId, days, showMessage, refr
                 </Box>
               </Stack>
               <Divider sx={{ my: 1 }} />
+              <Stack direction="row" spacing={1} alignItems="center">
+                <Typography variant="caption" color="text.secondary">
+                  {t('shareGroups.subscriptions.columns.airports')}
+                </Typography>
+                <Box sx={{ minWidth: 0, flexGrow: 1 }}>
+                  <AirportsCell item={item} />
+                </Box>
+              </Stack>
+              <Divider sx={{ my: 1 }} />
               <Stack direction="row" justifyContent="space-between" spacing={1} alignItems="center">
                 <DeviceCounts counts={item.devices} />
                 <SessionsCell item={item} />
@@ -413,6 +473,7 @@ export default function ShareSubscriptionsPanel({ subId, days, showMessage, refr
                 <TableCell>{t('shareGroups.subscriptions.columns.devices')}</TableCell>
                 <TableCell>{t('shareGroups.subscriptions.columns.traffic')}</TableCell>
                 <TableCell>{t('shareGroups.subscriptions.columns.nodes')}</TableCell>
+                <TableCell>{t('shareGroups.subscriptions.columns.airports')}</TableCell>
                 <TableCell>{t('shareGroups.subscriptions.columns.sessions')}</TableCell>
                 <TableCell>{t('shareGroups.subscriptions.columns.problems')}</TableCell>
                 <TableCell>{t('shareGroups.subscriptions.columns.lastReport')}</TableCell>
@@ -433,6 +494,9 @@ export default function ShareSubscriptionsPanel({ subId, days, showMessage, refr
                   <TableCell>{renderTraffic(item)}</TableCell>
                   <TableCell>
                     <NodesCell item={item} />
+                  </TableCell>
+                  <TableCell>
+                    <AirportsCell item={item} />
                   </TableCell>
                   <TableCell>
                     <SessionsCell item={item} />

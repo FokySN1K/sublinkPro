@@ -55,6 +55,12 @@ type shareDeviceOverviewItem struct {
 	ShareCount           int                     `json:"share_count"`
 	Shares               []shareDeviceShareEntry `json:"shares"`
 
+	SessionsToday  int64                      `json:"sessions_today"`
+	SessionsWindow int64                      `json:"sessions_window"`
+	ProblemNodes   int                        `json:"problem_nodes"`
+	Airports       []shareAirportTrafficEntry `json:"airports"`
+	LastSession    *shareDeviceLastSession    `json:"last_session"`
+
 	deviceRowIDs []int
 	searchText   string
 }
@@ -64,6 +70,16 @@ type shareDeviceHourlyBucket struct {
 	UpBytes     int64     `json:"up_bytes"`
 	DownBytes   int64     `json:"down_bytes"`
 	Bytes       int64     `json:"bytes"`
+}
+
+// shareDeviceLastSession is the latest VPN interval of one installation. A
+// users card answers "when did this user turn the VPN on and off" with it.
+type shareDeviceLastSession struct {
+	StartedAt       time.Time  `json:"started_at"`
+	EndedAt         *time.Time `json:"ended_at"`
+	DurationSeconds int64      `json:"duration_s"`
+	Bytes           int64      `json:"bytes"`
+	Open            bool       `json:"open"`
 }
 
 type shareDeviceActivityEntry struct {
@@ -101,6 +117,7 @@ func ShareDeviceOverview(c *gin.Context) {
 
 	windowStart := time.Now().AddDate(0, 0, -days)
 	items := aggregateShareDevices(devices, buildShareDeviceLinkIndex(shares), loadShareDeviceWindowSums(devices, windowStart))
+	enrichShareDeviceOverview(items, windowStart)
 
 	status := strings.ToLower(strings.TrimSpace(c.Query("status")))
 	keyword := strings.ToLower(strings.TrimSpace(c.Query("keyword")))
@@ -219,8 +236,12 @@ func ShareDeviceDetail(c *gin.Context) {
 		utils.Warn("Failed to load share sessions: %v", err)
 		sessions = nil
 	}
+	now := time.Now()
+	sessionEntries := buildShareSessionEntries(sessions, devices, now)
 	nodes, airports := buildShareNodeTraffic(nil, item.deviceRowIDs, windowStart)
 	reliability, reliabilityEvents := buildShareReliability(nil, item.deviceRowIDs, windowStart)
+	reliable := buildShareReliableNodes(nil, item.deviceRowIDs)
+	reputation := buildShareNodeReputation(nil, item.deviceRowIDs)
 
 	c.JSON(http.StatusOK, gin.H{
 		"code": 200,
@@ -228,11 +249,14 @@ func ShareDeviceDetail(c *gin.Context) {
 			"device":             item,
 			"hourly":             hourly,
 			"daily":              buildShareDailyBuckets(buckets, days),
-			"sessions":           buildShareSessionEntries(sessions, devices, time.Now()),
+			"sessions":           sessionEntries,
+			"session_stats":      buildShareSessionStats(sessionEntries),
 			"activity":           loadShareDeviceActivity(item),
 			"nodes":              nodes,
 			"airports":           airports,
 			"reliability":        reliability,
+			"reliable":           reliable,
+			"node_reputation":    reputation,
 			"reliability_events": reliabilityEvents,
 			"window_days":        days,
 		},
@@ -444,6 +468,160 @@ func sortShareDeviceItems(items []*shareDeviceOverviewItem) {
 		}
 		return items[i].Name < items[j].Name
 	})
+}
+
+// enrichShareDeviceOverview fills the analytics fields the analyst reads next
+// to the traffic: sessions, problem nodes and the airports the installation
+// actually carried traffic through. All queries are scoped to the device rows
+// already loaded for the page, so the cost stays linear in the page size.
+func enrichShareDeviceOverview(items []*shareDeviceOverviewItem, windowStart time.Time) {
+	ids := make([]int, 0, len(items)*2)
+	for _, item := range items {
+		ids = append(ids, item.deviceRowIDs...)
+	}
+	if len(ids) == 0 {
+		return
+	}
+
+	now := time.Now()
+	todayStart := localMidnight(now)
+	windowSessions, err := models.CountShareSessionsByDevice(ids, windowStart)
+	if err != nil {
+		utils.Warn("Failed to count device sessions: %v", err)
+		windowSessions = map[int]int64{}
+	}
+	todaySessions, err := models.CountShareSessionsByDevice(ids, todayStart)
+	if err != nil {
+		utils.Warn("Failed to count device sessions (today): %v", err)
+		todaySessions = map[int]int64{}
+	}
+	airports := buildShareDeviceAirportIndex(ids, windowStart)
+	problems := make(map[int]int, len(ids))
+	if rows, relErr := models.ListProblemShareNodeReliability(nil, ids); relErr != nil {
+		utils.Warn("Failed to load device reliability: %v", relErr)
+	} else {
+		for _, row := range rows {
+			if row.DeviceID > 0 {
+				problems[row.DeviceID]++
+			}
+		}
+	}
+	latestSessions, err := models.LatestShareSessionsByDeviceIDs(ids)
+	if err != nil {
+		utils.Warn("Failed to load latest device sessions: %v", err)
+		latestSessions = map[int]models.ShareSession{}
+	}
+
+	for _, item := range items {
+		merged := make(map[int]*shareAirportTrafficEntry, len(item.deviceRowIDs))
+		for _, id := range item.deviceRowIDs {
+			item.SessionsWindow += windowSessions[id]
+			item.SessionsToday += todaySessions[id]
+			item.ProblemNodes += problems[id]
+			if session, ok := latestSessions[id]; ok {
+				item.LastSession = laterShareDeviceSession(item.LastSession, session, now)
+			}
+			for _, entry := range airports[id] {
+				aggregate := merged[entry.AirportID]
+				if aggregate == nil {
+					aggregate = &shareAirportTrafficEntry{AirportID: entry.AirportID, AirportName: entry.AirportName}
+					merged[entry.AirportID] = aggregate
+				}
+				aggregate.Bytes += entry.Bytes
+			}
+		}
+		entries := make([]shareAirportTrafficEntry, 0, len(merged))
+		total := int64(0)
+		for _, aggregate := range merged {
+			total += aggregate.Bytes
+		}
+		for _, aggregate := range merged {
+			if total > 0 {
+				aggregate.Share = float64(aggregate.Bytes) / float64(total)
+			}
+			entries = append(entries, *aggregate)
+		}
+		sort.SliceStable(entries, func(i, j int) bool { return entries[i].Bytes > entries[j].Bytes })
+		if len(entries) > shareSubscriptionTopNodeLimit {
+			entries = entries[:shareSubscriptionTopNodeLimit]
+		}
+		item.Airports = entries
+	}
+}
+
+// laterShareDeviceSession keeps the newest session among the device rows of
+// one installation and turns it into the card-friendly shape.
+func laterShareDeviceSession(current *shareDeviceLastSession, session models.ShareSession, now time.Time) *shareDeviceLastSession {
+	if current != nil && !session.StartedAt.After(current.StartedAt) {
+		return current
+	}
+	duration := int64(now.Sub(session.StartedAt).Seconds())
+	if session.Closed && session.EndedAt != nil {
+		duration = int64(session.EndedAt.Sub(session.StartedAt).Seconds())
+	}
+	if duration < 0 {
+		duration = 0
+	}
+	return &shareDeviceLastSession{
+		StartedAt:       session.StartedAt,
+		EndedAt:         session.EndedAt,
+		DurationSeconds: duration,
+		Bytes:           session.Bytes,
+		Open:            !session.Closed,
+	}
+}
+
+// buildShareDeviceAirportIndex rolls the per-device node buckets up into
+// airport rows, so the overview can answer which airport a device uses.
+func buildShareDeviceAirportIndex(deviceIDs []int, since time.Time) map[int][]shareAirportTrafficEntry {
+	result := make(map[int][]shareAirportTrafficEntry)
+	sums, err := models.SumShareNodeUsageByDevice(deviceIDs, since)
+	if err != nil {
+		utils.Warn("Failed to sum device node usage: %v", err)
+		return result
+	}
+	if len(sums) == 0 {
+		return result
+	}
+	keys := make([]string, 0, len(sums))
+	for _, row := range sums {
+		keys = append(keys, row.NodeKey)
+	}
+	infos := models.ResolveShareNodeKeys(keys)
+	byDevice := make(map[int]map[int]*shareAirportTrafficEntry, len(deviceIDs))
+	for _, row := range sums {
+		info := infos[row.NodeKey]
+		if info.AirportID <= 0 {
+			continue
+		}
+		byAirport := byDevice[row.DeviceID]
+		if byAirport == nil {
+			byAirport = make(map[int]*shareAirportTrafficEntry)
+			byDevice[row.DeviceID] = byAirport
+		}
+		aggregate := byAirport[info.AirportID]
+		if aggregate == nil {
+			aggregate = &shareAirportTrafficEntry{AirportID: info.AirportID, AirportName: info.AirportName}
+			byAirport[info.AirportID] = aggregate
+		}
+		aggregate.Bytes += row.Bytes
+	}
+	for deviceID, byAirport := range byDevice {
+		total := int64(0)
+		entries := make([]shareAirportTrafficEntry, 0, len(byAirport))
+		for _, aggregate := range byAirport {
+			total += aggregate.Bytes
+		}
+		for _, aggregate := range byAirport {
+			if total > 0 {
+				aggregate.Share = float64(aggregate.Bytes) / float64(total)
+			}
+			entries = append(entries, *aggregate)
+		}
+		sort.SliceStable(entries, func(i, j int) bool { return entries[i].Bytes > entries[j].Bytes })
+		result[deviceID] = entries
+	}
+	return result
 }
 
 func shareDevicePagination(c *gin.Context) (int, int) {

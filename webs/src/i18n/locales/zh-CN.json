@@ -392,13 +392,18 @@
         "traffic": "流量",
         "windowTraffic": "近 {{days}} 天",
         "lastSeen": "最近联网",
-        "lastReport": "最近上报"
+        "lastReport": "最近上报",
+        "sessions": "会话",
+        "airports": "机场",
+        "problems": "问题节点"
       },
       "empty": "暂无设备。客户端携带 SNKP 设备请求头拉取链接后会出现在这里。",
       "loadFailed": "加载设备失败",
       "unknownDevice": "未知设备",
       "deviceFallback": "设备 {{id}}",
-      "shareCount": "{{count}} 个链接"
+      "shareCount": "{{count}} 个链接",
+      "sessionsToday": "今天 {{count}} 次",
+      "sessionsWindow": "{{days}} 天内 {{count}} 次"
     },
     "telemetryDetail": {
       "title": "设备 — {{name}}",
@@ -448,7 +453,21 @@
         "suspect": "质量下降",
         "healthy": "健康",
         "state_change": "状态变化"
-      }
+      },
+      "reliable": "可靠节点",
+      "reliableEmpty": "暂无可靠节点上报。",
+      "nodeTable": "节点：流量与信誉",
+      "nodeTableHint": "所选周期内的节点流量与同一节点的 SNKP 评分对照，点击列头排序。",
+      "tableNode": "节点",
+      "tableState": "SNKP 状态",
+      "tableScore": "评分",
+      "tableTraffic": "流量",
+      "tableLastSeen": "最近上报",
+      "sessionCount": "{{count}} 个会话",
+      "sessionActiveTime": "在线 {{time}}",
+      "sessionLastOn": "最近开启 {{time}}",
+      "sessionLastOff": "最近关闭 {{time}}",
+      "sessionTraffic": "会话流量 {{bytes}}"
     },
     "subscriptions": {
       "subtitle": "每条订阅链接一行：额度、设备、流量与会话。",
@@ -494,8 +513,10 @@
         "nodes": "节点",
         "sessions": "会话",
         "problems": "异常节点",
-        "lastReport": "最近联网 / 上报"
-      }
+        "lastReport": "最近联网 / 上报",
+        "airports": "机场"
+      },
+      "topAirports": "机场流量 Top"
     },
     "subscriptionDetail": {
       "title": "订阅链接 — {{name}}",
@@ -524,9 +545,9 @@
       "activityEmpty": "暂无访问记录。"
     },
     "users": {
-      "subtitle": "按归属用户分组的订阅链接。",
+      "subtitle": "按硬件标识分组的安装：每个用户的流量、会话和机场。",
       "add": "新建用户",
-      "empty": "暂无用户。创建用户可对订阅链接分组；在订阅详情中可调整归属。",
+      "empty": "暂无安装记录。客户端携带 SNKP 设备头拉取链接后会出现在这里。",
       "unassigned": "未归属用户",
       "unassignedHint": "未归属任何用户的链接",
       "shareCount": "{{count}} 条链接",
@@ -543,7 +564,9 @@
       "truncated": "仅展示前 {{count}} 条链接",
       "loadFailed": "加载用户失败",
       "deleteConfirm": "确定删除用户 \"{{name}}\"？其 {{count}} 条链接会保留并变为未归属。",
-      "deleteSuccess": "用户已删除"
+      "deleteSuccess": "用户已删除",
+      "airportLabel": "主要机场",
+      "lastVpn": "最近 VPN 会话"
     },
     "userDetail": {
       "title": "用户 — {{name}}",
@@ -3480,7 +3503,11 @@
         "updated": "设备已更新",
         "deleted": "设备已解绑",
         "updateFailed": "更新设备失败",
-        "deleteFailed": "解绑设备失败"
+        "deleteFailed": "解绑设备失败",
+        "clearAll": "清空全部设备",
+        "clearConfirm": "删除 \"{{name}}\" 下的全部 {{count}} 个设备？其流量历史也会被清除。",
+        "cleared": "已清空设备（{{count}}）",
+        "clearFailed": "清空设备失败"
       },
       "expire": {
         "never": "永不过期",

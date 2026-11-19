@@ -19,6 +19,8 @@ const (
 	shareSubscriptionActivityLimit   = 100
 	shareSubscriptionEventLimit      = 100
 	shareSubscriptionTopNodeLimit    = 3
+	shareSubscriptionReliableLimit   = 12
+	shareSubscriptionReputationLimit = 200
 )
 
 type shareSubscriptionDeviceCounts struct {
@@ -79,6 +81,7 @@ type shareSubscriptionOverviewItem struct {
 	SessionsToday int64                         `json:"sessions_today"`
 	ProblemNodes  int                           `json:"problem_nodes"`
 	TopNodes      []shareNodeTrafficEntry       `json:"top_nodes"`
+	Airports      []shareAirportTrafficEntry    `json:"airports"`
 	LastSession   *shareSubscriptionLastSession `json:"last_session"`
 
 	searchText string
@@ -231,7 +234,7 @@ func ShareSubscriptionOverview(c *gin.Context) {
 		utils.Warn("Failed to count problem share nodes: %v", err)
 		problemCounts = map[int]int{}
 	}
-	topNodes := buildShareSubscriptionTopNodes(shareIDs, windowStart)
+	topNodes, topAirports := buildShareSubscriptionTraffic(shareIDs, windowStart)
 
 	links := buildShareDeviceLinkIndex(shares)
 	clientNames := models.ClientNameIndex()
@@ -246,6 +249,10 @@ func ShareSubscriptionOverview(c *gin.Context) {
 		item.TopNodes = topNodes[share.ID]
 		if item.TopNodes == nil {
 			item.TopNodes = []shareNodeTrafficEntry{}
+		}
+		item.Airports = topAirports[share.ID]
+		if item.Airports == nil {
+			item.Airports = []shareAirportTrafficEntry{}
 		}
 		items = append(items, item)
 	}
@@ -275,6 +282,12 @@ func ShareSubscriptionOverview(c *gin.Context) {
 		filtered = append(filtered, item)
 	}
 	items = filtered
+
+	filteredShareIDs := make([]int, 0, len(items))
+	for _, item := range items {
+		filteredShareIDs = append(filteredShareIDs, item.ShareID)
+	}
+	airportSummary := buildShareAirportTraffic(filteredShareIDs, windowStart)
 
 	filteredDeviceIDs := make([]int, 0, len(devices))
 	for _, item := range items {
@@ -369,6 +382,7 @@ func ShareSubscriptionOverview(c *gin.Context) {
 			"page":         page,
 			"page_size":    pageSize,
 			"summary":      summary,
+			"top_airports": airportSummary,
 			"daily":        daily,
 			"window_days":  days,
 			"generated_at": end,
@@ -460,6 +474,8 @@ func ShareSubscriptionDetail(c *gin.Context) {
 
 	nodes, airports := buildShareNodeTraffic([]int{shareID}, nil, since)
 	reliability, reliabilityEvents := buildShareReliability([]int{shareID}, nil, since)
+	reliable := buildShareReliableNodes([]int{shareID}, nil)
+	reputation := buildShareNodeReputation([]int{shareID}, nil)
 
 	c.JSON(http.StatusOK, gin.H{
 		"code": 200,
@@ -468,10 +484,13 @@ func ShareSubscriptionDetail(c *gin.Context) {
 			"devices":            deviceEntries,
 			"daily":              daily,
 			"sessions":           sessionEntries,
+			"session_stats":      buildShareSessionStats(sessionEntries),
 			"events":             activity,
 			"nodes":              nodes,
 			"airports":           airports,
 			"reliability":        reliability,
+			"reliable":           reliable,
+			"node_reputation":    reputation,
 			"reliability_events": reliabilityEvents,
 			"window_days":        days,
 		},
@@ -690,27 +709,71 @@ func buildShareSessionEntries(sessions []models.ShareSession, devices []models.S
 	return entries
 }
 
-// buildShareSubscriptionTopNodes returns the busiest nodes of every share
-// link inside the window. It issues one grouped query and caps each list so
-// the overview keeps a fixed-size payload.
-func buildShareSubscriptionTopNodes(shareIDs []int, since time.Time) map[int][]shareNodeTrafficEntry {
-	result := make(map[int][]shareNodeTrafficEntry, len(shareIDs))
+// shareSessionStats summarizes the VPN activity of the scope: how many times
+// the client turned on and off, how long it stayed on and the traffic of those
+// intervals. Activity time is deliberately separate from the node table: an
+// idle session moves no bytes and a busy one is not "longer".
+type shareSessionStats struct {
+	Sessions      int        `json:"sessions"`
+	OpenSessions  int        `json:"open_sessions"`
+	ActiveSeconds int64      `json:"active_seconds"`
+	Bytes         int64      `json:"bytes"`
+	LastStartedAt *time.Time `json:"last_started_at"`
+	LastEndedAt   *time.Time `json:"last_ended_at"`
+	LastOpen      bool       `json:"last_open"`
+}
+
+func buildShareSessionStats(entries []shareSessionDetailEntry) shareSessionStats {
+	stats := shareSessionStats{}
+	if len(entries) == 0 {
+		return stats
+	}
+	newest := entries[0]
+	for _, entry := range entries {
+		stats.Sessions++
+		if entry.Open {
+			stats.OpenSessions++
+		}
+		stats.ActiveSeconds += entry.DurationSeconds
+		stats.Bytes += entry.Bytes
+		if entry.StartedAt.After(newest.StartedAt) {
+			newest = entry
+		}
+	}
+	started := newest.StartedAt
+	stats.LastStartedAt = &started
+	stats.LastEndedAt = newest.EndedAt
+	stats.LastOpen = newest.Open
+	return stats
+}
+
+// buildShareSubscriptionTraffic returns the busiest nodes and airports of
+// every share link inside the window. It issues one grouped query and caps
+// each list so the overview keeps a fixed-size payload; the airport totals of
+// the whole selection come from buildShareAirportTraffic, so the summary stays
+// exact even when a card list is capped.
+func buildShareSubscriptionTraffic(shareIDs []int, since time.Time) (map[int][]shareNodeTrafficEntry, map[int][]shareAirportTrafficEntry) {
+	nodes := make(map[int][]shareNodeTrafficEntry, len(shareIDs))
+	airports := make(map[int][]shareAirportTrafficEntry, len(shareIDs))
 	sums, err := models.SumShareNodeUsageByShare(shareIDs, since)
 	if err != nil {
 		utils.Warn("Failed to sum share node usage by share: %v", err)
-		return result
+		return nodes, airports
 	}
 	if len(sums) == 0 {
-		return result
+		return nodes, airports
 	}
 	keys := make([]string, 0, len(sums))
 	for _, row := range sums {
 		keys = append(keys, row.NodeKey)
 	}
 	infos := models.ResolveShareNodeKeys(keys)
+	byShare := make(map[int][]shareNodeTrafficEntry, len(shareIDs))
+	airportTotals := make(map[int]map[int]*shareAirportTrafficEntry, len(shareIDs))
+	shareTotals := make(map[int]int64, len(shareIDs))
 	for _, row := range sums {
 		info := infos[row.NodeKey]
-		result[row.ShareID] = append(result[row.ShareID], shareNodeTrafficEntry{
+		byShare[row.ShareID] = append(byShare[row.ShareID], shareNodeTrafficEntry{
 			Key:         row.NodeKey,
 			Name:        info.Name,
 			Group:       info.Group,
@@ -721,15 +784,150 @@ func buildShareSubscriptionTopNodes(shareIDs []int, since time.Time) map[int][]s
 			DownBytes:   row.DownBytes,
 			Bytes:       row.Bytes,
 		})
+		shareTotals[row.ShareID] += row.Bytes
+		if info.AirportID > 0 {
+			byAirport := airportTotals[row.ShareID]
+			if byAirport == nil {
+				byAirport = make(map[int]*shareAirportTrafficEntry)
+				airportTotals[row.ShareID] = byAirport
+			}
+			aggregate := byAirport[info.AirportID]
+			if aggregate == nil {
+				aggregate = &shareAirportTrafficEntry{AirportID: info.AirportID, AirportName: info.AirportName}
+				byAirport[info.AirportID] = aggregate
+			}
+			aggregate.Bytes += row.Bytes
+		}
 	}
-	for shareID, entries := range result {
+	for shareID, entries := range byShare {
 		sort.SliceStable(entries, func(i, j int) bool { return entries[i].Bytes > entries[j].Bytes })
 		if len(entries) > shareSubscriptionTopNodeLimit {
 			entries = entries[:shareSubscriptionTopNodeLimit]
 		}
-		result[shareID] = entries
+		nodes[shareID] = entries
 	}
-	return result
+	for shareID, byAirport := range airportTotals {
+		entries := make([]shareAirportTrafficEntry, 0, len(byAirport))
+		for _, aggregate := range byAirport {
+			if shareTotals[shareID] > 0 {
+				aggregate.Share = float64(aggregate.Bytes) / float64(shareTotals[shareID])
+			}
+			entries = append(entries, *aggregate)
+		}
+		sort.SliceStable(entries, func(i, j int) bool { return entries[i].Bytes > entries[j].Bytes })
+		if len(entries) > shareSubscriptionTopNodeLimit {
+			entries = entries[:shareSubscriptionTopNodeLimit]
+		}
+		airports[shareID] = entries
+	}
+	return nodes, airports
+}
+
+// buildShareAirportTraffic rolls the share scope up into airport rows, so the
+// analyst reads "where does the traffic of this selection go" before opening a
+// single card. It aggregates the uncapped buckets, unlike the per-card lists.
+func buildShareAirportTraffic(shareIDs []int, since time.Time) []shareAirportTrafficEntry {
+	sums, err := models.SumShareNodeUsageByShare(shareIDs, since)
+	if err != nil {
+		utils.Warn("Failed to sum share node usage by share: %v", err)
+		return []shareAirportTrafficEntry{}
+	}
+	if len(sums) == 0 {
+		return []shareAirportTrafficEntry{}
+	}
+	keys := make([]string, 0, len(sums))
+	for _, row := range sums {
+		keys = append(keys, row.NodeKey)
+	}
+	infos := models.ResolveShareNodeKeys(keys)
+	totals := make(map[int]*shareAirportTrafficEntry)
+	allBytes := int64(0)
+	for _, row := range sums {
+		info := infos[row.NodeKey]
+		if info.AirportID <= 0 {
+			continue
+		}
+		aggregate := totals[info.AirportID]
+		if aggregate == nil {
+			aggregate = &shareAirportTrafficEntry{AirportID: info.AirportID, AirportName: info.AirportName}
+			totals[info.AirportID] = aggregate
+		}
+		aggregate.Bytes += row.Bytes
+		allBytes += row.Bytes
+	}
+	entries := make([]shareAirportTrafficEntry, 0, len(totals))
+	for _, aggregate := range totals {
+		if allBytes > 0 {
+			aggregate.Share = float64(aggregate.Bytes) / float64(allBytes)
+		}
+		entries = append(entries, *aggregate)
+	}
+	sort.SliceStable(entries, func(i, j int) bool { return entries[i].Bytes > entries[j].Bytes })
+	return entries
+}
+
+// buildShareReliableNodes returns the healthiest current snapshots of the
+// scope: the nodes the installations keep reporting as working. It answers the
+// mirror question of buildShareReliability, so the analyst can compare the
+// nodes that carry traffic well with the ones that keep failing.
+func buildShareReliableNodes(shareIDs []int, deviceIDs []int) []shareReliabilityEntry {
+	snapshots, err := models.ListTopReliableShareNodeReliability(shareIDs, deviceIDs, shareSubscriptionReliableLimit)
+	if err != nil {
+		utils.Warn("Failed to load reliable share nodes: %v", err)
+		return []shareReliabilityEntry{}
+	}
+	entries, _ := buildShareReliabilityEntries(snapshots)
+	return entries
+}
+
+// buildShareNodeReputation returns the whole reputation table of the scope:
+// every node the installations scored, problems first. It is what the node
+// table joins with traffic, so a node's health sits next to the bytes it
+// actually carried instead of showing up only once it fails.
+func buildShareNodeReputation(shareIDs []int, deviceIDs []int) []shareReliabilityEntry {
+	snapshots, err := models.ListShareNodeReliability(shareIDs, deviceIDs, shareSubscriptionReputationLimit)
+	if err != nil {
+		utils.Warn("Failed to load share node reputation: %v", err)
+		return []shareReliabilityEntry{}
+	}
+	entries, _ := buildShareReliabilityEntries(snapshots)
+	return entries
+}
+
+// buildShareReliabilityEntries maps stored snapshots to the API shape every
+// reliability block shares and resolves the node keys to display metadata.
+// One node may be scored by several installations, so only the first snapshot
+// of a key is kept: the queries order problems first and that is the state the
+// blocks show.
+func buildShareReliabilityEntries(snapshots []models.ShareNodeReliability) ([]shareReliabilityEntry, map[string]models.ShareNodeInfo) {
+	keys := make([]string, 0, len(snapshots))
+	for _, row := range snapshots {
+		keys = append(keys, row.NodeKey)
+	}
+	infos := models.ResolveShareNodeKeys(keys)
+	entries := make([]shareReliabilityEntry, 0, len(snapshots))
+	seen := make(map[string]struct{}, len(snapshots))
+	for _, row := range snapshots {
+		if _, exists := seen[row.NodeKey]; exists {
+			continue
+		}
+		seen[row.NodeKey] = struct{}{}
+		info := infos[row.NodeKey]
+		entries = append(entries, shareReliabilityEntry{
+			Key:         row.NodeKey,
+			Name:        info.Name,
+			AirportName: info.AirportName,
+			Score:       row.Score,
+			Fails:       row.Fails,
+			Streak:      row.Streak,
+			Silent:      row.Silent,
+			State:       row.State,
+			LastSeenAt:  row.LastSeenAt,
+			ReportedAt:  row.ReportedAt,
+			UpdatedAt:   row.UpdatedAt,
+		})
+	}
+	return entries, infos
 }
 
 // buildShareNodeTraffic aggregates per-node buckets and rolls them up into
@@ -792,28 +990,7 @@ func buildShareReliability(shareIDs []int, deviceIDs []int, since time.Time) ([]
 		utils.Warn("Failed to load share node reliability: %v", err)
 		return []shareReliabilityEntry{}, []shareReliabilityEventEntry{}
 	}
-	keys := make([]string, 0, len(snapshots))
-	for _, row := range snapshots {
-		keys = append(keys, row.NodeKey)
-	}
-	infos := models.ResolveShareNodeKeys(keys)
-	entries := make([]shareReliabilityEntry, 0, len(snapshots))
-	for _, row := range snapshots {
-		info := infos[row.NodeKey]
-		entries = append(entries, shareReliabilityEntry{
-			Key:         row.NodeKey,
-			Name:        info.Name,
-			AirportName: info.AirportName,
-			Score:       row.Score,
-			Fails:       row.Fails,
-			Streak:      row.Streak,
-			Silent:      row.Silent,
-			State:       row.State,
-			LastSeenAt:  row.LastSeenAt,
-			ReportedAt:  row.ReportedAt,
-			UpdatedAt:   row.UpdatedAt,
-		})
-	}
+	entries, infos := buildShareReliabilityEntries(snapshots)
 
 	rows, eventErr := listShareReliabilityEventRows(shareIDs, deviceIDs, since)
 	if eventErr != nil {

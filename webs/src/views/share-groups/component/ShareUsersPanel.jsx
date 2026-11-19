@@ -3,224 +3,260 @@ import { useTranslation } from 'react-i18next';
 
 import Alert from '@mui/material/Alert';
 import Box from '@mui/material/Box';
-import Button from '@mui/material/Button';
 import Card from '@mui/material/Card';
 import CardContent from '@mui/material/CardContent';
 import Chip from '@mui/material/Chip';
 import CircularProgress from '@mui/material/CircularProgress';
 import Divider from '@mui/material/Divider';
 import Grid from '@mui/material/Grid';
-import IconButton from '@mui/material/IconButton';
 import Stack from '@mui/material/Stack';
-import Tooltip from '@mui/material/Tooltip';
 import Typography from '@mui/material/Typography';
+import DevicesIcon from '@mui/icons-material/Devices';
 
-import AddIcon from '@mui/icons-material/Add';
-import DeleteIcon from '@mui/icons-material/Delete';
-import EditIcon from '@mui/icons-material/Edit';
-import PersonIcon from '@mui/icons-material/Person';
-
+import { formatDateTime } from 'i18n/locales';
 import { formatBytes } from 'views/airports/utils';
-import { deleteShareClient, getShareClients, getShareSubscriptionsOverview } from 'api/shareGroups';
+import { getShareDevicesOverview } from 'api/shareGroups';
 
-import ShareClientDialog from './ShareClientDialog';
-import ShareUserDetailDialog from './ShareUserDetailDialog';
+import ShareDeviceDetailDialog from './ShareDeviceDetailDialog';
+import { formatDuration } from './ShareTelemetryBlocks';
 
-const USER_SHARE_LIMIT = 200;
+const USER_DEVICE_LIMIT = 200;
 
-// Users tab: subscription cards grouped by their owning client. Cards without
-// a client are shown in a separate read-only "no user" group.
-export default function ShareUsersPanel({ subId, days, showMessage, refreshKey }) {
-  const { t } = useTranslation();
+function newerDevice(candidate, current) {
+  if (!current) return true;
+  const left = Date.parse(candidate.last_seen_at || 0) || 0;
+  const right = Date.parse(current.last_seen_at || 0) || 0;
+  return left > right;
+}
+
+// Users tab: one card per installation identity (HWID). One person may run the
+// client on several devices, so a card folds every device row that shares the
+// hardware id and answers where that installation sends its traffic.
+export default function ShareUsersPanel({ days, showMessage, refreshKey }) {
+  const { t, i18n } = useTranslation();
+  const language = i18n.resolvedLanguage || i18n.language;
 
   const [loading, setLoading] = useState(false);
-  const [clients, setClients] = useState([]);
   const [items, setItems] = useState([]);
   const [truncated, setTruncated] = useState(false);
-  const [dialogOpen, setDialogOpen] = useState(false);
-  const [editingClient, setEditingClient] = useState(null);
-  const [detailGroup, setDetailGroup] = useState(null);
+  const [detailTarget, setDetailTarget] = useState(null);
 
   const fetchData = useCallback(async () => {
     setLoading(true);
     try {
-      const [clientsRes, overviewRes] = await Promise.all([
-        getShareClients(),
-        getShareSubscriptionsOverview({ subId: subId || undefined, days, page: 1, pageSize: USER_SHARE_LIMIT })
-      ]);
-      setClients(clientsRes.data?.items || []);
-      const data = overviewRes.data || {};
+      const res = await getShareDevicesOverview({ days, page: 1, pageSize: USER_DEVICE_LIMIT });
+      const data = res.data || {};
       setItems(data.items || []);
-      setTruncated((data.total || 0) > USER_SHARE_LIMIT);
+      setTruncated((data.total || 0) > USER_DEVICE_LIMIT);
     } catch (error) {
-      setClients([]);
       setItems([]);
       showMessage?.(error.response?.data?.msg || t('shareGroups.users.loadFailed'), 'error');
     } finally {
       setLoading(false);
     }
-  }, [subId, days, showMessage, t]);
+  }, [days, showMessage, t]);
 
   useEffect(() => {
     fetchData();
   }, [fetchData, refreshKey]);
 
   const groups = useMemo(() => {
-    const byClient = new Map();
-    const unassigned = [];
+    const byHwid = new Map();
     for (const item of items) {
-      if (item.client_id) {
-        const key = `${item.client_id}`;
-        if (!byClient.has(key)) byClient.set(key, []);
-        byClient.get(key).push(item);
-      } else {
-        unassigned.push(item);
-      }
+      const key = item.hwid || item.device_id || item.name;
+      if (!byHwid.has(key)) byHwid.set(key, []);
+      byHwid.get(key).push(item);
     }
-    const summarize = (list) => ({
-      shares: list.length,
-      devices: list.reduce((sum, item) => sum + (item.devices?.total || 0), 0),
-      online: list.reduce((sum, item) => sum + (item.online_now ? 1 : 0), 0),
-      windowBytes: list.reduce((sum, item) => sum + (item.window_bytes || 0), 0),
-      lifetimeBytes: list.reduce((sum, item) => sum + (item.lifetime_bytes || 0), 0),
-      problemNodes: list.reduce((sum, item) => sum + (item.problem_nodes || 0), 0),
-      sessionsToday: list.reduce((sum, item) => sum + (item.sessions_today || 0), 0)
-    });
-    const rows = clients.map((client) => {
-      const list = byClient.get(`${client.id}`) || [];
-      return { key: `client-${client.id}`, client, items: list, summary: summarize(list) };
-    });
+
+    const rows = [];
+    for (const [key, list] of byHwid) {
+      const newest = list.reduce((best, item) => (newerDevice(item, best) ? item : best), null);
+      const shares = new Map();
+      const airports = new Map();
+      let sessionsToday = 0;
+      let sessionsWindow = 0;
+      let windowBytes = 0;
+      let lifetimeBytes = 0;
+      let problemNodes = 0;
+      let lastSession = null;
+      for (const item of list) {
+        for (const link of item.shares || []) {
+          shares.set(link.share_id, link);
+        }
+        for (const entry of item.airports || []) {
+          const aggregate = airports.get(entry.airport_id) || {
+            airport_id: entry.airport_id,
+            airport_name: entry.airport_name,
+            bytes: 0
+          };
+          aggregate.bytes += entry.bytes || 0;
+          airports.set(entry.airport_id, aggregate);
+        }
+        sessionsToday += item.sessions_today || 0;
+        sessionsWindow += item.sessions_window || 0;
+        windowBytes += item.window_traffic_bytes || 0;
+        lifetimeBytes += item.reported_traffic_bytes || 0;
+        problemNodes += item.problem_nodes || 0;
+        if (item.last_session) {
+          const started = Date.parse(item.last_session.started_at || 0) || 0;
+          if (!lastSession || started > (Date.parse(lastSession.started_at || 0) || 0)) {
+            lastSession = item.last_session;
+          }
+        }
+      }
+      const topAirport = Array.from(airports.values()).sort((left, right) => right.bytes - left.bytes)[0] || null;
+      rows.push({
+        key,
+        hwid: newest?.hwid || key,
+        name: newest?.name || '',
+        platform: newest?.platform || '',
+        appVersion: newest?.app_version || '',
+        deviceCount: new Set(list.map((item) => item.device_id)).size,
+        sessionsToday,
+        sessionsWindow,
+        windowBytes,
+        lifetimeBytes,
+        problemNodes,
+        lastSession,
+        shares: Array.from(shares.values()),
+        topAirport,
+        lastSeenAt: newest?.last_seen_at,
+        target: { hwid: newest?.hwid || key, deviceId: newest?.device_id }
+      });
+    }
     rows.sort((left, right) => {
-      if (left.summary.online !== right.summary.online) return right.summary.online - left.summary.online;
-      if (left.summary.windowBytes !== right.summary.windowBytes) return right.summary.windowBytes - left.summary.windowBytes;
-      return (left.client.name || '').localeCompare(right.client.name || '');
+      if (left.windowBytes !== right.windowBytes) return right.windowBytes - left.windowBytes;
+      return (left.name || left.hwid).localeCompare(right.name || right.hwid);
     });
-    if (unassigned.length > 0) {
-      rows.push({ key: 'unassigned', client: null, items: unassigned, summary: summarize(unassigned) });
-    }
     return rows;
-  }, [clients, items]);
+  }, [items]);
 
-  const handleDelete = useCallback(
-    async (row) => {
-      if (!row.client) return;
-      if (!window.confirm(t('shareGroups.users.deleteConfirm', { name: row.client.name, count: row.items.length }))) return;
-      try {
-        await deleteShareClient(row.client.id);
-        showMessage?.(t('shareGroups.users.deleteSuccess'));
-        fetchData();
-      } catch (error) {
-        showMessage?.(error.response?.data?.msg || t('shareGroups.messages.deleteFailed'), 'error');
-      }
-    },
-    [t, showMessage, fetchData]
-  );
-
-  const renderCard = (row) => {
-    const { client, summary } = row;
-    return (
-      <Grid key={row.key} size={{ xs: 12, md: 6, xl: 4 }}>
-        <Card
-          sx={{ height: '100%', display: 'flex', flexDirection: 'column', border: '1px solid', borderColor: 'divider', cursor: 'pointer' }}
-          onClick={() => setDetailGroup(row)}
-        >
-          <CardContent sx={{ flexGrow: 1 }}>
-            <Stack direction="row" alignItems="flex-start" spacing={1}>
-              <Box sx={{ minWidth: 0, flexGrow: 1 }}>
-                <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap" useFlexGap>
-                  <Typography variant="subtitle1" fontWeight={700} noWrap>
-                    {client ? client.name : t('shareGroups.users.unassigned')}
-                  </Typography>
-                  {client && (
-                    <Chip
-                      size="small"
-                      label={client.enabled ? t('common.enabled') : t('common.disabled')}
-                      color={client.enabled ? 'success' : 'default'}
-                      variant="outlined"
-                    />
-                  )}
-                  <Chip size="small" variant="outlined" label={t('shareGroups.users.shareCount', { count: summary.shares })} />
-                </Stack>
-                <Typography variant="caption" color="text.secondary" noWrap display="block">
-                  {client ? client.note || '—' : t('shareGroups.users.unassignedHint')}
+  const renderCard = (row) => (
+    <Grid key={row.key} size={{ xs: 12, md: 6, xl: 4 }}>
+      <Card
+        sx={{ height: '100%', display: 'flex', flexDirection: 'column', border: '1px solid', borderColor: 'divider', cursor: 'pointer' }}
+        onClick={() => setDetailTarget(row.target)}
+      >
+        <CardContent sx={{ flexGrow: 1 }}>
+          <Stack direction="row" alignItems="flex-start" spacing={1}>
+            <Box sx={{ minWidth: 0, flexGrow: 1 }}>
+              <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap" useFlexGap>
+                <Typography variant="subtitle1" fontWeight={700} noWrap>
+                  {row.name || t('shareGroups.telemetry.unknownDevice')}
                 </Typography>
-              </Box>
-              {client && (
-                <Stack direction="row" spacing={0.25} onClick={(event) => event.stopPropagation()}>
-                  <Tooltip title={t('common.edit')}>
-                    <IconButton
-                      size="small"
-                      onClick={() => {
-                        setEditingClient(client);
-                        setDialogOpen(true);
-                      }}
-                    >
-                      <EditIcon fontSize="small" />
-                    </IconButton>
-                  </Tooltip>
-                  <Tooltip title={t('common.delete')}>
-                    <IconButton size="small" color="error" onClick={() => handleDelete(row)}>
-                      <DeleteIcon fontSize="small" />
-                    </IconButton>
-                  </Tooltip>
-                </Stack>
+                <Chip size="small" variant="outlined" label={t('shareGroups.users.devices', { count: row.deviceCount })} />
+                <Chip size="small" variant="outlined" label={t('shareGroups.users.shareCount', { count: row.shares.length })} />
+              </Stack>
+              <Typography variant="caption" color="text.secondary" noWrap display="block">
+                {[row.platform, row.appVersion].filter(Boolean).join(' · ') || '—'}
+              </Typography>
+              <Typography variant="caption" color="text.secondary" noWrap display="block" sx={{ fontFamily: 'monospace' }}>
+                {row.hwid}
+              </Typography>
+            </Box>
+          </Stack>
+
+          <Divider sx={{ my: 1.5 }} />
+
+          <Grid container spacing={1}>
+            <Grid size={6}>
+              <Typography variant="caption" color="text.secondary">
+                {t('shareGroups.users.windowLabel', { days })}
+              </Typography>
+              <Typography variant="body2">{formatBytes(row.windowBytes)}</Typography>
+            </Grid>
+            <Grid size={6}>
+              <Typography variant="caption" color="text.secondary">
+                {t('shareGroups.users.sessionsLabel')}
+              </Typography>
+              <Typography variant="body2">{t('shareGroups.users.sessionsToday', { count: row.sessionsToday })}</Typography>
+            </Grid>
+            <Grid size={6}>
+              <Typography variant="caption" color="text.secondary">
+                {t('shareGroups.users.airportLabel')}
+              </Typography>
+              {row.topAirport ? (
+                <Typography variant="body2" noWrap>
+                  {row.topAirport.airport_name || t('shareGroups.blocks.airportUnknown')}
+                </Typography>
+              ) : (
+                <Typography variant="body2" color="text.secondary">
+                  —
+                </Typography>
               )}
-            </Stack>
-
-            <Divider sx={{ my: 1.5 }} />
-
-            <Grid container spacing={1}>
-              <Grid size={6}>
-                <Typography variant="caption" color="text.secondary">
-                  {t('shareGroups.users.devicesLabel')}
+            </Grid>
+            <Grid size={6}>
+              <Typography variant="caption" color="text.secondary">
+                {t('shareGroups.users.lifetimeLabel')}
+              </Typography>
+              <Typography variant="body2">{formatBytes(row.lifetimeBytes)}</Typography>
+            </Grid>
+            <Grid size={12}>
+              <Typography variant="caption" color="text.secondary">
+                {t('shareGroups.users.lastVpn')}
+              </Typography>
+              {row.lastSession ? (
+                <>
+                  <Typography variant="body2" noWrap>
+                    {formatDateTime(row.lastSession.started_at, language)} →{' '}
+                    {row.lastSession.open ? t('shareGroups.blocks.sessionOpen') : formatDateTime(row.lastSession.ended_at, language)}
+                  </Typography>
+                  <Typography variant="caption" color="text.secondary" display="block">
+                    {formatDuration(row.lastSession.duration_s)} · {formatBytes(row.lastSession.bytes || 0)}
+                  </Typography>
+                </>
+              ) : (
+                <Typography variant="body2" color="text.secondary">
+                  —
                 </Typography>
-                <Typography variant="body2">{t('shareGroups.users.devices', { count: summary.devices })}</Typography>
-              </Grid>
-              <Grid size={6}>
-                <Typography variant="caption" color="text.secondary">
-                  {t('shareGroups.users.onlineLabel')}
-                </Typography>
-                <Typography variant="body2">{t('shareGroups.users.online', { count: summary.online })}</Typography>
-              </Grid>
-              <Grid size={6}>
-                <Typography variant="caption" color="text.secondary">
-                  {t('shareGroups.users.windowLabel', { days })}
-                </Typography>
-                <Typography variant="body2">{formatBytes(summary.windowBytes)}</Typography>
-              </Grid>
-              <Grid size={6}>
-                <Typography variant="caption" color="text.secondary">
-                  {t('shareGroups.users.sessionsLabel')}
-                </Typography>
-                <Typography variant="body2">{t('shareGroups.users.sessionsToday', { count: summary.sessionsToday })}</Typography>
-              </Grid>
-              <Grid size={6}>
-                <Typography variant="caption" color="text.secondary">
-                  {t('shareGroups.users.lifetimeLabel')}
-                </Typography>
-                <Typography variant="body2">{formatBytes(summary.lifetimeBytes)}</Typography>
-              </Grid>
-              <Grid size={6}>
-                <Typography variant="caption" color="text.secondary">
-                  {t('shareGroups.users.problemsLabel')}
-                </Typography>
-                {summary.problemNodes > 0 ? (
+              )}
+            </Grid>
+            <Grid size={12}>
+              <Typography variant="caption" color="text.secondary">
+                {t('shareGroups.users.problemsLabel')}
+              </Typography>
+              <Stack direction="row" spacing={0.5} alignItems="center" flexWrap="wrap" useFlexGap>
+                {row.problemNodes > 0 ? (
                   <Chip
                     size="small"
                     color="error"
                     variant="outlined"
-                    label={t('shareGroups.users.problemNodes', { count: summary.problemNodes })}
+                    label={t('shareGroups.users.problemNodes', { count: row.problemNodes })}
                   />
                 ) : (
-                  <Typography variant="body2">—</Typography>
+                  <Typography variant="body2" color="text.secondary">
+                    —
+                  </Typography>
                 )}
-              </Grid>
+                {row.lastSeenAt && (
+                  <Typography variant="caption" color="text.secondary">
+                    {formatDateTime(row.lastSeenAt, language)}
+                  </Typography>
+                )}
+              </Stack>
             </Grid>
-          </CardContent>
-        </Card>
-      </Grid>
-    );
-  };
+          </Grid>
+
+          {row.shares.length > 0 && (
+            <>
+              <Divider sx={{ my: 1 }} />
+              <Stack direction="row" spacing={0.5} flexWrap="wrap" useFlexGap>
+                {row.shares.slice(0, 3).map((link) => (
+                  <Chip
+                    key={link.share_id}
+                    size="small"
+                    variant="outlined"
+                    label={link.subscription_name || link.share_name || `#${link.share_id}`}
+                  />
+                ))}
+                {row.shares.length > 3 && <Chip size="small" variant="outlined" label={`+${row.shares.length - 3}`} />}
+              </Stack>
+            </>
+          )}
+        </CardContent>
+      </Card>
+    </Grid>
+  );
 
   return (
     <Box>
@@ -229,19 +265,8 @@ export default function ShareUsersPanel({ subId, days, showMessage, refreshKey }
           {t('shareGroups.users.subtitle')}
         </Typography>
         {truncated && (
-          <Chip size="small" variant="outlined" color="warning" label={t('shareGroups.users.truncated', { count: USER_SHARE_LIMIT })} />
+          <Chip size="small" variant="outlined" color="warning" label={t('shareGroups.users.truncated', { count: USER_DEVICE_LIMIT })} />
         )}
-        <Button
-          size="small"
-          variant="contained"
-          startIcon={<AddIcon />}
-          onClick={() => {
-            setEditingClient(null);
-            setDialogOpen(true);
-          }}
-        >
-          {t('shareGroups.users.add')}
-        </Button>
       </Stack>
 
       {loading ? (
@@ -249,7 +274,7 @@ export default function ShareUsersPanel({ subId, days, showMessage, refreshKey }
           <CircularProgress />
         </Stack>
       ) : groups.length === 0 ? (
-        <Alert severity="info" icon={<PersonIcon />}>
+        <Alert severity="info" icon={<DevicesIcon />}>
           {t('shareGroups.users.empty')}
         </Alert>
       ) : (
@@ -258,14 +283,13 @@ export default function ShareUsersPanel({ subId, days, showMessage, refreshKey }
         </Grid>
       )}
 
-      <ShareClientDialog
-        open={dialogOpen}
-        client={editingClient}
-        onClose={() => setDialogOpen(false)}
-        onSaved={fetchData}
-        showMessage={showMessage}
+      <ShareDeviceDetailDialog
+        open={Boolean(detailTarget)}
+        hwid={detailTarget?.hwid}
+        deviceId={detailTarget?.deviceId}
+        days={days}
+        onClose={() => setDetailTarget(null)}
       />
-      <ShareUserDetailDialog open={Boolean(detailGroup)} group={detailGroup} days={days} onClose={() => setDetailGroup(null)} />
     </Box>
   );
 }

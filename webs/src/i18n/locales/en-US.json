@@ -392,13 +392,18 @@
         "traffic": "Traffic",
         "windowTraffic": "Last {{days}} days",
         "lastSeen": "Last online",
-        "lastReport": "Last report"
+        "lastReport": "Last report",
+        "sessions": "Sessions",
+        "airports": "Airports",
+        "problems": "Problem nodes"
       },
       "empty": "No devices yet. A device appears here after a client fetches a link with SNKP device headers.",
       "loadFailed": "Failed to load devices",
       "unknownDevice": "Unknown device",
       "deviceFallback": "Device {{id}}",
-      "shareCount": "{{count}} links"
+      "shareCount": "{{count}} links",
+      "sessionsToday": "{{count}} today",
+      "sessionsWindow": "{{count}} in {{days}}d"
     },
     "telemetryDetail": {
       "title": "Device — {{name}}",
@@ -448,7 +453,21 @@
         "suspect": "Degraded",
         "healthy": "Healthy",
         "state_change": "State change"
-      }
+      },
+      "reliable": "Reliable nodes",
+      "reliableEmpty": "No reliable nodes reported yet.",
+      "nodeTable": "Nodes: traffic & reputation",
+      "nodeTableHint": "Traffic of the selected window next to the SNKP score of the same node. Click a column to sort.",
+      "tableNode": "Node",
+      "tableState": "SNKP state",
+      "tableScore": "Score",
+      "tableTraffic": "Traffic",
+      "tableLastSeen": "Last seen",
+      "sessionCount": "{{count}} sessions",
+      "sessionActiveTime": "On for {{time}}",
+      "sessionLastOn": "Last on {{time}}",
+      "sessionLastOff": "Last off {{time}}",
+      "sessionTraffic": "{{bytes}} in sessions"
     },
     "subscriptions": {
       "subtitle": "One row per subscription card: quota, devices, traffic and sessions.",
@@ -494,8 +513,10 @@
         "nodes": "Nodes",
         "sessions": "Sessions",
         "problems": "Problem nodes",
-        "lastReport": "Last seen / report"
-      }
+        "lastReport": "Last seen / report",
+        "airports": "Airports"
+      },
+      "topAirports": "Top airports"
     },
     "subscriptionDetail": {
       "title": "Subscription — {{name}}",
@@ -524,9 +545,9 @@
       "activityEmpty": "No recent access records."
     },
     "users": {
-      "subtitle": "Subscription cards grouped by their owning user.",
+      "subtitle": "Installations grouped by hardware id: traffic, sessions and airports of each user.",
       "add": "New user",
-      "empty": "No users yet. Create a user to group subscription cards; assign cards in the subscription details.",
+      "empty": "No installations yet. A device appears here after a client fetches a link with SNKP device headers.",
       "unassigned": "No user",
       "unassignedHint": "Cards without a user",
       "shareCount": "{{count}} links",
@@ -543,7 +564,9 @@
       "truncated": "Showing the first {{count}} cards",
       "loadFailed": "Failed to load users",
       "deleteConfirm": "Delete user \"{{name}}\"? Its {{count}} links stay and become unassigned.",
-      "deleteSuccess": "User deleted"
+      "deleteSuccess": "User deleted",
+      "airportLabel": "Top airport",
+      "lastVpn": "Last VPN session"
     },
     "userDetail": {
       "title": "User — {{name}}",
@@ -3487,7 +3510,11 @@
         "updated": "Device updated",
         "deleted": "Device unbound",
         "updateFailed": "Failed to update the device",
-        "deleteFailed": "Failed to unbind the device"
+        "deleteFailed": "Failed to unbind the device",
+        "clearAll": "Clear all devices",
+        "clearConfirm": "Delete all {{count}} devices of \"{{name}}\"? Their traffic history is removed too.",
+        "cleared": "Devices cleared ({{count}})",
+        "clearFailed": "Failed to clear devices"
       },
       "expire": {
         "never": "Never expires",

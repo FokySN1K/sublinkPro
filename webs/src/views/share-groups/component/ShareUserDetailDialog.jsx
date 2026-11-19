@@ -90,6 +90,7 @@ export default function ShareUserDetailDialog({ open, group, days, onClose }) {
     const nodeMap = new Map();
     const airportMap = new Map();
     const reliabilityMap = new Map();
+    const reputationMap = new Map();
     const deviceMap = new Map();
     let sessions = [];
     let reliabilityEvents = [];
@@ -121,6 +122,10 @@ export default function ShareUserDetailDialog({ open, group, days, onClose }) {
       for (const row of detail.reliability || []) {
         const key = `${row.key}`;
         if (!reliabilityMap.has(key)) reliabilityMap.set(key, row);
+      }
+      for (const row of detail.node_reputation || []) {
+        const key = `${row.key}`;
+        if (!reputationMap.has(key)) reputationMap.set(key, row);
       }
       reliabilityEvents = reliabilityEvents.concat(detail.reliability_events || []);
       events = events.concat((detail.events || []).map((entry) => ({ ...entry, share_name: shareLabel })));
@@ -156,6 +161,7 @@ export default function ShareUserDetailDialog({ open, group, days, onClose }) {
       devices,
       sessions: sortByDateDesc(sessions, 'started_at').slice(0, 100),
       reliability: Array.from(reliabilityMap.values()).sort((left, right) => left.score - right.score),
+      reputation: Array.from(reputationMap.values()).sort((left, right) => left.score - right.score),
       reliabilityEvents: sortByDateDesc(reliabilityEvents, 'created_at').slice(0, 100),
       events: sortByDateDesc(events, 'created_at').slice(0, 30),
       lifetimeBytes
@@ -308,7 +314,7 @@ export default function ShareUserDetailDialog({ open, group, days, onClose }) {
               <Typography variant="subtitle2" fontWeight={700} sx={{ mb: 1 }}>
                 {t('shareGroups.userDetail.traffic')}
               </Typography>
-              <ShareTrafficBreakdown nodes={merged.nodes} airports={merged.airports} />
+              <ShareTrafficBreakdown nodes={merged.nodes} airports={merged.airports} reputation={merged.reputation} />
             </Box>
 
             <Divider />

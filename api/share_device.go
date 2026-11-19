@@ -122,6 +122,37 @@ func ShareDeviceDelete(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"code": 200, "msg": "Deleted successfully"})
 }
 
+// ShareDeviceClear unbinds every device of one link together with its
+// telemetry history, so a link can start its device list from scratch.
+func ShareDeviceClear(c *gin.Context) {
+	shareID, err := strconv.Atoi(c.Query("shareId"))
+	if err != nil || shareID <= 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"code": 400, "msg": "Invalid share ID"})
+		return
+	}
+	share := &models.SubscriptionShare{ID: shareID}
+	if err := share.Find(); err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"code": 404, "msg": "Share not found"})
+		return
+	}
+	devices, err := models.ListShareDevices(shareID)
+	if err != nil {
+		utils.Error("Failed to load share devices: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"code": 500, "msg": "Failed to load devices"})
+		return
+	}
+	if err := models.DeleteShareDevices(shareID); err != nil {
+		utils.Error("Failed to clear share devices: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"code": 500, "msg": "Clear failed"})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{
+		"code": 200,
+		"msg":  "Devices cleared",
+		"data": gin.H{"deleted": len(devices)},
+	})
+}
+
 // ShareActivity returns recent access rows for one link.
 func ShareActivity(c *gin.Context) {
 	shareID, err := strconv.Atoi(c.Query("shareId"))

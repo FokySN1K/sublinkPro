@@ -23,6 +23,7 @@ func Share(r *gin.Engine) {
 		shareGroup.GET("/devices/detail", api.ShareDeviceDetail)                 // 单个设备的用量时间分布与访问记录
 		shareGroup.POST("/devices/update", api.ShareDeviceUpdate)                // 更新设备
 		shareGroup.DELETE("/devices/delete", api.ShareDeviceDelete)              // 解绑设备
+		shareGroup.DELETE("/devices/clear", api.ShareDeviceClear)                // 清空分享下的全部设备
 		shareGroup.GET("/subscriptions/overview", api.ShareSubscriptionOverview) // 订阅链接遥测总览（含用户归属）
 		shareGroup.GET("/subscriptions/detail", api.ShareSubscriptionDetail)     // 单个订阅链接的会话、按日流量、节点与可靠性
 		shareGroup.GET("/clients", api.ShareClientList)                          // 用户（客户端）列表

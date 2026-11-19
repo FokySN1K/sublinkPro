@@ -375,3 +375,33 @@ func LatestShareSessions(shareIDs []int) (map[int]ShareSession, error) {
 	}
 	return latest, nil
 }
+
+// LatestShareSessionsByDeviceIDs returns the newest session row per device
+// row. The users overview folds it into "when did this installation last turn
+// the VPN on and off", one card across several share bindings.
+func LatestShareSessionsByDeviceIDs(deviceIDs []int) (map[int]ShareSession, error) {
+	latest := make(map[int]ShareSession, len(deviceIDs))
+	if len(deviceIDs) == 0 {
+		return latest, nil
+	}
+	limit := len(deviceIDs) * 20
+	if limit < 200 {
+		limit = 200
+	}
+	if limit > 5000 {
+		limit = 5000
+	}
+	var sessions []ShareSession
+	if err := database.DB.Where("device_id IN ?", deviceIDs).
+		Order("started_at DESC, id DESC").
+		Limit(limit).
+		Find(&sessions).Error; err != nil {
+		return nil, err
+	}
+	for _, session := range sessions {
+		if _, exists := latest[session.DeviceID]; !exists {
+			latest[session.DeviceID] = session
+		}
+	}
+	return latest, nil
+}

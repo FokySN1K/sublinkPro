@@ -19,22 +19,16 @@ import ShareUsersPanel from './ShareUsersPanel';
 const DAY_OPTIONS = [7, 30];
 
 // Telemetry tab with three scopes: subscription cards (default), individual
-// installations and owning users. The pool and period filters apply to every
-// scope.
-export default function ShareTelemetryTab({ pools = [], showMessage }) {
+// installations and hardware groups. The period filter applies to every scope.
+export default function ShareTelemetryTab({ showMessage }) {
   const { t } = useTranslation();
 
   const [mode, setMode] = useState('subscriptions');
-  const [subId, setSubId] = useState('');
   const [days, setDays] = useState(7);
   const [refreshKey, setRefreshKey] = useState(0);
 
   const handleModeChange = useCallback((_, value) => {
     if (value) setMode(value);
-  }, []);
-
-  const handlePoolChange = useCallback((event) => {
-    setSubId(event.target.value);
   }, []);
 
   const handleDaysChange = useCallback((event) => {
@@ -67,21 +61,6 @@ export default function ShareTelemetryTab({ pools = [], showMessage }) {
         <TextField
           select
           size="small"
-          label={t('shareGroups.telemetry.filters.pool')}
-          value={subId}
-          onChange={handlePoolChange}
-          sx={{ minWidth: { md: 200 } }}
-        >
-          <MenuItem value="">{t('shareGroups.telemetry.filters.poolAll')}</MenuItem>
-          {pools.map((pool) => (
-            <MenuItem key={pool.ID} value={pool.ID}>
-              {pool.Name || `#${pool.ID}`}
-            </MenuItem>
-          ))}
-        </TextField>
-        <TextField
-          select
-          size="small"
           label={t('shareGroups.telemetry.filters.days')}
           value={days}
           onChange={handleDaysChange}
@@ -102,11 +81,11 @@ export default function ShareTelemetryTab({ pools = [], showMessage }) {
       </Stack>
 
       {mode === 'users' ? (
-        <ShareUsersPanel subId={subId} days={days} showMessage={showMessage} refreshKey={refreshKey} />
+        <ShareUsersPanel days={days} showMessage={showMessage} refreshKey={refreshKey} />
       ) : mode === 'subscriptions' ? (
-        <ShareSubscriptionsPanel subId={subId} days={days} showMessage={showMessage} refreshKey={refreshKey} />
+        <ShareSubscriptionsPanel days={days} showMessage={showMessage} refreshKey={refreshKey} />
       ) : (
-        <ShareDevicesPanel subId={subId} days={days} showMessage={showMessage} refreshKey={refreshKey} />
+        <ShareDevicesPanel days={days} showMessage={showMessage} refreshKey={refreshKey} />
       )}
     </Box>
   );

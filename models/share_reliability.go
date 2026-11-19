@@ -271,6 +271,50 @@ func ListProblemShareNodeReliability(shareIDs []int, deviceIDs []int) ([]ShareNo
 	return rows, err
 }
 
+// ListShareNodeReliability returns the latest snapshot of every node the
+// installations reported, problems first. The analyst table joins it with the
+// per-node traffic, so a node's health is readable next to its bytes.
+func ListShareNodeReliability(shareIDs []int, deviceIDs []int, limit int) ([]ShareNodeReliability, error) {
+	if limit <= 0 || limit > 500 {
+		limit = 200
+	}
+	query := database.DB.Model(&ShareNodeReliability{})
+	if len(deviceIDs) > 0 {
+		query = query.Where("device_id IN ?", deviceIDs)
+	} else if len(shareIDs) > 0 {
+		query = query.Where("share_id IN ?", shareIDs)
+	} else {
+		return []ShareNodeReliability{}, nil
+	}
+	var rows []ShareNodeReliability
+	// Problems come first so the per-node dedupe downstream keeps the worst
+	// state of a node that several installations reported.
+	err := query.Order("CASE state WHEN 'suspect' THEN 0 WHEN 'silent' THEN 1 WHEN 'neutral' THEN 2 WHEN 'ok' THEN 3 ELSE 4 END, score ASC, updated_at DESC").
+		Limit(limit).Find(&rows).Error
+	return rows, err
+}
+
+// ListTopReliableShareNodeReliability returns the healthiest current snapshots
+// of the scope: nodes the installations keep marking as working. The analyst
+// view pairs them with traffic to show which nodes carry the load well.
+func ListTopReliableShareNodeReliability(shareIDs []int, deviceIDs []int, limit int) ([]ShareNodeReliability, error) {
+	if limit <= 0 || limit > 200 {
+		limit = 20
+	}
+	query := database.DB.Model(&ShareNodeReliability{}).
+		Where("silent = ? AND state = ?", false, ShareReliabilityStateOk)
+	if len(deviceIDs) > 0 {
+		query = query.Where("device_id IN ?", deviceIDs)
+	} else if len(shareIDs) > 0 {
+		query = query.Where("share_id IN ?", shareIDs)
+	} else {
+		return []ShareNodeReliability{}, nil
+	}
+	var rows []ShareNodeReliability
+	err := query.Order("score DESC, fails ASC, updated_at DESC").Limit(limit).Find(&rows).Error
+	return rows, err
+}
+
 // CountProblemShareNodes counts the current unreliable nodes per link.
 func CountProblemShareNodes(shareIDs []int) (map[int]int, error) {
 	counts := make(map[int]int, len(shareIDs))

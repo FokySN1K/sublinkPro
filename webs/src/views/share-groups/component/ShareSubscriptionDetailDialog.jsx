@@ -25,7 +25,13 @@ import { formatDateTime } from 'i18n/locales';
 import { formatBytes } from 'views/airports/utils';
 import { getShareClients, getShareSubscriptionDetail, assignShareClients } from 'api/shareGroups';
 
-import { ShareDailyBarChart, ShareReliabilityList, ShareSessionsTable, ShareTrafficBreakdown } from './ShareTelemetryBlocks';
+import {
+  ShareDailyBarChart,
+  ShareReliabilityList,
+  ShareSessionStats,
+  ShareSessionsTable,
+  ShareTrafficBreakdown
+} from './ShareTelemetryBlocks';
 import ShareDeviceDetailDialog from './ShareDeviceDetailDialog';
 
 function statusColor(status) {
@@ -315,6 +321,11 @@ export default function ShareSubscriptionDetailDialog({ open, shareId, days, onC
                 <Typography variant="subtitle2" fontWeight={700} sx={{ mb: 1 }}>
                   {t('shareGroups.subscriptionDetail.sessions')}
                 </Typography>
+                {detail.session_stats?.sessions > 0 && (
+                  <Box sx={{ mb: 1 }}>
+                    <ShareSessionStats stats={detail.session_stats} />
+                  </Box>
+                )}
                 <ShareSessionsTable sessions={detail.sessions || []} showDevice />
               </Box>
 
@@ -324,7 +335,11 @@ export default function ShareSubscriptionDetailDialog({ open, shareId, days, onC
                 <Typography variant="subtitle2" fontWeight={700} sx={{ mb: 1 }}>
                   {t('shareGroups.subscriptionDetail.traffic')}
                 </Typography>
-                <ShareTrafficBreakdown nodes={detail.nodes || []} airports={detail.airports || []} />
+                <ShareTrafficBreakdown
+                  nodes={detail.nodes || []}
+                  airports={detail.airports || []}
+                  reputation={detail.node_reputation || []}
+                />
               </Box>
 
               <Divider />
