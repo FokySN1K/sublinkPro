@@ -61,11 +61,11 @@ const subscription = {
       breadcrumbs: true
     },
     {
-      id: 'proxy-pools',
-      title: 'Proxy Pools',
+      id: 'proxy-subscriptions',
+      title: 'Proxy Subscriptions',
       titleKey: 'navigation.items.proxyPools',
       type: 'item',
-      url: '/subscription/proxy-pools',
+      url: '/subscription/proxy-subscriptions',
       icon: IconWorld,
       breadcrumbs: true
     },

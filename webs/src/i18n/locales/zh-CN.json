@@ -106,7 +106,7 @@
       "nodes": "节点管理",
       "nodeCheck": "检测中心",
       "subscriptions": "节点池",
-      "proxyPools": "代理池",
+      "proxyPools": "代理订阅",
       "templates": "模板管理",
       "tags": "标签管理",
       "scripts": "脚本列表",
@@ -2931,10 +2931,10 @@
   },
   "proxyPools": {
     "page": {
-      "title": "代理池",
-      "searchLabel": "搜索代理池",
+      "title": "代理订阅",
+      "searchLabel": "搜索代理订阅",
       "searchPlaceholder": "搜索名称或唯一键",
-      "empty": "暂无代理池。创建一个即可原样转发机场的上游订阅。"
+      "empty": "暂无代理订阅。创建一个即可原样转发机场的上游订阅。"
     }
   },
   "subscriptions": {
@@ -3041,12 +3041,12 @@
       }
     },
     "proxyDialog": {
-      "addTitle": "添加代理节点池",
-      "editTitle": "编辑代理节点池",
+      "addTitle": "添加代理订阅",
+      "editTitle": "编辑代理订阅",
       "description": "SublinkPro 在服务端请求所选机场的上游订阅，并将内容原样返回：不解析、不过滤、不重命名节点。请求使用机场自身的地址、User-Agent、请求头、设备信息、代理和 TLS 设置，修改机场后转发配置会自动生效。分享链接和访问记录与普通节点池一致；不启用 IP 黑白名单，每个分享只提供一个订阅链接。",
       "confirm": "保存",
       "fields": {
-        "name": "节点池名称",
+        "name": "代理订阅名称",
         "description": "描述",
         "airport": "机场",
         "airportHelp": "上游订阅地址与请求配置均取自该机场",
@@ -3117,12 +3117,12 @@
       "actions": {
         "groupSort": "分组排序",
         "addSubscription": "添加节点池",
-        "addProxySubscription": "添加代理节点池"
+        "addProxySubscription": "添加代理订阅"
       },
       "tabs": {
         "aggregated": "聚合节点池",
-        "proxy": "代理节点池",
-        "proxyHint": "代理节点池原样转发所选机场的上游订阅内容，不解析、不过滤、不重命名节点。"
+        "proxy": "代理订阅",
+        "proxyHint": "代理订阅原样转发所选机场的上游订阅内容，不解析、不过滤、不重命名节点。"
       },
       "search": {
         "label": "搜索节点池",

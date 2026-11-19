@@ -76,7 +76,7 @@ const MainRoutes = {
           element: <SubscriptionList mode="collection" />
         },
         {
-          path: 'proxy-pools',
+          path: 'proxy-subscriptions',
           element: <SubscriptionList mode="proxy" />
         },
         {
